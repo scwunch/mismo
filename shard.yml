@@ -1,0 +1,17 @@
+name: mismo
+version: 0.1.0
+
+authors:
+  - Ryan Martens <martens.ryanj@gmail.com>
+
+targets:
+  mismo:
+    main: src/mismo.cr
+
+crystal: '>= 1.16.2'
+
+license: MIT
+
+dependencies:
+  auto_constructor:
+    github: kostya/auto_constructor
