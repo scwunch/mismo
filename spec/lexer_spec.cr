@@ -1,7 +1,7 @@
 require "./spec_helper"
 require "../src/lexer"
 
-LOG_LEVEL = Logger::Level::Info
+LOG_LEVEL = Logger::Level::Warning
 
 describe Lexer::Reader do
 
@@ -126,20 +126,21 @@ describe Lexer::Reader do
 end
 
 describe Lexer do
-  describe "#prev_token" do
-    it "gets the previous token" do
+  describe "#push_token" do
+    it "stores the given token in @current_token" do
       lexer = Lexer.new(
-        Lexer::Reader.new("hello\nworld"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Lexer::Reader.new(""),
+        Logger.new(LOG_LEVEL)
       )
-      lexer.prev_token.class.should eq(Token::BeginFile)
-      lexer.push_token(Token.int(Location.zero, 123))
-      lexer.prev_token.class.should eq(Token::Int)
-      lexer.push_token(Token.string(Location.zero, "hello"))
-      lexer.prev_token.class.should eq(Token::String)
+      lexer.current_token.class.should eq(Token::BeginFile)
+      lexer.push_token(Token.int({1,1}, 123))
+      lexer.current_token.class.should eq(Token::Int)
+      lexer.push_token(Token.string({1,1}, "hello"))
+      lexer.current_token.class.should eq(Token::String)
       lexer.push_token(Token.variable(Location.zero, "world"))
-      lexer.prev_token.class.should eq(Token::Variable)
+      lexer.current_token.class.should eq(Token::Variable)
+      lexer.push_token(Token.eof({1,1}))
+      lexer.current_token.class.should eq(Token::EOF)
     end
   end
 
@@ -147,18 +148,31 @@ describe Lexer do
     it "reads an operator" do
       lexer = Lexer.new(
         Lexer::Reader.new("+ *= and &"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
       lexer.push_operator(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::Add))
+      lexer.current_token.should eq(Token.operator(loc, Operator::Add))
       lexer.push_operator(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::MulAssign))
+      lexer.current_token.should eq(Token.operator(loc, Operator::MulAssign))
       lexer.push_operator(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::And))
+      lexer.current_token.should eq(Token.operator(loc, Operator::And))
       lexer.push_operator(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::And))
+      lexer.current_token.should eq(Token.operator(loc, Operator::And))
+    end
+
+    it "parses the longest possible operator (up to three characters)" do
+      lexer = Lexer.new(
+        Lexer::Reader.new("+= *= :="),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_operator(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.operator(loc, Operator::AddAssign))
+      lexer.push_operator(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.operator(loc, Operator::MulAssign))
+      lexer.push_operator(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.operator(loc, Operator::Assign))
     end
   end
 
@@ -169,16 +183,15 @@ describe Lexer do
         "hello" `backticks` 'world'
         MISMO
         ),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
       lexer.push_string(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.string(loc, "hello"))
+      lexer.current_token.should eq(Token.string(loc, "hello"))
       lexer.push_string(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.string(loc, "backticks"))
+      lexer.current_token.should eq(Token.string(loc, "backticks"))
       lexer.push_string(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.string(loc, "world"))
+      lexer.current_token.should eq(Token.string(loc, "world"))
     end
   end
 
@@ -186,20 +199,19 @@ describe Lexer do
     it "reads a number" do
       lexer = Lexer.new(
         Lexer::Reader.new("123 456.789_012 33_.44.55 66.to_string"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
       lexer.push_number(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.int(loc, 123))
+      lexer.current_token.should eq(Token.int(loc, 123))
       lexer.push_number(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.float(loc, 456.789_012))
+      lexer.current_token.should eq(Token.float(loc, 456.789_012))
       lexer.push_number(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.float(loc, 33.44))
+      lexer.current_token.should eq(Token.float(loc, 33.44))
       lexer.push_number(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.int(loc, 55))
+      lexer.current_token.should eq(Token.int(loc, 55))
       lexer.push_number(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.int(loc, 66))
+      lexer.current_token.should eq(Token.int(loc, 66))
       lexer.reader.peek_str?("to_string").should eq(true)
     end
   end
@@ -208,8 +220,7 @@ describe Lexer do
     it "reads a word" do
       lexer = Lexer.new(
         Lexer::Reader.new("hello\nworld"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
       lexer.read_word(loc).should eq("hello")
@@ -222,34 +233,31 @@ describe Lexer do
     it "reads a word and pushes an operator, keyword, variable, or type name" do
       lexer = Lexer.new(
         Lexer::Reader.new("import\nstruct\nhello world def and or is not then not in"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
-      lexer.push_word(loc, lexer.read_word(loc)); lexer.reader.next
-      lexer.prev_token.should eq(Token.keyword(loc, KeyWord::Import))
-      lexer.push_word(loc, lexer.read_word(loc)); lexer.reader.next
-      lexer.prev_token.should eq(Token.keyword(loc, KeyWord::Struct))
-      lexer.push_word(loc, lexer.read_word(loc)); lexer.reader.next
-      lexer.prev_token.should eq(Token.variable(loc, "hello"))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.variable(loc, "world"))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.keyword(loc, KeyWord::Def))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::And))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::Or))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::Is))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::IsNot))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.variable(loc, "then"))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::Not))
-      lexer.push_word(loc); lexer.reader.next
-      lexer.prev_token.should eq(Token.operator(loc, Operator::NotIn))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.keyword(loc, KeyWord::Import))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.keyword(loc, KeyWord::Struct))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.variable(loc, "hello"))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.variable(loc, "world"))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.keyword(loc, KeyWord::Def))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.operator(loc, Operator::And))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.operator(loc, Operator::Or))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should_not eq(Token.operator(loc, Operator::Is))
+      lexer.current_token.should eq(Token.operator(loc, Operator::IsNot))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should eq(Token.variable(loc, "then"))
+      lexer.push_word(loc, lexer.read_word(loc), ParserContext::TopLevel); lexer.reader.next
+      lexer.current_token.should_not eq(Token.operator(loc, Operator::Not))
+      lexer.current_token.should eq(Token.operator(loc, Operator::NotIn))
     end
   end
 
@@ -257,8 +265,7 @@ describe Lexer do
     it "consumes the rest of the line, excluding the newline character" do
       lexer = Lexer.new(
         Lexer::Reader.new("-- comment\nhello\nworld"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       lexer.skip_comment
       lexer.reader.peek.should eq('\n')
@@ -269,8 +276,7 @@ describe Lexer do
     it "consumes whitespace characters" do
       lexer = Lexer.new(
         Lexer::Reader.new("\n\t\r\f\v -- this is a comment\n   hello\nworld"),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       lexer.skip_whitespace_and_comments
       lexer.reader.peek.should eq('h')
@@ -290,32 +296,30 @@ describe Lexer do
         world
         MISMO
         ),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       lexer.reader.next  # d
       lexer.reader.next  # e
       lexer.reader.next  # f
       lexer.push_newline
       lexer.reader.peek.should eq('h')
-      lexer.prev_token.should eq(Token.newline({1, 4}, 2))
+      lexer.current_token.should eq(Token.newline({1, 4}, 2))
     end
   end
 
-  describe "#lex_body" do
-    it "lexes the input" do
-      tokens = TestLexerOut.new
+  describe "#next" do
+    it "lexes the next token in the input" do
       lexer = Lexer.new(
         Lexer::Reader.new(<<-MISMO
         function greet(name String):
           print("hello, " + name)
         MISMO
         ),
-        Logger.new(LOG_LEVEL),
-        tokens
+        Logger.new(LOG_LEVEL)
       )
-      tokens.expect([
-        Token.keyword({1, 1}, KeyWord::Function),
+      lexer.next(:top_level).should eq(Token.keyword({1, 1}, KeyWord::Function))
+      # the rest of the tokens are lexed as if they are in a function body
+      [
         Token.variable({1, 10}, "greet"),
         Token.lparen({1, 15}),
         Token.variable({1, 16}, "name"),
@@ -329,9 +333,41 @@ describe Lexer do
         Token.operator({2, 19}, Operator::Add),
         Token.variable({2, 21}, "name"),
         Token.rparen({2, 25}),
-        Token.newline({2, 26}, 0),
-      ])
-      lexer.lex_body
+        Token.newline({2, 26}, 0)
+      ].each do |token|
+        lexer.next(:block).should eq(token)
+      end
+    end
+    it "lexes newlines as commas in ParserContext::List" do
+      code = <<-MISMO
+        [
+          T
+          U
+        ]
+        (
+          x Int
+          y Float
+        )
+        MISMO
+      lexer = Lexer.new(code, LOG_LEVEL)
+      [
+        Token.lbracket({1, 1}),
+        Token.type({2, 3}, "T"),
+        Token.comma({2, 4}),
+        Token.type({3, 3}, "U"),
+        Token.rbracket({4, 1}),
+        Token.comma({4, 2}),  # newline between groups interpreted as comma
+                              # because all `next` calls are with ParserContext::List
+        Token.lparen({5, 1}),
+        Token.variable({6, 3}, "x"),
+        Token.type({6, 5}, "Int"),
+        Token.comma({6, 8}),
+        Token.variable({7, 3}, "y"),
+        Token.type({7, 5}, "Float"),
+        Token.rparen({8, 1})
+      ].each do |token|
+        lexer.next(ParserContext::List).should eq(token)
+      end
     end
   end
 
@@ -344,8 +380,7 @@ describe Lexer do
         path\\ with\\ spaces as Alias
         MISMO
         ),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       lexer.parse_path.should eq("hello")
       lexer.reader.next.should eq('\n')
@@ -365,8 +400,7 @@ describe Lexer do
         { foo , bar }
         MISMO
         ),
-        Logger.new(LOG_LEVEL),
-        NullLexerOut.new
+        Logger.new(LOG_LEVEL)
       )
       lexer.parse_import_bindings.should eq([{"foo", "foo"}, {"bar", "bar"}])
       lexer.reader.next.should eq('\n')
@@ -379,7 +413,7 @@ describe Lexer do
     #   lexer = Lexer.new(
     #     Lexer::Reader.new("as alias {foo, bar}"),
     #     Logger.new(LOG_LEVEL),
-    #     NullLexerOut.new
+    #     
     #   )
     #   import = lexer.parse_import(Location.zero, "module")
     #   import.path.should eq("module")
@@ -390,91 +424,90 @@ describe Lexer do
 
   describe "#handle_import" do
     it "yields one or more import items" do
-      lexer = Lexer.new(
-        Lexer::Reader.new(<<-MISMO
-          import std/math
-          import std/
-            math as M
-            big/
-              int {parse as big_parse}
-              float {parse as fparse}
-            http
-          import src/
-            utils
-          MISMO
-        ),
-        Logger.new(LOG_LEVEL),
-        imports = TestLexerOut.new
-      )
-      imports.expect([
-        Ast::Import.new(Location.new(1, 8), "std/math", nil, nil),
-        Ast::Import.new(Location.new(3, 3), "std/math", "M", nil),
-        Ast::Import.new(Location.new(5, 5), "std/big/int", nil, [{"parse", "big_parse"}]),
-        Ast::Import.new(Location.new(6, 5), "std/big/float", nil, [{"parse", "fparse"}]),
-        Ast::Import.new(Location.new(7, 3), "std/http", nil, nil),
-        Ast::Import.new(Location.new(9, 3), "src/utils", nil, nil),
-      ])
-      3.times do 
-        lexer.read_word.should eq("import")
-        lexer.reader.next.should eq(' ')
-        lexer.handle_import
-      end
-      imports.import_idx.should eq(imports.imports.size)
+      # lexer = Lexer.new(
+      #   Lexer::Reader.new(<<-MISMO
+      #     import std/math
+      #     import std/
+      #       math as M
+      #       big/
+      #         int {parse as big_parse}
+      #         float {parse as fparse}
+      #       http
+      #     import src/
+      #       utils
+      #     MISMO
+      #   ),
+      #   Logger.new(LOG_LEVEL)
+      # )
+      # imports.expect([
+      #   Ast::Import.new(Location.new(1, 8), "std/math", nil, nil),
+      #   Ast::Import.new(Location.new(3, 3), "std/math", "M", nil),
+      #   Ast::Import.new(Location.new(5, 5), "std/big/int", nil, [{"parse", "big_parse"}]),
+      #   Ast::Import.new(Location.new(6, 5), "std/big/float", nil, [{"parse", "fparse"}]),
+      #   Ast::Import.new(Location.new(7, 3), "std/http", nil, nil),
+      #   Ast::Import.new(Location.new(9, 3), "src/utils", nil, nil),
+      # ])
+      # 3.times do 
+      #   lexer.read_word.should eq("import")
+      #   lexer.reader.next.should eq(' ')
+      #   lexer.handle_import
+      # end
+      # imports.import_idx.should eq(imports.imports.size)
     end
   end
 end
 
 
-class TestLexerOut
-  include Lexer::Out
-  property tokens = [] of Token
-  property idx = 0
-  property imports = [] of Ast::Import
-  property import_idx = 0
+# class TestLexerOut
+#   include Lexer::Out
+#   property tokens = [] of Token
+#   property idx = 0
+#   property imports = [] of Ast::Import
+#   property import_idx = 0
 
-  def emit(token : Token)
-    token.should eq(@tokens[idx])
-    @idx += 1
-  end
+#   def emit(token : Token)
+#     token.should eq(@tokens[idx])
+#     @idx += 1
+#   end
 
-  def signal_end_of_file
-    puts "EOF"
-  end
+#   def signal_end_of_file
+#     puts "EOF"
+#   end
 
-  def send_log(log : Logger)
-    puts log
-  end
+#   def send_log(log : Logger)
+#     puts log
+#   end
 
-  def expect(token : Token)
-    @tokens << token
-  end
+#   def expect(token : Token)
+#     @tokens << token
+#   end
 
-  def expect(tokens : Array(Token))
-    @tokens.concat(tokens)
-  end
+#   def expect(tokens : Array(Token))
+#     @tokens.concat(tokens)
+#   end
 
-  def expect(imports : Array(Ast::Import))
-    @imports.concat(imports)
-  end
+#   def expect(imports : Array(Ast::Import))
+#     @imports.concat(imports)
+#   end
 
-  def import(import_loc : Location, path : String, import_alias : String?, import_bindings : Array({String, String})?)
-    import = Ast::Import.new(import_loc, path, import_alias, import_bindings)
-    import.should eq(@imports[@import_idx])
-    @import_idx += 1
-  end
-end
+#   def import(import_loc : Location, path : String, import_alias : String?, import_bindings : Array({String, String})?)
+#     import = Ast::Import.new(import_loc, path, import_alias, import_bindings)
+#     import.should eq(@imports[@import_idx])
+#     @import_idx += 1
+#   end
+# end
 
-struct NullLexerOut
-  include Lexer::Out
-  def emit(token : Token)
-  end
+# struct NullLexerOut
+#   include Lexer::Out
+#   def emit(token : Token)
+#   end
 
-  def signal_end_of_file
-  end
+#   def signal_end_of_file
+#   end
 
-  def send_log(log : Logger)
-  end
+#   def send_log(log : Logger)
+#   end
 
-  def import(import_loc : Location, path : String, import_alias : String?, import_bindings : Array({String, String})?)
-  end
-end
+#   def import(import_loc : Location, path : String, import_alias : String?, import_bindings : Array({String, String})?)
+#   end
+# end

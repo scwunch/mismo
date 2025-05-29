@@ -65,6 +65,10 @@ macro define_token(name, type)
     def inspect(io : IO)
       io << "Token::{{name}}(#{@location}, #{@data})"
     end
+
+    def short : ::String
+      @data.to_s
+    end
   end
 
   # eg Token.number(Location.new(1, 1), "34")
@@ -104,6 +108,25 @@ abstract struct Token
   getter location : Location
   abstract def to_s(io : IO)
   abstract def inspect(io : IO)
+  def short : ::String
+    case self
+    when BeginFile then "<begin file>"
+    when Not then "not"
+    when Comma then ","
+    when Dot then "."
+    when Colon then ":"
+    when Semicolon then ";"
+    when LParen then "(" 
+    when RParen then ")"
+    when LBracket then "["
+    when RBracket then "]"
+    when LBrace then "{" 
+    when RBrace then "}"
+    when EOF then "<EOF>"
+    else
+      self.class.name
+    end
+  end
   
   def initialize(@location : Location)
   end
@@ -120,7 +143,7 @@ abstract struct Token
   define_token Variable, ::String
   define_token Type, ::String
   define_token KeyWord, ::KeyWord
-  define_token Assign
+  # define_token Assign
   define_token Operator, ::Operator
   define_token Not
   define_token Comma
@@ -137,6 +160,12 @@ abstract struct Token
   define_token Error, ::String
   define_token EOF
 
+  def Newline.short : ::String
+    "\n" + @data * " "
+  end
+
+  alias GroupOpen = LParen | LBracket | LBrace
+  alias GroupClose = RParen | RBracket | RBrace
 end
 
 
@@ -161,6 +190,7 @@ enum Operator
   Le
   Gt
   Ge
+  RArrow
   Assign
   AddAssign
   SubAssign
@@ -192,7 +222,8 @@ enum Operator
     when "<=" then Le
     when ">" then Gt
     when ">=" then Ge
-    when "=" then Assign
+    when "->" then RArrow
+    when "=", ":=" then Assign
     when "+=" then AddAssign
     when "-=" then SubAssign
     when "*=" then MulAssign
@@ -205,6 +236,41 @@ enum Operator
       nil
     end
   end
+
+  def to_s
+    case self
+    in Neg then "-"
+    in Add then "+"
+    in Sub then "-"
+    in Mul then "*"
+    in Div then "/"
+    in Mod then "%"
+    in Exp then "^"
+    in Not then "not"
+    in And then "and"
+    in Or then "or"
+    in Is then "is"
+    in IsNot then "is not"
+    in In then "in"
+    in NotIn then "not in"
+    in Eq then "=="
+    in Neq then "!="
+    in Lt then "<"
+    in Le then "<="
+    in Gt then ">"
+    in Ge then ">="
+    in RArrow then "->"
+    in Assign then "="
+    in AddAssign then "+="
+    in SubAssign then "-="
+    in MulAssign then "*="
+    in DivAssign then "/="
+    in ModAssign then "%="
+    in AndAssign then "&&="
+    in OrAssign then "||="
+    in ExpAssign then "**="
+    end
+  end
 end
 
 enum KeyWord
@@ -214,11 +280,18 @@ enum KeyWord
   Function
   Extend
   Trait
+  Field
+  Constructor
+  Static
   Def
   Let
   Var
   If
   Else
+  For
+  While
+  Mut
+  Const
 
   def top_level_keyword?
     case self
@@ -229,7 +302,30 @@ enum KeyWord
     end
   end
 
-  def self.parse?(str : String)
+  # macro parse?(str, ctx)
+  #   {% if ctx == :block %}
+  #     KeyWord.parse_in_block?({{str}})
+  #   {% elsif ctx == :top_level %}
+  #     KeyWord.parse_top_level?({{str}})
+  #   {% else %}
+  #     {% raise "KeyWord.parse? expects :block or :top_level context" %}
+  #   {% end %}
+  # end
+
+  def self.parse?(str : String, ctx : ParserContext)
+    case ctx
+    in ParserContext::Block, ParserContext::List
+      parse_in_block?(str)
+    in ParserContext::TopLevel
+      parse_top_level?(str)
+    end
+  end
+
+  def self.parse?(arg) : Never
+    raise "KeyWord.parse? expects 2 arguments: String and one of :block or :top_level context.  (Got `KeyWord.parse?(#{arg})`)"
+  end
+
+  def self.parse_top_level?(str : String)
     case str
     when "import" then Import
     when "struct" then Struct
@@ -237,11 +333,25 @@ enum KeyWord
     when "function" then Function
     when "extend" then Extend
     when "trait" then Trait
+    when "field" then Field
+    when "constructor" then Constructor
+    when "static" then Static
     when "def" then Def
+    when "const" then Const
+    else
+      nil
+    end
+  end
+
+  def self.parse_in_block?(str : String)
+    case str
     when "let" then Let
     when "var" then Var
+    when "mut" then Mut
     when "if" then If
     when "else" then Else
+    when "for" then For
+    when "while" then While
     else
       nil
     end
@@ -255,11 +365,18 @@ enum KeyWord
     in Function then "function"
     in Extend then "extend"
     in Trait then "trait"
+    in Field then "field"
+    in Constructor then "constructor"
+    in Static then "static"
     in Def then "def"
     in Let then "let"
     in Var then "var"
     in If then "if"
     in Else then "else"
+    in For then "for"
+    in While then "while"
+    in Mut then "mut"
+    in Const then "const"
     end
   end
 end

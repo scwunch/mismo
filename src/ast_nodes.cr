@@ -34,23 +34,26 @@ module Ast
     end
   end
 
-  struct Nil < Node
+  abstract struct Expr < Node
+  end
+
+  struct Nil < Expr
     def to_s(io : IO)
       io << "nil"
     end
     # def_eq
   end
-  struct False < Node
+  struct False < Expr
     def to_s(io : IO)
       io << "false"
     end
   end
-  struct True < Node
+  struct True < Expr
     def to_s(io : IO)
       io << "true"
     end
   end
-  struct Int < Node
+  struct Int < Expr
     property value : Int128
     def initialize(@loc : Location, @value : Int128)
     end
@@ -58,7 +61,7 @@ module Ast
       io << value.to_s
     end
   end
-  struct Float < Node
+  struct Float < Expr
     property value : Float64
     def initialize(@loc : Location, @value : Float64)
     end
@@ -66,7 +69,7 @@ module Ast
       io << value.to_s
     end
   end
-  struct String < Node
+  struct String < Expr
     property value : ::String
     def initialize(@loc : Location, @value : ::String)
     end
@@ -74,19 +77,19 @@ module Ast
       io << "\"#{value}\""
     end
   end
-  struct Let < Node
+  struct Let < Expr
     property name : ::String
-    property value : Box(Node)
-    def initialize(@loc : Location, @name : ::String, @value : Box(Node))
+    property value : Box(Expr)
+    def initialize(@loc : Location, @name : ::String, @value : Box(Expr))
     end
-    def initialize(@loc : Location, @name : ::String, value : Node)
-      @value = Box.new(value.as(Node))
+    def initialize(@loc : Location, @name : ::String, value : Expr)
+      @value = Box.new(value.as(Expr))
     end
     def to_s(io : IO)
       io << "let #{name} = #{value}"
     end
   end
-  struct Var < Node
+  struct Var < Expr
     property name : ::String
     def initialize(@loc : Location, @name : ::String)
     end
@@ -94,7 +97,7 @@ module Ast
       io << name
     end
   end
-  struct Const < Node
+  struct Const < Expr
     property name : ::String
     def initialize(@loc : Location, @name : ::String)
     end
@@ -102,7 +105,7 @@ module Ast
       io << name
     end
   end
-  struct Identifier < Node
+  struct Identifier < Expr
     property name : ::String
     def initialize(@loc : Location, @name : ::String)
     end
@@ -110,52 +113,62 @@ module Ast
       io << name
     end
   end
-  struct Tuple < Node
-    property elements : ::Array(Node)
-    def initialize(@loc : Location, @elements : ::Array(Node))
+  struct Tuple < Expr
+    property elements : ::Array(Expr)
+    def initialize(@loc : Location, @elements : ::Array(Expr))
     end
     def to_s(io : IO)
       io << "(#{elements.join(", ")})"
     end
   end
-  struct Array < Node
-    property elements : ::Array(Node)
-    def initialize(@loc : Location, @elements : ::Array(Node))
+  struct NamedTuple < Expr
+    property fields : ::Array({::String, Expr})
+    def initialize(@loc : Location, @fields : ::Array({::String, Expr}))
+    end
+    def to_s(io : IO)
+      io << "(#{fields.map { |f| "#{f[0]}: #{f[1]}" }.join(", ")})"
+    end
+  end
+  struct Array < Expr
+    property elements : ::Array(Expr)
+    def initialize(@loc : Location, @elements : ::Array(Expr))
     end
     def to_s(io : IO)
       io << "[#{elements.join(", ")}]"
     end
   end
-  struct EmptyTuple < Node
+  struct EmptyTuple < Expr
     def initialize(@loc : Location)
     end
     def to_s(io : IO)
       io << "()"
     end
   end
-  struct EmptyArray < Node
+  struct EmptyArray < Expr
     def initialize(@loc : Location)
     end
     def to_s(io : IO)
       io << "[]"
     end
   end
-  struct Block < Node
-    property statements : ::Array(Node)
-    def initialize(@loc : Location, @statements : ::Array(Node))
-    end
-    def to_s(io : IO)
-      io << "#{statements.join("\n")}"
-    end
-  end
-  struct Type < Node
+  # struct Block < Node
+  #   property statements : ::Array(Node)
+  #   def initialize(@loc : Location, @statements : ::Array(Node))
+  #   end
+  #   def to_s(io : IO)
+  #     io << "#{statements.join("\n")}"
+  #   end
+  # end
+  struct Type < Expr
     property name : ::String
     property type_args : ::Array(Type)?
     def initialize(@loc : Location, @name : ::String, @type_args : ::Array(Type)? = nil)
     end
     def to_s(io : IO)
       io << name
-      io << "[#{type_args.join(", ")}]" if type_args
+      if t_args = type_args
+        io << "[#{t_args.join(", ")}]"
+      end
     end
     # def_eq
     # def_inspect
@@ -163,49 +176,49 @@ module Ast
     #   io << "#{self.class.name}(#{loc})"
     # end
   end
-  struct Binop < Node
+  struct Binop < Expr
     include AutoConstructor
     field :loc, Location
-    field :left, Box(Node)
+    field :left, Box(Expr)
     field :operator, Operator
-    field :right, Box(Node)
-    def initialize(@loc : Location, left : Node, @operator : Operator, right : Node)
-      @left = Box.new(left.as(Node))
-      @right = Box.new(right.as(Node))
+    field :right, Box(Expr)
+    def initialize(@loc : Location, left : Expr, @operator : Operator, right : Expr)
+      @left = Box.new(left.as(Expr))
+      @right = Box.new(right.as(Expr))
     end
     def to_s(io : IO)
       io << "#{left} #{self.class.name} #{right}"
     end
   end
-  struct NotNode < Node
-    property value : Box(Node)
-    def initialize(@loc : Location, @value : Box(Node))
+  struct NotNode < Expr
+    property value : Box(Expr)
+    def initialize(@loc : Location, @value : Box(Expr))
     end
-    def initialize(@loc : Location, value : Node)
-      @value = Box.new(value.as(Node))
+    def initialize(@loc : Location, value : Expr)
+      @value = Box.new(value.as(Expr))
     end
     def to_s(io : IO)
       io << "!#{value}"
     end
   end
-  struct NegNode < Node
-    property value : Box(Node)
-    def initialize(@loc : Location, @value : Box(Node))
+  struct NegNode < Expr
+    property value : Box(Expr)
+    def initialize(@loc : Location, @value : Box(Expr))
     end
-    def initialize(@loc : Location, value : Node)
-      @value = Box.new(value.as(Node))
+    def initialize(@loc : Location, value : Expr)
+      @value = Box.new(value.as(Expr))
     end
     def to_s(io : IO)
       io << "-#{value}"
     end
   end
-  struct DotNode < Node
-    property left : Box(Node)?
+  struct DotNode < Expr
+    property left : Box(Expr)?
     property method : :: String
-    def initialize(@loc : Location, @left : Box(Node)?, @method : :: String)
+    def initialize(@loc : Location, @left : Box(Expr)?, @method : :: String)
     end
-    def initialize(@loc : Location, left : Node, @method : :: String)
-      @left = Box.new(left.as(Node))
+    def initialize(@loc : Location, left : Expr, @method : :: String)
+      @left = Box.new(left.as(Expr))
     end
     def initialize(@loc : Location, @method : :: String)
     end
@@ -213,89 +226,89 @@ module Ast
       io << "#{left}.#{method}"
     end
   end
-  struct Call < Node
-    property receiver : Box(Node)
+  struct Call < Expr
+    property receiver : Box(Expr)
     property method : ::String
-    property args : ::Array(Node)
-    def initialize(@loc : Location, @receiver : Box(Node), @method : ::String, @args : ::Array(Node))
+    property args : ::Array(Expr)
+    def initialize(@loc : Location, @receiver : Box(Expr), @method : ::String, @args : ::Array(Expr))
     end
-    def initialize(@loc : Location, receiver : Node, @method : ::String, args : ::Array(Node))
-      @receiver = Box.new(receiver.as(Node))
-      @args = args.map { |arg| arg.as(Node) }
+    def initialize(@loc : Location, receiver : Expr, @method : ::String, args : ::Array(Expr))
+      @receiver = Box.new(receiver.as(Expr))
+      @args = args.map { |arg| arg.as(Expr) }
     end
     def to_s(io : IO)
       io << "#{receiver}.#{method}#{args.join(", ")}" 
     end
   end
-  struct If < Node
-    property condition : Box(Node)
-    property then_branch : Box(Node)
-    property else_branch : Box(Node)?
-    def initialize(@loc : Location, @condition : Box(Node), @then_branch : Box(Node), @else_branch : Box(Node)?)
+  struct If < Expr
+    property condition : Box(Expr)
+    property then_branch : Box(Expr)
+    property else_branch : Box(Expr)?
+    def initialize(@loc : Location, @condition : Box(Expr), @then_branch : Box(Expr), @else_branch : Box(Expr)?)
     end
-    def initialize(@loc : Location, condition : Node, then_branch : Node, else_branch : Node?)
-      @condition = Box.new(condition.as(Node))
-      @then_branch = Box.new(then_branch.as(Node))
-      @else_branch = Box.new(else_branch.as(Node)) if else_branch
+    def initialize(@loc : Location, condition : Expr, then_branch : Expr, else_branch : Expr?)
+      @condition = Box.new(condition.as(Expr))
+      @then_branch = Box.new(then_branch.as(Expr))
+      @else_branch = Box.new(else_branch.as(Expr)) if else_branch
     end
     def to_s(io : IO)
       io << "if #{condition}\n#{then_branch}\nelse\n#{else_branch}\nend"
     end
   end
-  struct ForLoop < Node
-    property variable : Box(Node)
-    property collection : Box(Node)
-    property body : Box(Node)
-    def initialize(@loc : Location, @variable : Box(Node), @collection : Box(Node), @body : Box(Node))
+  struct ForLoop < Expr
+    property variable : Box(Expr)
+    property collection : Box(Expr)
+    property body : Box(Expr)
+    def initialize(@loc : Location, @variable : Box(Expr), @collection : Box(Expr), @body : Box(Expr))
     end
-    def initialize(@loc : Location, variable : Node, collection : Node, body : Node)
-      @variable = Box.new(variable.as(Node))
-      @collection = Box.new(collection.as(Node))
-      @body = Box.new(body.as(Node))
+    def initialize(@loc : Location, variable : Expr, collection : Expr, body : Expr)
+      @variable = Box.new(variable.as(Expr))
+      @collection = Box.new(collection.as(Expr))
+      @body = Box.new(body.as(Expr))
     end
     def to_s(io : IO)
       io << "for #{variable} in #{collection}\n#{body}\nend"
     end
   end
-  struct WhileLoop < Node
-    property condition : Box(Node)
-    property body : Box(Node)
-    def initialize(@loc : Location, @condition : Box(Node), @body : Box(Node))
+  struct WhileLoop < Expr
+    property condition : Box(Expr)
+    property body : Box(Expr)
+    def initialize(@loc : Location, @condition : Box(Expr), @body : Box(Expr))
     end
-    def initialize(@loc : Location, condition : Node, body : Node)
-      @condition = Box.new(condition.as(Node))
-      @body = Box.new(body.as(Node))
+    def initialize(@loc : Location, condition : Expr, body : Expr)
+      @condition = Box.new(condition.as(Expr))
+      @body = Box.new(body.as(Expr))
     end
     def to_s(io : IO)
       io << "while #{condition}\n#{body}\nend"
     end
   end
-  struct Return < Node
-    property value : Box(Node)
-    def initialize(@loc : Location, @value : Box(Node))
+  struct Return < Expr
+    property value : Box(Expr)
+    def initialize(@loc : Location, @value : Box(Expr))
     end
-    def initialize(@loc : Location, value : Node)
-      @value = Box.new(value.as(Node))
+    def initialize(@loc : Location, value : Expr)
+      @value = Box.new(value.as(Expr))
     end
     def to_s(io : IO)
       io << "return #{value}"
     end
   end
-  struct Break < Node
+  struct Break < Expr
     def initialize(@loc : Location)
     end
     def to_s(io : IO)
       io << "break"
     end
   end
-  struct Continue < Node
+  struct Continue < Expr
     def initialize(@loc : Location)
     end
     def to_s(io : IO)
       io << "continue"
     end
   end
-  struct Error < Node
+  struct Error < Expr
     property message : ::String
     def initialize(@loc : Location, @message : ::String)
     end
@@ -330,9 +343,8 @@ module Ast
   end
 
   abstract struct TopLevelItem < Node
-    property name : ::String
-    property type_parameters : ::Array(Type)?
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?)
+    property type_parameters : ::Array(TypeParameter)?
+    def initialize(@loc : Location, @type_parameters : ::Array(TypeParameter)? = nil)
     end
     abstract def to_s(io : IO)
     # def inspect(io : IO)
@@ -342,6 +354,7 @@ module Ast
 
   abstract struct TypeDeclaration < TopLevelItem
     property convention : Convention
+    property name : ::String
     property traits : ::Array(Type)?
     def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @convention : Convention, @traits : ::Array(Type)?)
     end
@@ -349,26 +362,54 @@ module Ast
 
   
   struct Struct < TypeDeclaration
-    property fields : ::Array(Node)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @convention : Convention, @traits : ::Array(Type)?, @fields : ::Array(Node))
+    property fields : ::Array(Field)
+    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field, @convention : Convention = nil)
+    end
+    def initialize(@loc : Location, @convention : Convention, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field)
     end
     def to_s(io : IO)
       io << "struct #{name}"
     end
   end
 
+  struct Field < Node
+    property name : ::String
+    property type : Type
+    property init : Expr?
+    def initialize(@loc : Location, @name : ::String, @type : Type, @init : Expr? = nil)
+    end
+    def to_s(io : IO)
+      io << "field #{name}: #{type}"
+      io << " = #{init}" if init
+    end
+  end
+
   struct Enum < TypeDeclaration
-    property variants : ::Array(Node)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @convention : Convention, @traits : ::Array(Type)?, @variants : ::Array(Node))
+    property variants : ::Array(Variant)
+    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant, @convention : Convention = nil)
+    end
+    def initialize(@loc : Location, @convention : Convention, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant)
     end
     def to_s(io : IO)
       io << "enum #{name}"
     end
   end
 
+  struct Variant < Node
+    property name : ::String
+    property fields : NamedTuple
+    def initialize(@loc : Location, @name : ::String, @fields : NamedTuple)
+    end
+    def to_s(io : IO)
+      io << "variant #{name}#{fields}"
+    end
+  end
+
   struct Trait < TypeDeclaration
-    property methods : ::Array(Node)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @convention : Convention, @traits : ::Array(Type)?, @methods : ::Array(Node))
+    property methods : ::Array(Function)
+    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(Function) = [] of Function, @convention : Convention = nil)
+    end
+    def initialize(@loc : Location, @convention : Convention, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(Function) = [] of Function)
     end
     def to_s(io : IO)
       io << "trait #{name}"
@@ -378,7 +419,12 @@ module Ast
   struct Extend < TopLevelItem
     property type : Type
     property traits : ::Array(Type)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @type : Type, @traits : ::Array(Type))
+    def initialize(@loc : Location, @type_parameters : ::Array(Type)?, @type : Type, @traits : ::Array(Type) = [] of Type)
+    end
+    def initialize(@loc : Location, @type : Type, *, @type_parameters : ::Array(Type)? = nil, @traits : ::Array(Type) = [] of Type)
+    end
+    def name 
+      @type.name
     end
     def to_s(io : IO)
       io << "extend #{name}"
@@ -386,9 +432,10 @@ module Ast
   end
 
   struct Function < TopLevelItem
+    property name : ::String
     property signature : Signature
-    property body : ::Array(Node)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(Type)?, @signature : Signature, @body : Array(Node))
+    property body : ::Array(Expr)
+    def initialize(@loc : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
     end
     def to_s(io : IO)
       io << "#{self.class.name}(#{name})"
@@ -399,10 +446,11 @@ module Ast
     property type_parameters : ::Array(TypeParameter)?
     property params : ::Array(Parameter)?
     property return_type : Type?
-    def initialize(@loc : Location, @type_parameters : ::Array(TypeParameter)? = nil, @params : ::Array(Parameter)? = nil, @return_type : Type? = nil)
+    property return_convention : Convention?
+    def initialize(@loc : Location, @type_parameters : ::Array(TypeParameter)? = nil, @params : ::Array(Parameter)? = nil, @return_type : Type? = nil, @return_convention : Convention = nil)
     end
     def to_s(io : IO)
-      io << "#{params.join(", ")} -> #{return_type}"
+      io << "#{params.join(", ")} -> #{return_convention} #{return_type}"
     end
   end
 
@@ -452,6 +500,11 @@ module Ast
     def to_s(io : IO)
       value.to_s(io)
     end
+  end
+
+  def self.to_type_args(type_params : ::Array(TypeParameter)?) : ::Array(Type)?
+    return nil unless type_params
+    type_params.map { |tp| Type.new(tp.loc, tp.name, tp.constraints) }
   end
 end
 

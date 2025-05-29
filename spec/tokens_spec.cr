@@ -34,3 +34,23 @@ describe Token do
     end
   end
 end
+
+# p! Token.lbrace({1, 1}).is_a?(Token::GroupOpen)
+# p! Token.type({1, 1}, "T").is_a?(Token::GroupOpen)
+# p! Token.type({1, 1}, "T").is_a?(Token::LParen | Token::LBracket | Token::LBrace)
+# p! Token.type({1, 1}, "T").is_a?(Token::Type | Token::LBracket | Token::LBrace)
+# puts "----------------------"
+# p! Token.lbrace({1, 1}).class <= Token::GroupOpen
+# p! Token.type({1, 1}, "T").class <= Token::GroupOpen
+# p! Token.type({1, 1}, "T").class <= (Token::LParen | Token::LBracket | Token::LBrace)
+# p! Token.type({1, 1}, "T").class <= (Token::Type | Token::LBracket | Token::LBrace)
+# puts "----------------------"
+# p! Token.lbrace({1, 1}).class > Token::GroupOpen
+# p! Token.type({1, 1}, "T").class > Token::GroupOpen
+# p! Token.type({1, 1}, "T").class > (Token::LParen | Token::LBracket | Token::LBrace)
+# p! Token.type({1, 1}, "T").class > (Token::Type | Token::LBracket | Token::LBrace)
+# puts "----------------------"
+# p! Token.lbrace({1, 1}).class >= Token::GroupOpen
+# p! Token.type({1, 1}, "T").class >= Token::GroupOpen
+# p! Token.type({1, 1}, "T").class >= (Token::LParen | Token::LBracket | Token::LBrace)
+# p! Token.type({1, 1}, "T").class >= (Token::Type | Token::LBracket | Token::LBrace)

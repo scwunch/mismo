@@ -4,16 +4,17 @@ require "./ast_nodes"
 
 class Lexer
   getter reader : Reader
-  getter current_token : Token = Token::BeginFile.new(Location.zero)
-  # getter next_token : Token = Token::BeginFile.new(Location.zero)
+  @current_token : Token = Token::BeginFile.new(Location.zero)
+  @next_token : Token? = nil
   getter log : Logger
-  property tokens_emitted = [] of Token
+  getter tokens_emitted = 0
 
   def initialize(@reader : Reader, @log : Logger)
+    next
   end
-  def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
+  def initialize(text : String, @log : Logger)
     @reader = Reader.new(text)
-    @log = Logger.new(log_level)
+    next
   end
 
   class Reader
@@ -97,47 +98,32 @@ class Lexer
 
   def push_token(tok : Token)
     @log.debug(@reader.location, "emitting token: #{tok}")
-    @tokens_emitted << tok
-    @current_token = tok
+    @tokens_emitted += 1
+    @current_token = @next_token
+    @next_token = tok
   end
 
-  def next(context : ParserContext = ParserContext::Block)
+  def next
     @log.debug_descend(@reader.location, "next token") do
       loc = @reader.location
       @log.debug(loc, "next: '#{@reader.peek}'")
       case @reader.peek
       when '\n'
-        handle_newline(loc, context)
+        push_newline
       when .ascii_whitespace?
-        skip_horizantal_whitespace
-        return self.next(context)
+        @reader.next
       when ','
-        push_token(Token.comma(loc))
-        @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        push_token(Token.comma(loc)); @reader.next
       when ';'
-        push_token(Token.semicolon(loc))
-        skip_whitespace_and_comments
+        push_token(Token.semicolon(loc)); @reader.next
       when ':'
-        if @reader.peek_str?(":=")
-          push_token(Token.operator(loc, Operator::Assign))
-          @reader.next
-        else
-          push_token(Token.colon(loc))
-        end
-        @reader.next
+        push_token(Token.colon(loc)); @reader.next
       when '{'
-        push_token(Token.lbrace(loc))
-        @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        push_token(Token.lbrace(loc)); @reader.next
       when '['
-        push_token(Token.lbracket(loc))
-        @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        push_token(Token.lbracket(loc)); @reader.next
       when '('
-        push_token(Token.lparen(loc))
-        @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        push_token(Token.lparen(loc)); @reader.next
       when ')'
         push_token(Token.rparen(loc)); @reader.next
       when ']'
@@ -158,28 +144,21 @@ class Lexer
         else
           push_operator(loc) # push_operator consumes
         end
-      when .ascii_letter?, '_'
-        push_word(loc, read_word(loc), context)  # push_word consumes
+      when .ascii_letter?
+        push_word(loc)  # push_word consumes
       when '\0'
         if @reader.has_next?
           push_token(Token.error(loc, "unexpected null character"))
           @reader.next
         else # End of file
-          # stupidly complex logic to determine whether to emit a newline or EOF
-          if context == ParserContext::TopLevel || (@current_token.is_a?(Token::Newline) && @current_token.data == 0)
-            push_token(Token.eof(loc))
-          elsif @current_token.is_a?(Token::EOF)
-            nil
-          else
-            push_token(Token.newline(loc, 0))
-          end
+          break
         end
       else
         push_token(Token.error(loc, "unrecognized character: '#{@reader.next}'"))
       end
     end
-    @log.info(@reader.location, "emitted #{@tokens_emitted.size} tokens: #{@tokens_emitted}")
-    @tokens_emitted.clear
+    @log.info(@reader.location, "emitted #{@tokens_emitted} tokens")
+    @tokens_emitted = 0
     @current_token
   end
 
@@ -218,7 +197,7 @@ class Lexer
   # and pushes a newline token
   def push_newline(loc : Location = @reader.location)
     @log.debug_descend(loc, "pushing newline") do
-      skip_whitespace_and_comments
+        skip_whitespace_and_comments
       if @reader.has_next?
         push_token(Token.newline(loc, @reader.col - 1))
       else
@@ -227,48 +206,17 @@ class Lexer
     end
   end
 
-  def handle_newline(loc : Location, context : ParserContext)
-    case context
-    in ParserContext::TopLevel
-      skip_whitespace_and_comments
-      self.next(context)
-    in ParserContext::Block
-      push_newline
-    in ParserContext::List
-      # newline is emitted as comma in List context
-      # ONLY if it is not a leading or trailing 'comma'
-      skip_whitespace_and_comments
-      if @current_token.is_a?(Token::LParen | Token::LBracket | Token::LBrace)
-        @log.debug(loc, "skipped whitespace after #{@current_token.class}")
-        return self.next(context)
-      end
-      case @reader.peek
-      when ']'
-        push_token(Token.rbracket(@reader.location))
-      when ')'
-        push_token(Token.rparen(@reader.location))
-      when '}'
-        push_token(Token.rbrace(@reader.location))
-      when ','
-        push_token(Token.comma(@reader.location))
-      else
-        @log.debug(loc, "emitting newline as comma")
-        push_token(Token.comma(loc))
-        return
-      end
-      @log.debug(loc, "(skipped trailing newline/comma)")
-      @reader.next
-    end
-  end
-
   # handle the tokenization of a given word at the given location
-  def push_word(loc : Location, word : String, context : ParserContext)
-    @log.debug_descend(loc, "push_word: #{word}") do
-      # raise "breakpoint"
-      if key = KeyWord.parse?(word, context)
+  def push_word(loc : Location, word : String? = nil)
+    word ||= read_word(loc)
+    @log.debug_descend(loc, "handle word: #{word}") do
+      if key = KeyWord.parse?(word)
         if loc.column == 1 && key == KeyWord::Import
           skip_horizantal_whitespace
           handle_import
+        elsif loc.column > 1 && key.top_level_keyword?
+          # certain keywords are only allowed at the top level
+          push_token(Token.variable(loc, word))
         else
           push_token(Token.keyword(loc, key))
         end
@@ -286,25 +234,15 @@ class Lexer
 
   def push_word_operator(loc, op)
     @log.debug_descend(loc, "push word operator: #{op}") do
-      case op
-      when Operator::Not
-        skip_horizantal_whitespace
-        if @reader.peek_str?("in")
-          push_token(Token.operator(loc, Operator::NotIn))
-          2.times { @reader.next }
-        else
-          push_token(Token.not(loc))
-        end
-      when Operator::Is
-        skip_horizantal_whitespace
-        if @reader.peek_str?("not")
-          push_token(Token.operator(loc, Operator::IsNot))
-          3.times { @reader.next }
-        else
-          push_token(Token.operator(loc, op))
-        end
+      if op == Operator::Not && (prev = @current_token) && prev.data == Operator::Is
+        @current_token = Token.operator(prev.location, Operator::IsNot)
+        @log.debug(loc, "pushed 'is not' operator")
+      elsif op == Operator::In && (prev = @current_token) && prev.data == Operator::Not
+        @current_token = Token.operator(prev.location, Operator::NotIn)
+        @log.debug(loc, "pushed 'not in' operator")
       else
         push_token(Token.operator(loc, op))
+        # @log.debug(loc, "pushed operator: #{op}")
       end
     end
   end
@@ -402,6 +340,75 @@ class Lexer
     @log.debug(loc, "read_word: #{word_text}")
     word_text
   end
+
+  # deprecated — this logic should be moved to parser
+  # def read_function_name
+    # loc = @reader.location
+    # start_idx = @reader.idx
+
+    # # Log initial part for debugging
+    # peek_len = Math.min(8, @reader.text.size - (@reader.idx || 0)) # Ensure @reader.idx is not nil
+    # @log.debug(loc, "read_function_name starting with: '#{@reader.text[start_idx, peek_len]}'")
+
+
+    # if is_operator_char?(@reader.peek)
+    #   while is_operator_char?(@reader.peek)
+    #     @reader.next
+    #   end
+    #   name_text = @reader.text[start_idx...@reader.idx]
+    #   # Function names can be operators (e.g. `def +()`)
+    #   push_token(Token.variable_name(loc, name_text))
+    # elsif is_alphanumeric?(@reader.peek) # Standard alphanumeric name
+    #   while is_alphanumeric?(@reader.peek)
+    #     @reader.next
+    #   end
+    #   name = @reader.text[start_idx...@reader.idx]
+    #   @log.debug(loc, "prev_tok_kind=#{prev_tok_kind.to_s}, name=#{name}, peek='#{@reader.peek_str(1)}'")
+
+    #   is_prev_dot = prev_tok_kind == TokenKind::Dot # Assumes TokenKind::Dot
+
+    #   if @reader.peek == '=' && !is_prev_dot
+    #     # Special case for property setters like `def property=(value Type)`
+    #     @reader.next # Consume '='
+    #     full_name = @reader.text[start_idx...@reader.idx] # Name includes '='
+    #     @log.debug(loc, "special function name: #{full_name}")
+    #     push_token(Token.variable_name(loc, full_name))
+    #   else
+    #     # Check if previous token was 'def' keyword
+    #     prev_tok_is_def_keyword = false
+    #     if prev_t = @current_token
+    #       # Assumes Token::Keyword has kw_type and Keyword::Type::Def enum
+    #       if prev_t.is_a?(Token::Keyword) && prev_t.kw_type == Keyword::Type::Def
+    #          prev_tok_is_def_keyword = true
+    #       end
+    #     end
+
+    #     # Assumes a Conventions module/class
+    #     is_convention = Conventions.parse?(name).is_a?(String) # Check if not nil
+
+    #     if prev_tok_is_def_keyword && is_convention
+    #       @log.debug(loc, "convention #{name} detected")
+    #       push_token(Token.variable_name(loc, name)) # Push current name (e.g., "+=")
+    #       skip_whitespace
+    #       return read_function_name # Recursive call for actual name after convention
+    #     elsif is_type_name?(name)
+    #       push_token(Token.type_name(loc, name))
+    #     else
+    #       push_token(Token.variable_name(loc, name))
+    #     end
+    #   end
+    # else
+    #   @log.warn(loc, "read_function_name: expected operator or alphanumeric, found '#{@reader.peek}'. No token pushed.")
+    #   # To prevent infinite loops if called when no valid char is present, push an error and advance.
+    #   # However, callers (handle_dot, handle_word_top_level) usually ensure a valid start.
+    #   # If this else is reached, it's likely an issue with caller logic or an unexpected state.
+    #   # For safety, if we are stuck:
+    #   if start_idx == @reader.idx && @reader.has_next? # No progress and not EOF
+    #      push_token(Token.error(loc, "Failed to read function name, unexpected char: '#{@reader.peek}'"))
+    #      @reader.next
+    #   end
+    # end
+  # end
 
   def push_string(loc : Location)
     @log.debug_descend(loc, "push string") do
@@ -543,8 +550,7 @@ class Lexer
         import_alias = parse_import_alias
         import_bindings = parse_import_bindings
         @log.debug(import_loc, "Lexer.handle_import => #{import_loc} #{path}, alias: #{import_alias}, bindings: #{import_bindings}")
-        # @out.import(import_loc, path, import_alias, import_bindings)
-        @log.info(import_loc, "Lexer.handle_import => import #{path}, alias: #{import_alias}, bindings: #{import_bindings}")
+        @out.import(import_loc, path, import_alias, import_bindings)
       end
       skip_whitespace_and_comments
     end
@@ -615,8 +621,3 @@ class Lexer
   end
 end
 
-enum ParserContext
-  TopLevel  # newline insensitive
-  List      # newline as delimiter (parameters, args, tuple literal, etc)
-  Block     # register newlines; inside function body or between sub-items of top-level blocks
-end
