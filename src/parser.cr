@@ -26,75 +26,8 @@ enum StopAt
   ExpressionEnd      # Stops more aggressively, e.g. doesn't consume trailing operators
 end
 
-class Parser
-  property lexer : Lexer
-  @peeked : Token? = nil
-  property context : ParserContext = ParserContext::TopLevel
-  property indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
-  # ^ or maybe this should be passed by methods on the stack?  since it's a little stacky
-  @log : Logger
-  getter declarations = [] of Ast::TopLevelItem # The final list of top-level AST nodes
-
-  # --- Exception for Parse Errors to aid in recovery ---
-  class ParseError < Exception
-    getter location : Location
-    def initialize(message : String, @location : Location)
-      super("#{@location}: #{message}")
-    end
-  end
-
-  def initialize(@lexer : Lexer, @log : Logger)
-  end
-  def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
-    @log = Logger.new(log_level)
-    @lexer = Lexer.new(Lexer::Reader.new(text), @log)
-  end
-
-  # == Main Entry Point ==
-  def parse : Array(Ast::TopLevelItem)
-    @log.info(Location.zero, "Parser.parse start")
-    consume? Token::BeginFile
-
-    until eof?
-      # Skip any leading newlines or comments between top-level items
-      skipped_newlines_or_comments = false
-      while peek.is_a?(Token::Newline) || peek.is_a?(Token::Comment)
-        next_token
-        skipped_newlines_or_comments = true
-        break if eof?
-      end
-      break if eof?
-
-      begin
-        # parse_top_level_item is expected to add items to @declarations directly
-        # if it parses a construct that can produce multiple items (like 'function' block).
-        # Otherwise, it returns a single item.
-        item = parse_top_level_item
-        if item # Add if it's a single item
-          @declarations << item
-        elsif !skipped_newlines_or_comments && !eof? && !peek.is_a?(Token::KeyWord)
-          # If parse_top_level_item returned nil, and we haven't just skipped newlines,
-          # and we're not at a keyword, it implies an error or unexpected token.
-          # This case might be hit if parse_top_level_item handles adding to declarations itself (like function blocks)
-          # and successfully parses but returns nil to signal it.
-          # However, if it returns nil due to an *unhandled* token at the start of parse_top_level_item,
-          # we need to advance to avoid an infinite loop.
-          # The current parse_top_level_item already reports an error for non-keywords.
-        end
-      rescue err : ParseError
-        # Logged by report_error, here we just ensure we can continue to next top-level item
-        @log.debug(err.location, "Caught ParseError: #{err.message}, attempting to find next top-level item.")
-        # Basic recovery: try to find a sensible place to restart, e.g., after next significant newline or known keyword
-        recover_to_next_declaration
-      end
-    end
-
-    @log.info(peek.location, "Parser.parse end, #{@declarations.size} declarations found.")
-    @declarations
-  end
-
-  # --- Token Navigation & Consumption ---
-
+# methods for peek, next_token, consume, and error-handling
+module TokenNavigation
   # Peeks at the current token without consuming
   def peek : Token
     @peeked ||= @lexer.next(@context)
@@ -124,6 +57,37 @@ class Parser
     # Crystal parser type-checks `old_ctx` as nilable, because the assignment
     # occurs in the begin block.  However, we know it can't be nil here, so this is safe.
     @context = old_ctx || ParserContext::TopLevel
+  end
+
+  # Reads an optional convention keyword (let, mut, sink, copy, ref)
+  def read_convention? : Convention # Convention = Mode | Nil
+    tok = peek
+    if tok.is_a?(Token::KeyWord)
+      case tok.data
+      when KeyWord::Let   then next_token; Mode::Let
+      # TODO: Add other keywords that map to Mode enum (mut, sink, copy, ref)
+      # when KeyWord::Mut   then next_token; Mode::Mut
+      # when KeyWord::Sink  then next_token; Mode::Sink
+      # when KeyWord::Copy  then next_token; Mode::Copy
+      # when KeyWord::Ref   then next_token; Mode::Ref
+      else 
+        nil  # Not a convention keyword
+      end
+    # Pony also allowed string matches for "mut", "sink", etc.
+    # If these are lexed as VariableName tokens but act as conventions:
+    elsif tok.is_a?(Token::Variable)
+      case tok.data
+      when "let" then next_token; Mode::Let
+      when "mut"  then next_token; Mode::Mut
+      when "sink" then next_token; Mode::Sink
+      when "ref"  then next_token; Mode::Ref
+      when "copy" then next_token; Mode::Copy
+      else
+        nil # Not a convention keyword
+      end
+    else
+      nil # No convention keyword found
+    end
   end
 
   def consume?(&block : Token -> Bool) : Token?
@@ -192,34 +156,6 @@ class Parser
     end
   end
 
-
-  # --- Error Reporting & Recovery ---
-  def report_error(location : Location, message : String) : ParseError
-    @log.error(location, message)
-    ParseError.new(message, location)
-  end
-
-  def recover_to_next_declaration
-    # Simple recovery: skip tokens until we find a keyword that typically starts a new declaration,
-    # or after a significant newline sequence. This can be made more sophisticated.
-    @log.debug(peek.location, "Attempting recovery...")
-    until eof?
-      tok = peek
-      # Check for top-level keywords
-      if tok.is_a?(Token::KeyWord)
-        case tok.data
-        when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
-             KeyWord::Extend, KeyWord::Function, KeyWord::Def, KeyWord::Import
-          @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
-          return
-        end
-      end
-      # Could also look for patterns like multiple newlines, or end-of-block tokens if not nested.
-      next_token # Consume and discard the token
-    end
-    @log.debug(peek.location, "Recovery reached EOF or skipped too many tokens.")
-  end
-
   # --- Identifier Consumption ---
   # Consumes the next token as if it is an identifier.
   # Works for variable names, type names, keywords, and operators;
@@ -263,7 +199,52 @@ class Parser
     # end
   end
 
-  # --- Top-Level Parsing ---
+  # --- Error Reporting & Recovery ---
+  def report_error(location : Location, message : String) : Parser::ParseError
+    @log.error(location, message)
+    Parser::ParseError.new(message, location)
+  end
+
+  def recover_to_next_declaration
+    # Simple recovery: skip tokens until we find a keyword that typically starts a new declaration
+    @context = ParserContext::TopLevel
+    @log.debug(peek.location, "Attempting recovery...")
+    until eof?
+      tok = peek
+      # Check for top-level keywords
+      if tok.is_a?(Token::KeyWord)
+        case tok.data
+        when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
+             KeyWord::Extend, KeyWord::Function, KeyWord::Def, KeyWord::Import
+          @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
+          return
+        end
+      end
+      next_token # Consume and discard the token
+    end
+    @log.debug(peek.location, "Recovery reached EOF or skipped too many tokens.")
+  end
+
+  def recover_to_next_def_or_sub_item
+    @context = ParserContext::TopLevel
+    @log.debug(peek.location, "Attempting recovery to next sub-item...")
+    until eof?
+      if peek.is_a?(Token::KeyWord)
+        case peek.data
+        when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
+             KeyWord::Extend, KeyWord::Function, KeyWord::Import,
+             KeyWord::Def, KeyWord::Static, KeyWord::Constructor
+          @log.debug(peek.location, "Recovery found #{peek.data}, resuming parse.")
+          return
+        end
+      end
+      next_token
+    end
+    @log.debug(peek.location, "Recovery in top-level block reached EOF.")
+  end
+end
+
+module TopLevelItemParser
   def parse_top_level_item : Ast::TopLevelItem?
     loc = peek.location
     @log.debug(loc, "Parsing top-level item, current token: #{peek}")
@@ -316,36 +297,35 @@ class Parser
   # Adds Ast::Function nodes directly to @declarations.
   def parse_function_block(function_keyword_loc : Location)
     block_name = consume_identifier("function block name")
-    return if block_name.nil?  # Error already reported by consume_identifier
 
     @log.info(function_keyword_loc, "Parsing function block '#{block_name}'")
-    @log.debug_descend
+    @log.debug_descend do
+      type_params = parse_type_parameters?
 
-    type_params = parse_type_parameters?
-
-    # check if this is a single function or a function block
-    case peek
-    when Token::Def
-      # continue
-    when Token::LBrace, Token::Type, Token::Colon
-      parse_def_overload(function_keyword_loc, block_name, type_params)
-      return
-    else
-      raise report_error(peek.location, "Expected 'def' or function signature after function block name")
-    end
-
-    until eof?
-      break unless def_tok = consume?("def")
-      
-      if overload_ast = parse_def_overload(def_tok.location, block_name, type_params)
-        @declarations << overload_ast
+      # check if this is a single function or a function block
+      case peek
+      when Token::Def
+        # continue
+      when Token::LBrace, Token::Type, Token::Colon
+        @declarations << parse_def_overload(function_keyword_loc, block_name, type_params)
+        return
       else
-        # Error in parsing overload, already reported. Attempt to recover to next 'def' or end of block.
-        recover_to_next_def_or_end_of_function_block
+        report_error(peek.location, "Expected 'def' or function signature after function block name")
+        recover_to_next_declaration
+        return
+      end
+
+      until eof?
+        break unless def_tok = consume?(KeyWord::Def)
+        
+        if overload_ast = parse_def_overload(def_tok.location, block_name, type_params)
+          @declarations << overload_ast
+        else
+          # Error in parsing overload, already reported. Attempt to recover to next 'def' or end of block.
+          recover_to_next_def_or_sub_item
+        end
       end
     end
-
-    
     @log.info(peek.location, "Finished parsing function block '#{block_name}'")
   end
 
@@ -434,6 +414,8 @@ class Parser
     end
   end
 
+  # UNUSED; this was gonna be a wrapper function for parsing type parameters, 
+  # type args, traits, and constraints
   def parse_list(delimiter : (Token::Comma.class | Operator::And.class), &block)
     peek # to skip the possible leading newline before entering into list context
     until eof?
@@ -531,37 +513,6 @@ class Parser
     Ast::Parameter.new(loc, convention, name, type)
   end
 
-  # Reads an optional convention keyword (let, mut, sink, copy, ref)
-  def read_convention? : Convention # Convention = Mode | Nil
-    tok = peek
-    if tok.is_a?(Token::KeyWord)
-      case tok.data
-      when KeyWord::Let   then next_token; Mode::Let
-      # TODO: Add other keywords that map to Mode enum (mut, sink, copy, ref)
-      # when KeyWord::Mut   then next_token; Mode::Mut
-      # when KeyWord::Sink  then next_token; Mode::Sink
-      # when KeyWord::Copy  then next_token; Mode::Copy
-      # when KeyWord::Ref   then next_token; Mode::Ref
-      else 
-        nil  # Not a convention keyword
-      end
-    # Pony also allowed string matches for "mut", "sink", etc.
-    # If these are lexed as VariableName tokens but act as conventions:
-    elsif tok.is_a?(Token::Variable)
-      case tok.data
-      when "let" then next_token; Mode::Let
-      when "mut"  then next_token; Mode::Mut
-      when "sink" then next_token; Mode::Sink
-      when "ref"  then next_token; Mode::Ref
-      when "copy" then next_token; Mode::Copy
-      else
-        nil # Not a convention keyword
-      end
-    else
-      nil # No convention keyword found
-    end
-  end
-
   # Parses a type expression, e.g., MyType, MyGenericType[Arg1, Arg2]
   def parse_type_expression : Ast::Type
     loc = peek.location
@@ -627,31 +578,6 @@ class Parser
         statements
       end
     end
-  end
-
-  def recover_to_next_def_or_end_of_function_block
-    @log.debug(peek.location, "Attempting recovery within function block...")
-    count = 0
-    until eof? || count > 200 # Safety break
-      count += 1
-      tok = peek
-      # Look for 'def' or a token that clearly indicates end of the 'function NAME' block
-      if tok.is_a?(Token::KeyWord) && tok.data == KeyWord::Def
-        @log.debug(tok.location, "Recovery found next 'def' keyword.")
-        return
-      end
-      # Heuristic: if we encounter another top-level keyword, the 'function' block was likely malformed and ended.
-      if tok.is_a?(Token::KeyWord)
-        case tok.data
-        when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, KeyWord::Extend, KeyWord::Function, KeyWord::Import
-          @log.debug(tok.location, "Recovery found another top-level keyword '#{tok.data}', assuming end of current function block.")
-          rewind # Put the keyword back for the main loop
-          return
-        end
-      end
-      next_token
-    end
-    @log.debug(peek.location, "Recovery in function block reached EOF or limit.")
   end
 
   def parse_type_header : {Convention, String, Array(Ast::TypeParameter)?, Array(Ast::Type)?}
@@ -905,6 +831,77 @@ class Parser
       extension
     end
   end
+end
+
+class Parser
+  property lexer : Lexer
+  @peeked : Token? = nil
+  property context : ParserContext = ParserContext::TopLevel
+  property indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
+  # ^ or maybe this should be passed by methods on the stack?  since it's a little stacky
+  @log : Logger
+  getter declarations = [] of Ast::TopLevelItem # The final list of top-level AST nodes
+
+  # --- Exception for Parse Errors to aid in recovery ---
+  class ParseError < Exception
+    getter location : Location
+    def initialize(message : String, @location : Location)
+      super("#{@location}: #{message}")
+    end
+  end
+
+  def initialize(@lexer : Lexer, @log : Logger)
+  end
+  def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
+    @log = Logger.new(log_level)
+    @lexer = Lexer.new(Lexer::Reader.new(text), @log)
+  end
+
+  # == Main Entry Point ==
+  def parse : Array(Ast::TopLevelItem)
+    @log.info(Location.zero, "Parser.parse start")
+    consume? Token::BeginFile
+
+    until eof?
+      # Skip any leading newlines or comments between top-level items
+      skipped_newlines_or_comments = false
+      while peek.is_a?(Token::Newline) || peek.is_a?(Token::Comment)
+        next_token
+        skipped_newlines_or_comments = true
+        break if eof?
+      end
+      break if eof?
+
+      begin
+        # parse_top_level_item is expected to add items to @declarations directly
+        # if it parses a construct that can produce multiple items (like 'function' block).
+        # Otherwise, it returns a single item.
+        item = parse_top_level_item
+        if item # Add if it's a single item
+          @declarations << item
+        elsif !skipped_newlines_or_comments && !eof? && !peek.is_a?(Token::KeyWord)
+          # If parse_top_level_item returned nil, and we haven't just skipped newlines,
+          # and we're not at a keyword, it implies an error or unexpected token.
+          # This case might be hit if parse_top_level_item handles adding to declarations itself (like function blocks)
+          # and successfully parses but returns nil to signal it.
+          # However, if it returns nil due to an *unhandled* token at the start of parse_top_level_item,
+          # we need to advance to avoid an infinite loop.
+          # The current parse_top_level_item already reports an error for non-keywords.
+        end
+      rescue err : ParseError
+        # Logged by report_error, here we just ensure we can continue to next top-level item
+        @log.debug(err.location, "Caught ParseError: #{err.message}, attempting to find next top-level item.")
+        # Basic recovery: try to find a sensible place to restart, e.g., after next significant newline or known keyword
+        recover_to_next_declaration
+      end
+    end
+
+    @log.info(peek.location, "Parser.parse end, #{@declarations.size} declarations found.")
+    @declarations
+  end
+
+  include TokenNavigation
+  include TopLevelItemParser
 
   def parse_expression
     loc = peek.location
