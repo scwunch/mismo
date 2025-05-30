@@ -848,8 +848,6 @@ describe Parser do
       ))
     end
   end
-
-  parser("mut", :top_level).test_it_out
 end
     
 

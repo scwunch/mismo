@@ -2,13 +2,7 @@ require "./tokens"
 require "./ast_nodes"
 require "./logger" 
 
-module DoSomethingWithParserMethods
-  def test_it_out
-    @log.error_descend(loc, "Testing parser methods...") do
-      @log.error(loc, read_convention?.to_s)
-    end
-  end
-end
+
 # Placeholder for operator precedence comparison
 # This would be defined elsewhere, e.g., in a file for operator logic.
 # enum PrecedenceResult
@@ -930,12 +924,8 @@ class Parser
     Ast::Nil.new(loc)
   end
 
-  # TODO: Implement parse_signature, parse_parameters, parse_type_expression,
-  # parse_colon_and_block, parse_type_parameters, parse_traits, etc.
-
   # TODO: Implement ExpressionParser class (for `parse_expression`)
   # TODO: Implement UcsParser class (for `parse_if_expression`)
-  include DoSomethingWithParserMethods
 end
 
 
