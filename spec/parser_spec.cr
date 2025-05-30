@@ -63,6 +63,64 @@ describe Parser do
     end
   end
 
+  describe "#parse_constraints" do
+    it "returns no constraints if no types given" do
+      parser("this aint no constraint", :block).parse_constraints.should eq(Ast::Constraints.new)
+    end
+    it "parses a type as a positive constraint" do
+      parser("String", :block).parse_constraints.should eq(
+        Ast::Constraints.new([Ast::Type.new(loc, "String")]))
+    end
+    it "parses multiple &-separated types as constraints" do
+      parser("Compare & Read & Format", :block).parse_constraints.should eq(
+        Ast::Constraints.new([Ast::Type.new(loc, "Compare"), Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Format")]))
+    end
+    it "parses bounds prefixed with ~ as prohibitions" do
+      parser("Read ~Write", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "Read")], 
+          [Ast::Type.new(loc, "Write")]))
+    end
+    it "parses bounds prefixed with ~ as prohibitions, with multiple prohibitions" do
+      parser("Read ~Write ~Format", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "Read")], 
+          [Ast::Type.new(loc, "Write"), Ast::Type.new(loc, "Format")]))
+    end
+    it "the first bound may be negative" do
+      parser("~Read", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          nil, 
+          [Ast::Type.new(loc, "Read")]))
+    end
+    it "the first bound may be negative, with multiple prohibitions" do
+      parser("~Read ~Write", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          nil,
+          [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")]))
+    end
+    it "the first bound may be negative, with a positive constraint" do
+      parser("~Read & String", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "String")],
+          [Ast::Type.new(loc, "Read")]))
+    end
+    it "required and prohibited constraints can be mixed " do
+      parser("~Read & String ~ Int & Format", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "String"), Ast::Type.new(loc, "Format")],
+          [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Int")]))
+    end
+    it "parses constraints after an optional 'is' or ':'" do
+      parser("is Compare", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "Compare")]))
+      parser(": Compare", :block).parse_constraints.should eq(
+        Ast::Constraints.new(
+          [Ast::Type.new(loc, "Compare")]))
+    end
+  end
+
   describe "#parse_type_expression" do
     it "consumes a type token and returns a type node" do
       parser("String", :block).parse_type_expression.should eq(Ast::Type.new(loc, "String"))
@@ -336,6 +394,39 @@ describe Parser do
     end
   end
 
+  describe "#parse_type_header" do
+    it "returns the convention, name, type parameters, and traits" do
+      parser("Type[T] is Trait1 & Trait2", :top_level)
+      .parse_type_header
+      .should eq({
+        nil, 
+        "Type", 
+        [Ast::TypeParameter.new(loc, "T")], 
+        [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
+      })
+    end
+    it "returns the convention, name, type parameters, and traits with a receiver convention" do
+      parser("mut Type[T Bound] is Trait1 & Trait2", :top_level)
+      .parse_type_header
+      .should eq({
+        Mode::Mut, 
+        "Type", 
+        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Bound")])], 
+        [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
+      })
+    end
+    it "parses a type header with some newlines thrown in there" do
+      parser("mut\nType[\nT\n]\n is \nTrait1 \n&\n Trait2\n", :top_level)
+      .parse_type_header
+      .should eq({
+        Mode::Mut, 
+        "Type", 
+        [Ast::TypeParameter.new(loc, "T")], 
+        [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
+      })
+    end
+  end
+
   describe "#parse_struct" do
     it "parses a struct with fields" do
       code = <<-MISMO
@@ -343,7 +434,7 @@ describe Parser do
           field x Int
           field y Int
         MISMO
-      parser = parser(code, :top_level) #, :debug)
+      parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
       s = parser.parse_struct(loc)
       s.should eq(Ast::Struct.new(
@@ -364,7 +455,7 @@ describe Parser do
           field _length UInt
           field _capacity UInt
         MISMO
-      parser = parser(code, :top_level) #, :debug)
+      parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
       s = parser.parse_struct(loc)
       s.should eq(Ast::Struct.new(
@@ -385,7 +476,7 @@ describe Parser do
           field _buffer Pointer[T]
           field _length UInt
         MISMO
-      parser = parser(code, :top_level) #, :debug)
+      parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
       s = parser.parse_struct(loc)
       s.should eq(Ast::Struct.new(
@@ -408,7 +499,7 @@ describe Parser do
           def read Int:
             string[0]
         MISMO
-      parser = parser(code, :top_level, :debug)
+      parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
       parser.parse_struct(loc)
       .should eq(Ast::Struct.new(
@@ -463,7 +554,7 @@ describe Parser do
           def count UInt: ._count
         MISMO
       self_param = Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "T")]))
-      parser = parser(code, :top_level, :debug)
+      parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
       s = parser.parse_struct(loc)
       s.should eq(Ast::Struct.new(
@@ -508,6 +599,257 @@ describe Parser do
       parser.declarations.last.should eq(s)
     end
   end
+
+  describe "#parse_enum" do
+    it "parses an enum with no variants" do
+      code = <<-MISMO
+        enum Token
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Token", 
+        nil, 
+        nil,
+        [] of Ast::Variant
+      ))
+    end
+    it "parses an enum with basic variants" do
+      code = <<-MISMO
+        enum Color
+          Red
+          Blue
+          Green
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Color", 
+        nil, 
+        nil,
+        [
+          Ast::Variant.new(loc, "Red"),
+          Ast::Variant.new(loc, "Blue"),
+          Ast::Variant.new(loc, "Green"),
+        ]
+      ))
+    end
+    it "parses an enum with variants and fields" do
+      code = <<-MISMO
+        enum Token
+          EOF
+          Var(String)
+          Func(String, Array[String], String)
+          App(String, Array[String])
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Token", 
+        nil, 
+        nil,
+        [
+          Ast::Variant.new(loc, "EOF"),
+          Ast::Variant.new(loc, "Var", [{"0", Ast::Type.new(loc, "String")}]),
+          Ast::Variant.new(loc, "Func", [{"0", Ast::Type.new(loc, "String")}, {"1", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}, {"2", Ast::Type.new(loc, "String")}]),
+          Ast::Variant.new(loc, "App", [{"0", Ast::Type.new(loc, "String")}, {"1", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}])
+        ]
+      ))
+    end
+    it "parses an enum with type parameters and traits" do
+      code = <<-MISMO
+        enum Result[R, E] is 
+              Awesome[R] & Cool[E]
+          Ok(R)
+          Err(E)
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Result", 
+        [Ast::TypeParameter.new(loc, "R"), Ast::TypeParameter.new(loc, "E")], 
+        [Ast::Type.new(loc, "Awesome", [Ast::Type.new(loc, "R")]), Ast::Type.new(loc, "Cool", [Ast::Type.new(loc, "E")])],
+        [
+          Ast::Variant.new(loc, "Ok", [{"0", Ast::Type.new(loc, "R")}]),
+          Ast::Variant.new(loc, "Err", [{"0", Ast::Type.new(loc, "E")}])
+        ]
+      ))
+    end
+    it "parses an enum with variants that contain named fields" do
+      code = <<-MISMO
+        enum Token
+          EOF
+          Var(String)
+          Func(caller: String, args: Array[String], return: String)
+          App(caller: String, args: Array[String])
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Token", 
+        nil, 
+        nil,
+        [
+          Ast::Variant.new(loc, "EOF"),
+          Ast::Variant.new(loc, "Var", [{"0", Ast::Type.new(loc, "String")}]),
+          Ast::Variant.new(loc, "Func", [{"caller", Ast::Type.new(loc, "String")}, {"args", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}, {"return", Ast::Type.new(loc, "String")}]),
+          Ast::Variant.new(loc, "App", [{"caller", Ast::Type.new(loc, "String")}, {"args", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}])
+        ]
+      ))
+    end
+    it "parses an enum with methods and stuff" do
+      code = <<-MISMO
+        enum Color
+          Red
+          Green
+          Blue
+          
+          def is_special -> Bool:
+            true
+
+          static parse(str String) -> Color:
+            if str ==
+              "red": Color.Red
+              "green": Color.Green
+              "blue": Color.Blue
+            else
+              raise "Invalid color: ${str}"
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Color", 
+        nil, 
+        nil,
+        [
+          Ast::Variant.new(loc, "Red"),
+          Ast::Variant.new(loc, "Green"),
+          Ast::Variant.new(loc, "Blue")
+        ]
+      ))
+      parser.declarations.size.should eq(3)
+      special = parser.declarations[0]
+      special.should be_a(Ast::Function)
+      special.name.should eq("is_special")
+      special.as(Ast::Function).signature.should eq(Ast::Signature.new(
+        loc,
+        nil,
+        [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Color"))],
+        Ast::Type.new(loc, "Bool")
+      ))
+      parse = parser.declarations[1]
+      parse.should be_a(Ast::Function)
+      parse.name.should eq("Color.parse")
+      parse.as(Ast::Function).signature.should eq(Ast::Signature.new(
+        loc,
+        nil,
+        [Ast::Parameter.new(loc, "str", Ast::Type.new(loc, "String"))],
+        Ast::Type.new(loc, "Color")
+      ))
+    end
+  end
+
+  describe "#parse_trait" do
+    self_param = Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Self"))
+    it "parses a trait" do
+      code = <<-MISMO
+        trait IO
+          def read String
+          def write(str String)
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
+      t = parser.parse_trait(loc)
+      t.should eq(Ast::Trait.new(
+        loc, 
+        "IO", 
+        nil, 
+        nil,
+        [
+          Ast::AbstractMethod.new(loc, "read", Ast::Signature.new(loc, nil, [self_param], Ast::Type.new(loc, "String"))),
+          Ast::AbstractMethod.new(loc, "write", Ast::Signature.new(loc, nil, [self_param, Ast::Parameter.new(loc, "str", Ast::Type.new(loc, "String"))]))
+        ]
+      ))
+    end
+    it "parses a trait with convention and type parameters and super traits" do
+      code = <<-MISMO
+        trait mut Mutable[X] is Dangerous & Fun
+          def mutate_me(pls Please)
+          
+          def let get(index Int) -> Something:
+            default + implementation
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
+      t = parser.parse_trait(loc)
+      t.convention.should eq(Mode::Mut)
+      t.name.should eq("Mutable")
+      t.type_parameters.should eq([Ast::TypeParameter.new(loc, "X")])
+      t.traits.should eq([Ast::Type.new(loc, "Dangerous"), Ast::Type.new(loc, "Fun")])
+      mutate_me = t.methods[0]
+      mutate_me.name.should eq("mutate_me")
+      mutate_me.signature.should eq(Ast::Signature.new(
+        loc, 
+        [Ast::TypeParameter.new(loc, "X")], 
+        [self_param, Ast::Parameter.new(loc, "pls", Ast::Type.new(loc, "Please"))]
+      ))
+      get = t.methods[1]
+      get.name.should eq("get")
+      get_self_param = self_param
+      get_self_param.convention = Mode::Let
+      get.signature.should eq(Ast::Signature.new(
+        loc, 
+        [Ast::TypeParameter.new(loc, "X")], 
+        [get_self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
+        Ast::Type.new(loc, "Something")
+      ))
+      get.body.should_not be_nil
+    end
+  end
+
+  describe "#parse_extend" do
+    it "parses an extend" do
+      code = <<-MISMO
+        extend[T: String] T is Format
+          def format String: 
+            self.string
+        MISMO
+      parser = parser(code, :top_level)
+      parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Extend))
+      e = parser.parse_extend(loc)
+      e.should eq(Ast::Extend.new(
+        loc, 
+        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
+        Ast::Type.new(loc, "T"), 
+        [Ast::Type.new(loc, "Format")]
+      ))
+      parser.declarations.size.should eq(2)
+      parser.declarations[0].should be_a(Ast::Extend)
+      format = parser.declarations[1]
+      format.should be_a(Ast::Function)
+      format.name.should eq("format")
+      format.as(Ast::Function).signature.should eq(Ast::Signature.new(
+        loc, 
+        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
+        [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "T"))], 
+        Ast::Type.new(loc, "String")
+      ))
+    end
+  end
+
+  parser("mut", :top_level).test_it_out
 end
     
 

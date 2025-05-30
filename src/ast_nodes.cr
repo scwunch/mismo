@@ -14,6 +14,7 @@ module Ast
       {% for ivar, i in @type.instance_vars %}
         # io << {{ivar.name.stringify}} << "="
         {% if ivar.name.id != "loc" %}
+          # io << "{{ivar.name.id}}=" << {{ivar.name.id}}.inspect
           io << {{ivar.name.id}}.inspect
         {% end %}
         {% if i < @type.instance_vars.size - 1 %}
@@ -397,8 +398,8 @@ module Ast
 
   struct Variant < Node
     property name : ::String
-    property fields : NamedTuple
-    def initialize(@loc : Location, @name : ::String, @fields : NamedTuple)
+    property fields : ::Array({::String, Type})?
+    def initialize(@loc : Location, @name : ::String, @fields : ::Array({::String, Type})? = nil)
     end
     def to_s(io : IO)
       io << "variant #{name}#{fields}"
@@ -406,10 +407,10 @@ module Ast
   end
 
   struct Trait < TypeDeclaration
-    property methods : ::Array(Function)
-    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(Function) = [] of Function, @convention : Convention = nil)
+    property methods : ::Array(AbstractMethod)
+    def initialize(@loc : Location, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod, @convention : Convention = nil)
     end
-    def initialize(@loc : Location, @convention : Convention, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(Function) = [] of Function)
+    def initialize(@loc : Location, @convention : Convention, @name : ::String, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod)
     end
     def to_s(io : IO)
       io << "trait #{name}"
@@ -418,10 +419,10 @@ module Ast
 
   struct Extend < TopLevelItem
     property type : Type
-    property traits : ::Array(Type)
-    def initialize(@loc : Location, @type_parameters : ::Array(Type)?, @type : Type, @traits : ::Array(Type) = [] of Type)
+    property traits : ::Array(Type)?
+    def initialize(@loc : Location, @type_parameters : ::Array(TypeParameter)?, @type : Type, @traits : ::Array(Type)? = nil)
     end
-    def initialize(@loc : Location, @type : Type, *, @type_parameters : ::Array(Type)? = nil, @traits : ::Array(Type) = [] of Type)
+    def initialize(@loc : Location, @type : Type, *, @type_parameters : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil)
     end
     def name 
       @type.name
@@ -442,6 +443,17 @@ module Ast
     end
   end
 
+  struct AbstractMethod < TopLevelItem
+    property name : ::String
+    property signature : Signature
+    property body : ::Array(Expr)?
+    def initialize(@loc : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr)? = nil)
+    end
+    def to_s(io : IO)
+      io << "#{self.class.name}(#{name})"
+    end
+  end
+
   struct Signature < Node
     property type_parameters : ::Array(TypeParameter)?
     property params : ::Array(Parameter)?
@@ -455,23 +467,60 @@ module Ast
   end
 
   struct TypeParameter < Node
-    include AutoConstructor
-    field :loc, Location
-    field :name, ::String
-    field :constraints, ::Array(Type)?
-    # property loc : Location
-    # property name : ::String
-    # property constraints : ::Array(Type)? = nil
-    # def initialize(@loc : Location, @name : ::String, @constraints : ::Array(Type)? = nil)
-    # end
+    # include AutoConstructor
+    # field :loc, Location
+    # field :name, ::String
+    # field :constraints, Constraints
+    property loc : Location
+    property name : ::String
+    property constraints : Constraints
+    def initialize(@loc : Location, @name : ::String, @constraints : Constraints = Constraints.new)
+    end
+    def initialize(@loc : Location, @name : ::String, include_traits : ::Array(Type)? = nil, exclude_traits : ::Array(Type)? = nil)
+      @constraints = Constraints.new(include_traits, exclude_traits)
+    end
     def to_s(io : IO)
       io << "#{name}"
-      io << ": " << constraints.join(", ") if constraints
+      io << ": " << constraints.to_s unless constraints.empty?
     end
-    # def inspect(io : IO)
-    #   super
-    # end
   end
+
+  struct Constraints
+    property includes : ::Array(Type)?
+    property excludes : ::Array(Type)?
+    def initialize(@includes : ::Array(Type)? = nil, @excludes : ::Array(Type)? = nil)
+    end
+    def self.include(trait : Type)
+      new([trait])
+    end
+    def self.exclude(trait : Type)
+      new(nil, [trait])
+    end
+    def include(trait : Type)
+      if i = @includes
+        i << trait
+      else
+        @includes = [trait]
+      end
+    end
+    def exclude(trait : Type)
+      if e = @excludes
+        e << trait
+      else
+        @excludes = [trait]
+      end
+    end
+    def empty?
+      includes.nil? && excludes.nil?
+    end
+    def to_s(io : IO)
+      io << includes.join(" & ") if includes
+      io << " ~" << excludes.join(" ~") if excludes
+    end
+    def inspect(io : IO)
+      io << "Ast::Constraints(includes: #{includes.inspect}, excludes: #{excludes.inspect})"
+    end
+  end    
 
   struct Parameter < Node
     property loc : Location
@@ -483,6 +532,7 @@ module Ast
     def initialize(@loc : Location, @convention : Convention, @name : ::String, @type : Type)
     end
     def to_s(io : IO)
+      io << "#{convention} " if convention
       io << "#{name}: #{type}"
     end
   end
@@ -504,7 +554,7 @@ module Ast
 
   def self.to_type_args(type_params : ::Array(TypeParameter)?) : ::Array(Type)?
     return nil unless type_params
-    type_params.map { |tp| Type.new(tp.loc, tp.name, tp.constraints) }
+    type_params.map { |tp| Type.new(tp.loc, tp.name) }
   end
 end
 

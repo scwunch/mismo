@@ -209,7 +209,7 @@ enum Operator
     when "/" then Div
     when "%" then Mod
     when "^", "**" then Exp
-    when "not" then Not
+    when "not", "~" then Not
     when "&", "and" then And
     when "|", "or" then Or
     when "is" then Is

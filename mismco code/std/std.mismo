@@ -1,0 +1,50 @@
+struct Array[T]
+  field _buffer: Pointer[T]
+  field _len: UInt
+  field _cap: UInt
+
+  def len UInt: _len
+  def cap UInt: _cap
+
+  def opt(index: UInt): Option[T]
+    if index < _len
+      Some(_buffer.deref(index))
+    else
+      None
+
+  def mut opt(index: UInt): Option[T]
+    if index < _len
+      Some(_buffer.deref_mut(index))
+    else
+      None
+    
+  def get(index: UInt): T
+    _buffer.deref(index)
+  
+  def mut get(index: UInt): T
+    _buffer.deref_mut(index)
+    
+
+enum Result[T, E]
+  Ok(T)
+  Err(E)
+
+
+alias Option[T] = Result[T, Nil]
+  static Some[T](t: T) Option[T]: 
+    Ok(t)
+  static None[T] Option[T]: 
+    Err(Nil)
+
+
+trait Monad[T]
+  def map[U](fn: T -> U) Self[U]
+
+  def flat_map[U](fn: T -> Self[U]) Self[U]
+
+
+extend[T] Option[T] is Monad[T]
+  def map[U](fn: T -> U) Option[U]
+    if self is
+      Ok(t): Ok(fn(t))
+      Err(_): Err(Nil)

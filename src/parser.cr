@@ -2,7 +2,13 @@ require "./tokens"
 require "./ast_nodes"
 require "./logger" 
 
-
+module DoSomethingWithParserMethods
+  def test_it_out
+    @log.error_descend(loc, "Testing parser methods...") do
+      @log.error(loc, read_convention?.to_s)
+    end
+  end
+end
 # Placeholder for operator precedence comparison
 # This would be defined elsewhere, e.g., in a file for operator logic.
 # enum PrecedenceResult
@@ -39,7 +45,7 @@ class Parser
   class ParseError < Exception
     getter location : Location
     def initialize(message : String, @location : Location)
-      super(message)
+      super("#{@location}: #{message}")
     end
   end
 
@@ -263,19 +269,6 @@ class Parser
     # end
   end
 
-  def consume_variable_name(ignore_newline = false) : String
-    # case token = ignore_newline ? next_token(:skip_newline) : next_token
-    case token = next_token
-    when Token::Variable
-      token.data
-    when Token::Type # Check if it's a mis-cased variable name
-      report_error(token.location, "Variable names usually start with lowercase; got '#{token.data}' (a type name pattern).")
-      token.data
-    else
-      raise report_error(token.location, "Expected variable name, got #{token}")
-    end
-  end
-
   # --- Top-Level Parsing ---
   def parse_top_level_item : Ast::TopLevelItem?
     loc = peek.location
@@ -433,7 +426,7 @@ class Parser
           # parse type parameter
           param_loc = peek.location
           name = consume_type_name!
-          constraints = parse_constraints?
+          constraints = parse_constraints
           type_params << Ast::TypeParameter.new(param_loc, name, constraints)
           unless consume?(Token::Comma) 
             break if peek.is_a?(Token::RBracket)
@@ -457,21 +450,50 @@ class Parser
   end
 
   # Parses `: Trait & Trait[Int]`
-  def parse_constraints?
+  def parse_traits?
     # consume optional colon or `is`
-    return nil unless consume?(Token::Colon) || consume?(Operator::Is) || peek.is_a?(Token::Type)
-    @log.debug_descend(peek.location, "Parsing constraints...") do
+    return nil unless consume?(Token::Colon) || consume?(Operator::Is)
+    @log.debug_descend(peek.location, "Parsing traits...") do
       # contraint parsing may occur in a list context, but we still want to require
       # the `&` separator yet ignore newlines, so we use ParserContext::TopLevel
       with_context ParserContext::TopLevel do
-        constraints = [] of Ast::Type
+        traits = [] of Ast::Type
         until eof?
-          constraints << parse_type_expression
+          traits << parse_type_expression
           consume?(Operator::And) || break
         end
-        constraints
+        traits
       end
     end
+  end
+
+  # Parses `: Trait & Trait[Int]`
+  def parse_constraints : Ast::Constraints
+    constraints = Ast::Constraints.new
+    unless consume?(Token::Colon) || consume?(Operator::Is) || peek.data == Operator::Not || peek.is_a?(Token::Type)
+      return constraints
+    end
+    @log.debug_descend(peek.location, "Parsing constraints...") do
+      with_context ParserContext::TopLevel do
+        # parse first constraint
+        if consume?(Operator::Not)
+          constraints.exclude(parse_type_expression)
+        else
+          constraints.include(parse_type_expression)
+        end
+        # parse remaining constraints
+        while true
+          if consume?(Operator::And)
+            constraints.include(parse_type_expression)
+          elsif consume?(Operator::Not)
+            constraints.exclude(parse_type_expression)
+          else
+            break
+          end
+        end
+      end
+    end
+    constraints
   end
 
   # macro parse_parameters(receiver)
@@ -638,11 +660,12 @@ class Parser
     @log.debug(peek.location, "Recovery in function block reached EOF or limit.")
   end
 
-  def parse_type_header : {String, Array(Ast::TypeParameter)?, Array(Ast::Type)?}
+  def parse_type_header : {Convention, String, Array(Ast::TypeParameter)?, Array(Ast::Type)?}
+    convention = read_convention?
     name = consume_identifier
     type_params = parse_type_parameters?
-    traits = parse_constraints?
-    {name, type_params, traits}
+    traits = parse_traits?
+    {convention, name, type_params, traits}
   end
     
 
@@ -654,9 +677,9 @@ class Parser
   # ```
   def parse_struct(decl_loc : Location) : Ast::Struct?
     @log.debug_descend(decl_loc, "Parsing struct declaration...") do
-      name, type_params, traits = parse_type_header
-      struct_dec = Ast::Struct.new(decl_loc, name, type_params, traits)
-      receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name))
+      convention, name, type_params, traits = parse_type_header
+      struct_dec = Ast::Struct.new(decl_loc, convention, name, type_params, traits)
+      receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name, Ast.to_type_args(type_params)))
       until eof?
         if peek.location.column <= decl_loc.column
           break
@@ -666,17 +689,17 @@ class Parser
         when KeyWord::Field
           struct_dec.fields << parse_field(key_tok.location)
         when KeyWord::Def
-          declarations << parse_method(key_tok.location, receiver, type_params)
+          @declarations << parse_method(key_tok.location, receiver, type_params)
         when KeyWord::Constructor
-          declarations << parse_constructor(key_tok.location, name, type_params)
+          @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
         when KeyWord::Static
-          declarations << parse_static(key_tok.location, name, type_params)
+          @declarations << parse_static(key_tok.location, name, type_params)
         else
           report_error(peek.location, "Unexpected token in struct declaration")
           break
         end
       end
-      declarations << struct_dec
+      @declarations << struct_dec
       struct_dec
     end
   end
@@ -714,37 +737,140 @@ class Parser
     
   end
 
-  def parse_constructor(loc : Location, type_name : String, inherited_type_params : Array(Ast::TypeParameter)? = nil)
+  def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil) : Ast::AbstractMethod
+    @log.debug_descend(loc, "Parsing abstract method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
+      convention = read_convention?
+      receiver.convention = convention if convention
+      name = consume_identifier
+      signature = parse_signature(peek.location, inherited_type_params, receiver)
+      indent = loc.column == 0 ? 0_u32 : loc.column - 1
+      if peek.is_a?(Token::Colon)
+        block = parse_colon_and_block(indent)
+        consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
+      end
+      Ast::AbstractMethod.new(loc, name, signature, block)
+    end
+  end
+
+  def parse_constructor(loc : Location, return_type : Ast::Type, type_params : Array(Ast::TypeParameter)? = nil)
     @log.debug_descend(loc, "Parsing constructor...") do
-      signature = parse_signature(loc, inherited_type_params)
+      signature = parse_signature(loc, type_params)
       if t = signature.return_type
         report_error(t.loc, "Constructor cannot have a return type")
       end
-      signature.return_type = Ast::Type.new(loc, type_name, Ast.to_type_args(inherited_type_params))
+      signature.return_type = return_type
       indent = loc.column == 0 ? 0_u32 : loc.column - 1
       block = parse_colon_and_block(indent)
       consume?(Token::Newline) || report_error(peek.location, "Expected newline after constructor body")
-      Ast::Function.new(loc, type_name, signature, block)
+      Ast::Function.new(loc, return_type.name, signature, block)
     end
   end
 
   def parse_static(loc : Location, type_name : String, inherited_type_params : Array(Ast::TypeParameter)? = nil)
-    raise report_error(loc, "parse_static is not yet implemented")
-    Ast::Function.new(loc, "#{type_name}.#{consume_identifier}", Ast::Signature.new(loc), [] of Ast::Expr)
+    @log.debug_descend(loc, "Parsing static method...") do
+      name = consume_identifier
+      signature = parse_signature(peek.location, inherited_type_params)
+      indent = loc.column == 0 ? 0_u32 : loc.column - 1
+      block = parse_colon_and_block(indent)
+      consume?(Token::Newline) || report_error(peek.location, "Expected newline after static method body")
+      Ast::Function.new(loc, "#{type_name}.#{name}", signature, block)
+    end
   end
 
   def parse_trait(decl_loc : Location) : Ast::Trait?
-    @log.debug(decl_loc, "Parsing trait declaration...")
-    # Pony: parse_trait() -> parse_type_header(), then methods
-    raise report_error(decl_loc, "parse_trait not yet implemented")
-    nil # Placeholder
+    @log.debug_descend(decl_loc, "Parsing trait declaration...") do
+      convention, name, type_params, traits = parse_type_header
+      trait_dec = Ast::Trait.new(decl_loc, convention, name, type_params, traits)
+      receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, "Self"))
+      until eof?
+        if peek.location.column <= decl_loc.column
+          break
+        end
+        key_tok = consume!(Token::KeyWord)
+        case key_tok.data
+        when KeyWord::Field
+          report_error(key_tok.location, "Fields not yet supported by traits.")
+          parse_field(key_tok.location)
+        when KeyWord::Def
+          trait_dec.methods << parse_abstract_method(key_tok.location, receiver, type_params)
+        when KeyWord::Constructor
+          report_error(key_tok.location, "Constructors not yet supported by traits.")
+          parse_constructor(key_tok.location, receiver.type, type_params)
+        when KeyWord::Static
+          @declarations << parse_static(key_tok.location, name, type_params)
+        else
+          report_error(peek.location, "Unexpected token in trait declaration")
+          break
+        end
+      end
+      @declarations << trait_dec
+      trait_dec
+    end
   end
 
   def parse_enum(decl_loc : Location) : Ast::Enum?
-    @log.debug(decl_loc, "Parsing enum declaration...")
-    # Pony: parse_enum() -> parse_type_header(), parse_variants(), then methods
-    raise report_error(decl_loc, "parse_enum not yet implemented")
-    nil # Placeholder
+    @log.debug_descend(decl_loc, "Parsing enum declaration...") do
+      convention, name, type_params, traits = parse_type_header
+      enum_dec = Ast::Enum.new(decl_loc, convention, name, type_params, traits)
+      receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name, Ast.to_type_args(type_params)))
+      until eof?
+        if peek.location.column <= decl_loc.column
+          break
+        end
+        if variant_token = consume?(Token::Type)
+          enum_dec.variants << parse_variant(variant_token.location, variant_token.data.as(String))
+          next
+        end
+        key_tok = consume!(Token::KeyWord)
+        case key_tok.data
+        when KeyWord::Field
+          # enum_dec.fields << parse_field(key_tok.location)
+          report_error(key_tok.location, "Enums cannot have fields directly, fields should be in variants.")
+          parse_field(key_tok.location)
+        when KeyWord::Def
+          @declarations << parse_method(key_tok.location, receiver, type_params)
+        when KeyWord::Constructor
+          @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
+        when KeyWord::Static
+          @declarations << parse_static(key_tok.location, name, type_params)
+        else
+          report_error(peek.location, "Unexpected token in struct declaration")
+          break
+        end
+      end
+      @declarations << enum_dec
+      enum_dec
+    end
+  end
+
+  def parse_variant(loc : Location, name : String) : Ast::Variant
+    @log.debug_descend(loc, "Parsing variant declaration...") do
+      unless consume?(Token::LParen)
+        return Ast::Variant.new(loc, name)
+      end
+      if consume?(Token::RParen)
+        @log.warning(loc, "Variant #{name} has no fields.")
+        return Ast::Variant.new(loc, name, [] of {String, Ast::Type})
+      end
+      with_context ParserContext::List do
+        fields = [] of {String, Ast::Type}
+        until eof?
+          case peek
+          when Token::Type
+            field_type = parse_type_expression
+            fields << {fields.size.to_s, field_type}
+          else
+            field_name = consume_identifier
+            consume?(Token::Colon)
+            field_type = parse_type_expression
+            fields << {field_name, field_type}
+          end
+          consume?(Token::Comma) || break
+        end
+        consume!(Token::RParen)
+        Ast::Variant.new(loc, name, fields)
+      end
+    end
   end
 
   def parse_import(decl_loc : Location) : Ast::Node? # TODO: Define Ast::Import
@@ -755,10 +881,35 @@ class Parser
   end
 
   def parse_extend(decl_loc : Location) : Ast::Extend?
-    @log.debug(decl_loc, "Parsing extend declaration...")
-    # Pony: parse_extend(loc.col)
-    raise report_error(decl_loc, "parse_extend not yet implemented")
-    nil # Placeholder
+    @log.debug_descend(decl_loc, "Parsing extend declaration...") do
+      type_params = parse_type_parameters?
+      type = parse_type_expression
+      traits = parse_traits?
+      extension = Ast::Extend.new(decl_loc, type_params, type, traits)
+      @declarations << extension
+      receiver = Ast::Parameter.new(decl_loc, "self", type)
+      until eof?
+        if peek.location.column <= decl_loc.column
+          break
+        end
+        key_tok = consume!(Token::KeyWord)
+        case key_tok.data
+        when KeyWord::Field
+          report_error(key_tok.location, "Type extensions cannot add fields, only methods.")
+          parse_field(key_tok.location)
+        when KeyWord::Def
+          @declarations << parse_method(key_tok.location, receiver, type_params)
+        when KeyWord::Constructor
+          @declarations << parse_constructor(key_tok.location, type, type_params)
+        when KeyWord::Static
+          @declarations << parse_static(key_tok.location, type.name, type_params)
+        else
+          report_error(peek.location, "Unexpected #{peek.data} in extend declaration")
+          break
+        end
+      end
+      extension
+    end
   end
 
   def parse_expression
@@ -780,9 +931,11 @@ class Parser
   end
 
   # TODO: Implement parse_signature, parse_parameters, parse_type_expression,
-  # parse_colon_and_block, parse_type_parameters, parse_constraints, etc.
+  # parse_colon_and_block, parse_type_parameters, parse_traits, etc.
 
   # TODO: Implement ExpressionParser class (for `parse_expression`)
   # TODO: Implement UcsParser class (for `parse_if_expression`)
-
+  include DoSomethingWithParserMethods
 end
+
+
