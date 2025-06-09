@@ -3,6 +3,8 @@
 #  - Operator
 #  - Keyword
 #  
+require "./operators"
+
 
 struct Location
   include Comparable(Location)
@@ -18,6 +20,10 @@ struct Location
 
   def self.zero
     Location.new(0, 0)
+  end
+
+  def indent
+    @column - 1
   end
 
   def to_s(io : IO)
@@ -168,111 +174,6 @@ abstract struct Token
   alias GroupClose = RParen | RBracket | RBrace
 end
 
-
-enum Operator
-  Neg
-  Add
-  Sub
-  Mul
-  Div
-  Mod
-  Exp
-  Not
-  And
-  Or
-  Is
-  IsNot
-  In
-  NotIn
-  Eq
-  Neq
-  Lt
-  Le
-  Gt
-  Ge
-  RArrow
-  Assign
-  AddAssign
-  SubAssign
-  MulAssign
-  DivAssign
-  ModAssign
-  AndAssign
-  OrAssign
-  ExpAssign
-
-  def self.parse?(str : String)
-    case str
-    when "+" then Add
-    when "-" then Sub
-    when "*" then Mul
-    when "/" then Div
-    when "%" then Mod
-    when "^", "**" then Exp
-    when "not", "~" then Not
-    when "&", "and" then And
-    when "|", "or" then Or
-    when "is" then Is
-    when "is not" then IsNot
-    when "in" then In
-    when "not in" then NotIn
-    when "==" then Eq
-    when "!=" then Neq
-    when "<" then Lt
-    when "<=" then Le
-    when ">" then Gt
-    when ">=" then Ge
-    when "->" then RArrow
-    when "=", ":=" then Assign
-    when "+=" then AddAssign
-    when "-=" then SubAssign
-    when "*=" then MulAssign
-    when "/=" then DivAssign
-    when "%=" then ModAssign
-    when "&&=" then AndAssign
-    when "||=" then OrAssign
-    when "**=", "^=" then ExpAssign
-    else
-      nil
-    end
-  end
-
-  def to_s
-    case self
-    in Neg then "-"
-    in Add then "+"
-    in Sub then "-"
-    in Mul then "*"
-    in Div then "/"
-    in Mod then "%"
-    in Exp then "^"
-    in Not then "not"
-    in And then "and"
-    in Or then "or"
-    in Is then "is"
-    in IsNot then "is not"
-    in In then "in"
-    in NotIn then "not in"
-    in Eq then "=="
-    in Neq then "!="
-    in Lt then "<"
-    in Le then "<="
-    in Gt then ">"
-    in Ge then ">="
-    in RArrow then "->"
-    in Assign then "="
-    in AddAssign then "+="
-    in SubAssign then "-="
-    in MulAssign then "*="
-    in DivAssign then "/="
-    in ModAssign then "%="
-    in AndAssign then "&&="
-    in OrAssign then "||="
-    in ExpAssign then "**="
-    end
-  end
-end
-
 enum KeyWord
   Import
   Struct
@@ -286,12 +187,15 @@ enum KeyWord
   Def
   Let
   Var
+  Mut
+  Const
   If
   Else
   For
   While
-  Mut
-  Const
+  Break
+  Continue
+  Return
 
   def top_level_keyword?
     case self
@@ -352,13 +256,16 @@ enum KeyWord
     when "else" then Else
     when "for" then For
     when "while" then While
+    when "break" then Break
+    when "continue" then Continue
+    when "return" then Return
     else
       nil
     end
   end
 
-  def to_s(io : IO)
-    io << case self
+  def to_s
+    case self
     in Import then "import"
     in Struct then "struct"
     in Enum then "enum"
@@ -371,12 +278,15 @@ enum KeyWord
     in Def then "def"
     in Let then "let"
     in Var then "var"
+    in Mut then "mut"
+    in Const then "const"
     in If then "if"
     in Else then "else"
     in For then "for"
     in While then "while"
-    in Mut then "mut"
-    in Const then "const"
+    in Break then "break"
+    in Continue then "continue"
+    in Return then "return"
     end
-  end
+  end  
 end

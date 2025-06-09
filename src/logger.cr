@@ -18,40 +18,28 @@ class Logger
     end
   end
 
+  getter file_path : String = ""
   @indent : UInt32 = 0
+  @out : IO = STDOUT
   property level : Level
 
-  def initialize(@level : Level = Level::Debug, @out : IO = STDOUT)
-  end
-
-  def debug(loc : Location, msg : String)
-    if @level <= Level::Debug
-      @out.puts "#{loc}: DEBUG: #{msg}"
-    end
-  end
-
-  def info(loc : Location, msg : String)
-    if @level <= Level::Info
-      @out.puts "#{loc}: INFO: #{msg}"
-    end
-  end
-
-  def warning(loc : Location, msg : String)
-    if @level <= Level::Warning
-      @out.puts "#{loc}: WARNING: #{msg}"
-    end
-  end
-
-  def error(loc : Location, msg : String)
-    if @level <= Level::Error
-      @out.puts "#{loc}: ERROR: #{msg}"
+  def initialize(@level : Level = Level::Debug, @out : IO = STDOUT, file_path : (String | Nil) = nil)
+    if file_path && !file_path.ends_with?(':')
+      @file_path = file_path + ':'
+    else
+      @file_path = file_path || ""
     end
   end
 
   macro def_log(level)
     def {{level.id.downcase}}(loc : Location, msg : String)
       if @level <= Level::{{level}}
-        @out.puts "#{"  " * @indent}#{ Level::{{level}}.color } #{loc} #{msg}\033[0m"
+        # @out.puts "#{"  " * @indent}#{ Level::{{level}}.color } #{loc} #{msg}\033[0m"
+        @out << " " * @indent
+        @out << Level::{{level}}.color
+        @out << file_path << loc
+        @out << ' ' << msg << "\033[0m"
+        @out << '\n'
       end
     end
 

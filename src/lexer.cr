@@ -129,15 +129,15 @@ class Lexer
       when '{'
         push_token(Token.lbrace(loc))
         @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        skip_whitespace_and_comments # if context == ParserContext::List
       when '['
         push_token(Token.lbracket(loc))
         @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        skip_whitespace_and_comments  # if context == ParserContext::List
       when '('
         push_token(Token.lparen(loc))
         @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        skip_whitespace_and_comments  # if context == ParserContext::List
       when ')'
         push_token(Token.rparen(loc)); @reader.next
       when ']'

@@ -5,10 +5,15 @@ require "../src/lexer"
 def parser(
     source : String, 
     context : ParserContext,
-    level : Logger::Level = Logger::Level::Warning
-  )
-  # level = Logger::Level::Debug
-  logger = Logger.new(level)
+    level : Logger::Level = Logger::Level::Warning)
+  parser(nil, source, context, level)
+end
+def parser(
+    file : (String | Nil),
+    source : String, 
+    context : ParserContext,
+    level : Logger::Level = Logger::Level::Warning)
+  logger = Logger.new(level, file_path: file)
   lexer = Lexer.new(
     Lexer::Reader.new(source), 
     if level == Logger::Level::Debug
@@ -282,7 +287,7 @@ describe Parser do
           Ast::Type.new(loc, "Int32")))
     end
     it "parses conventions before parameter names and before return type" do
-      parser("(mut a A, let b B, ref c C, sink d D) let Return", :top_level)
+      parser("(mut a A, let b B, ref c C, move d D) let Return", :top_level)
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
         loc, 
@@ -291,7 +296,7 @@ describe Parser do
           Ast::Parameter.new(loc(1, 2), Mode::Mut, "a", Ast::Type.new(loc(1, 8), "A")),
           Ast::Parameter.new(loc(1, 11), Mode::Let, "b", Ast::Type.new(loc(1, 17), "B")),
           Ast::Parameter.new(loc(1, 20), Mode::Ref, "c", Ast::Type.new(loc(1, 26), "C")),
-          Ast::Parameter.new(loc(1, 29), Mode::Sink, "d", Ast::Type.new(loc(1, 36), "D"))
+          Ast::Parameter.new(loc(1, 29), Mode::Move, "d", Ast::Type.new(loc(1, 36), "D"))
         ], 
         Ast::Type.new(loc(1, 40), "Return"),
         Mode::Let
@@ -495,9 +500,9 @@ describe Parser do
         struct Reader
           field string String
           def read Char:
-            string[0]
+            nil -- string.at(0)
           def read Int:
-            string[0]
+            nil -- string.at(0)
         MISMO
       parser = parser(code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
@@ -546,9 +551,10 @@ describe Parser do
           field _capacity UInt
           
           constructor(cap UInt):
-            cap = cap.next_power_of_2
-            buf = Pointer[T].alloc(cap)
-            Array[T](buf, 0, cap)
+            nil
+            -- cap = cap.next_power_of_2
+            -- buf = Pointer[T].alloc(cap)
+            -- Array[T](buf, 0, cap)
           
           def cap UInt: ._capacity
           def count UInt: ._count
@@ -718,14 +724,15 @@ describe Parser do
             true
 
           static parse(str String) -> Color:
-            if str ==
-              "red": Color.Red
-              "green": Color.Green
-              "blue": Color.Blue
-            else
-              raise "Invalid color: ${str}"
+            nil
+            -- if str ==
+            --   "red": Color.Red
+            --   "green": Color.Green
+            --   "blue": Color.Blue
+            -- else
+            --   raise "Invalid color: ${str}"
         MISMO
-      parser = parser(code, :top_level)
+      parser = parser("enum-Color", code, :top_level)
       parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
       e = parser.parse_enum(loc)
       e.should eq(Ast::Enum.new(
@@ -849,61 +856,356 @@ describe Parser do
     end
   end
 end
+
+def expression_parser(test_name : String, code : String, level : Logger::Level = Logger::Level::Warning)
+  ExpressionParser.new(parser(test_name, code, :block, level))
+end
+def expression_parser(code : String, level : Logger::Level = Logger::Level::Warning)
+  ExpressionParser.new(
+    parser: parser(code, :block, level),
+    # expression_indent: 2,
+    # line_indent: 2,
+    # stop: StopAt::Normal
+  )
+end
+describe ExpressionParser do
+  it "parses a simple binary expression" do
+    parser = expression_parser("1 + 2")
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Int.new(loc, 1),
+      Operator::Add,
+      Ast::Int.new(loc, 2)
+    ))
+  end
+  it "parses arithmetic expression with number literals" do
+    expression_parser("1 + 2 * 3").parse.should eq(Ast::Binop.new(
+      Ast::Int.new(loc, 1),
+      Operator::Add,
+      Ast::Binop.new(
+        Ast::Int.new(loc, 2),
+        Operator::Mul,
+        Ast::Int.new(loc, 3)
+      )
+    ))
+    expression_parser("1 - 2 * 3 + 4").parse.should eq(Ast::Binop.new(
+      Ast::Binop.new(
+        Ast::Int.new(loc, 1),
+        Operator::Sub,
+        Ast::Binop.new(
+          Ast::Int.new(loc, 2),
+          Operator::Mul,
+          Ast::Int.new(loc, 3)
+        )
+      ),
+      Operator::Add,
+      Ast::Int.new(loc, 4)
+    ))
+  end
+  it "respects operator precedence" do
+    code = <<-MISMO
+        not this and not that == -1 + - 2 * 3
+        foo = bar = baz
+        1 + foo, bar = 1, 2, 3
+        1 + foo = 3  -- this should raise an error
+      MISMO
+    parser = expression_parser("op-precedence", code)
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Binop.new(
+        Ast::NotNode.new(loc, Ast::Identifier.new(loc, "this")),
+        Operator::And,
+        Ast::NotNode.new(loc, Ast::Identifier.new(loc, "that"))
+      ),
+      Operator::Eq,
+      Ast::Binop.new(
+        Ast::Int.new(loc, -1),
+        Operator::Add,
+        Ast::Binop.new(
+          Ast::Int.new(loc, -2),
+          Operator::Mul,
+          Ast::Int.new(loc, 3)
+        )
+      )
+    ))
+    parser.next_token.should be_a(Token::Newline)
+    parser.expect(Expecting::Term)
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Identifier.new(loc, "foo"),
+      Operator::Assign,
+      Ast::Binop.new(
+        Ast::Identifier.new(loc, "bar"),
+        Operator::Assign,
+        Ast::Identifier.new(loc, "baz")
+      )
+    ))
+    parser.next_token.should be_a(Token::Newline)
+    parser.expect(Expecting::Term)
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Tuple.new(
+        loc,
+        [
+          Ast::Binop.new(
+            Ast::Int.new(loc, 1),
+            Operator::Add,
+            Ast::Identifier.new(loc, "foo")
+          ).as(Ast::Expr),
+          Ast::Identifier.new(loc, "bar").as(Ast::Expr)
+        ]
+      ),
+      Operator::Assign,
+      Ast::Tuple.new(
+        loc,
+        [
+          Ast::Int.new(loc, 1).as(Ast::Expr),
+          Ast::Int.new(loc, 2).as(Ast::Expr),
+          Ast::Int.new(loc, 3).as(Ast::Expr)
+        ]
+      )
+    ))
+    parser.next_token.should be_a(Token::Newline)
+    parser.expect(Expecting::Term)
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Binop.new(
+        Ast::Int.new(loc, 1),
+        Operator::Add,
+        Ast::Identifier.new(loc, "foo")
+      ),
+      Operator::Assign,
+      Ast::Int.new(loc, 3)
+    ))
+  end
+  it "parses parentheses" do
+    parser = expression_parser("(1 + 2) * 3")
+    parser.parse.should eq(Ast::Binop.new(
+      Ast::Binop.new(
+        Ast::Int.new(loc, 1),
+        Operator::Add,
+        Ast::Int.new(loc, 2)
+      ),
+      Operator::Mul,
+      Ast::Int.new(loc, 3)
+    ))
+  end
+  it "parses static method calls" do
+    expression_parser("Pointer.alloc[T](cap)").parse.should eq(Ast::StaticCall.new(
+      loc,
+      "Pointer",
+      Ast::Call.new(
+        loc,
+        "alloc",
+        [Ast::Type.new(loc, "T")],
+        [Ast::Identifier.new(loc, "cap").as(Ast::Expr)]
+      )
+    ))
+  end
+  it "parses generic and non-generic function calls" do
+    expression_parser("fn-call", "awesome(1, 2, 3)").parse.should eq(Ast::Call.new(
+      loc,
+      "awesome",
+      [
+        Ast::Int.new(loc, 1).as(Ast::Expr),
+        Ast::Int.new(loc, 2).as(Ast::Expr),
+        Ast::Int.new(loc, 3).as(Ast::Expr),
+      ]
+    ))
+    expression_parser("generic-fn", "awesome[Int](1)").parse.should eq(Ast::Call.new(
+      loc,
+      "awesome",
+      [Ast::Type.new(loc, "Int")],
+      [Ast::Int.new(loc, 1).as(Ast::Expr)]
+    ))
+  end
+  it "parses generic and non-generic method calls" do
+    expression_parser("method-call", "self.awesome(1, 2, 3)").parse.should eq(Ast::Call.new(
+      loc,
+      "awesome",
+      [
+        Ast::Identifier.new(loc, "self").as(Ast::Expr),
+        Ast::Int.new(loc, 1).as(Ast::Expr),
+        Ast::Int.new(loc, 2).as(Ast::Expr),
+        Ast::Int.new(loc, 3).as(Ast::Expr),
+      ]
+    ))
+    expression_parser("generic-method", "self.awesome[Int](1)").parse.should eq(Ast::Call.new(
+      loc,
+      "awesome",
+      [Ast::Type.new(loc, "Int")],
+      [
+        Ast::Identifier.new(loc, "self").as(Ast::Expr),
+        Ast::Int.new(loc, 1).as(Ast::Expr)
+      ]
+    ))
+  end
+  it "parses method calls with no arguments" do
+    expression_parser("method-call", "self.awesome").parse.should eq(Ast::Call.new(
+      loc,
+      "awesome",
+      [
+        Ast::Identifier.new(loc, "self").as(Ast::Expr),
+      ]
+    ))
+  end
+  it "parses basic literals" do
+    expression_parser("int", "1").parse.should eq(Ast::Int.new(loc, 1))
+    expression_parser("float", "1.0").parse.should eq(Ast::Float.new(loc, 1.0))
+    expression_parser("string", "\"hello\"").parse.should eq(Ast::String.new(loc, "hello"))
+    expression_parser("true", "true").parse.should eq(Ast::True.new(loc))
+    expression_parser("false", "false").parse.should eq(Ast::False.new(loc))
+    expression_parser("nil", "nil").parse.should eq(Ast::Nil.new(loc))
+  end
+  it "parses array literals" do
+    expression_parser("array", "[1, 2, 3]").parse.should eq(Ast::Array.new(
+      loc,
+      [
+        Ast::Int.new(loc, 1).as(Ast::Expr),
+        Ast::Int.new(loc, 2).as(Ast::Expr),
+        Ast::Int.new(loc, 3).as(Ast::Expr),
+      ]
+    ))
+    code = <<-MISMO
+      [
+        1
+        2
+        3
+      ]
+      MISMO
+    expression_parser("newline-array", code, :debug).parse.should eq(Ast::Array.new(
+      loc,
+      [
+        Ast::Int.new(loc, 1).as(Ast::Expr),
+        Ast::Int.new(loc, 2).as(Ast::Expr),
+        Ast::Int.new(loc, 3).as(Ast::Expr),
+      ]
+    ))
+    code = <<-MISMO
+      [
+        1,
+        2,
+        3,
+      ]
+      MISMO
+    expression_parser("comma-newline-array", code).parse.should eq(Ast::Array.new(
+      loc,
+      [
+        Ast::Int.new(loc, 1).as(Ast::Expr),
+        Ast::Int.new(loc, 2).as(Ast::Expr),
+        Ast::Int.new(loc, 3).as(Ast::Expr),
+      ]
+    ))
+  end
+end
     
 
 <<-MISMO
-struct Option[T]: String & Size
+  struct Option[T]: String & Size
 
-extend[T: String] T: Format
-  def format String: 
-    self.string
+  extend[T: String] T: Format
+    def format String: 
+      self.string
 
-extend Format
+  extend Format
 
-function do_something(param Int32) -> Int32:
-  param + 1
+  function do_something(param Int32) -> Int32:
+    param + 1
 
-enum Token
-  EOF
-  Var(String)
-  Func(String, Array(String), String)
-  App(String, Array(String))
-  Number[N](num N)
+  enum Token
+    EOF
+    Var(String)
+    Func(String, Array(String), String)
+    App(String, Array(String))
+    Number[N](num N)
 
-function main:
-  let tok : Token = get_token
-  tok = Token.Number(53.2)
-  if tok is
-    Number[Int](n): 
-      print("${n} is an integer")
-    Number[Float](f): 
-      print("${f} is a float")
-    Var(name): 
-      print("${name} is a variable")
-    Func(name): 
-      print("${name} is a function")
-    App(func, args): 
-      print("${func} is a function, called with ${args.join(", ")}")
-    EOF: 
-      print("EOF")
+  function main:
+    let tok : Token = get_token
+    tok = Token.Number(53.2)
+    if tok is
+      Number[Int](n): 
+        print("${n} is an integer")
+      Number[Float](f): 
+        print("${f} is a float")
+      Var(name): 
+        print("${name} is a variable")
+      Func(name): 
+        print("${name} is a function")
+      App(func, args): 
+        print("${func} is a function, called with ${args.join(", ")}")
+      EOF: 
+        print("EOF")
+    function_call(
+      arg1
+      arg2
+    )
 
-enum Dynamic
-  Value[T](T)
+  enum Dynamic
+    Value[T](T)
 
-function main:
-  let dyn = Dynamic.Value(5)
-  if dyn is Value[Int](n):
-    print("dyn is an int")
-  if dyn is Value[Float](f):
-    print("dyn is a float")
+  function main:
+    let dyn = Dynamic.Value(5)
+    if dyn is Value[Int](n):
+      print("dyn is an int")
+    if dyn is Value[Float](f):
+      print("dyn is a float")
 
-struct Dynamic
-  field[T] t T
+  struct Dynamic
+    field[T] t T
 
-function main:
-  let dyn = Dynamic.new(5)
-  if dyn.t is Int(n):
-    print("dyn is an int")
-  if dyn.t is Float(f):
-    print("dyn is a float")
-MISMO
+  function main:
+    let dyn = Dynamic.new(5)
+    if dyn.t is Int(n):
+      print("dyn is an int")
+    if dyn.t is Float(f):
+      print("dyn is a float")
+    var array = [1, 2, 3]
+    mut array.push(4)
+    let array.push(4)
+
+  function add(a Int, b Int) Int:
+    a + b
+
+  let x = 55
+  let y = -140
+  let z = add(x, y)
+
+
+  function increment(mut a Int):
+    a += 1
+
+  var x = 0
+  increment(x)
+  x  --> 1
+
+  struct copy Point
+    var x Int
+    var y Int
+
+  function main:
+    let p = Point.new(1, 2)
+    let q = p
+    p.x = 3
+    q.x  --> 3
+
+  struct Point is ImplicitCopy
+
+  function main:
+    function_call   -- Identifier
+    function_call() -- Call
+    obj.method      -- MethodCall
+    obj.method()    -- MethodCall
+    .method         -- MethodCall
+    .method()       -- MethodCall
+    Point[T](1, 2)    -- Call
+    Point[T].new(1,2) -- Call
+    Point.new(1,2)    -- MethodCall
+    Point(1,2)        -- Call
+    (arbitrary expression).method  -- MethodCall
+
+  struct ref Point[
+      T
+    ] is 
+     Copy 
+     & 
+     Stringable
+    var x T
+    var y T
+  
+    MISMO
+

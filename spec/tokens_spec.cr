@@ -31,6 +31,7 @@ describe Token do
       token.should eq(Token::KeyWord.new(Location.new(1,1), KeyWord::If))
       token.location.should eq(Location.new(1, 1))
       token.to_s.should eq("Token::KeyWord(if)")
+      token.data.to_s.should eq("if")
     end
   end
 end
