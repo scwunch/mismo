@@ -3,19 +3,6 @@ require "./ast_nodes"
 require "./logger" 
 
 
-# Placeholder for operator precedence comparison
-# This would be defined elsewhere, e.g., in a file for operator logic.
-# enum PrecedenceResult
-#   Tighter # Left operator has tighter precedence (evaluate left first)
-#   Looser  # Left operator has looser precedence (evaluate right first / push right)
-#   Equal   # Equal precedence (usually left-associative)
-#   None    # Precedence not comparable (error or specific handling)
-# end
-# def operator_compare(op_left : Operator, op_right : Operator) : PrecedenceResult
-#   # ... implementation needed ...
-#   PrecedenceResult::None # Placeholder
-# end
-
 # Defines the types of tokens that can stop an expression parser
 enum StopAt
   Normal             # Default: stops at block closers, major separators like Colon, EOF
@@ -57,16 +44,6 @@ module TokenNavigation
   def eof? : Bool
     peek.is_a?(Token::EOF)
   end
-
-  # def with_context(ctx : ParserContext, &block)
-  #   old_ctx = @context
-  #   @context = ctx
-  #   yield
-  # ensure
-  #   # Crystal parser type-checks `old_ctx` as nilable, because the assignment
-  #   # occurs in the begin block.  However, we know it can't be nil here, so this is safe.
-  #   @context = old_ctx || ParserContext::TopLevel
-  # end
 
   # Reads an optional convention keyword (let, mut, move, copy, ref)
   def read_convention? : Convention # Convention = Mode | Nil
@@ -189,15 +166,9 @@ module TokenNavigation
   end
 
   def consume_type_name?(ignore_newline = false) : String?
-    # if ignore_newline
-    #   if peek(:skip_newline).is_a?(Token::Type)
-    #     next_token(:skip_newline).as(Token::Type).data
-    #   end
-    # else
-      if (tok = peek).is_a?(Token::Type)
-        next_token.as(Token::Type).data
-      end
-    # end
+    if (tok = peek).is_a?(Token::Type)
+      next_token.as(Token::Type).data
+    end
   end
 
   # consumes a newline only if it's not the end of a block
@@ -358,33 +329,6 @@ module TopLevelItemParser
       else
         raise report_error(peek.location, "Expected top-level declaration (struct, function, enum, etc.); got #{peek}")
       end
-
-      # keyword_token = peek
-      # unless keyword_token.is_a?(Token::KeyWord)
-      #   raise report_error(keyword_token.location, "Expected top-level declaration (struct, function, enum, etc.); got #{keyword_token}")
-      # end
-
-      # # Now we know it's a KeyWord token, get its data
-      # keyword_data = keyword_token.data.as(KeyWord)
-      # next_token # Consume the keyword token itself
-
-      # case keyword_data
-      # when KeyWord::Function
-      #   # parse_function_block will add Ast::Function nodes directly to @declarations
-      #   parse_function_block(loc)
-      # when KeyWord::Struct
-      #   parse_struct(loc)
-      # when KeyWord::Trait
-      #   parse_trait(loc)
-      # when KeyWord::Enum
-      #   parse_enum(loc)
-      # when KeyWord::Import
-      #   raise "This should have been handled in the lexer"
-      # when KeyWord::Extend
-      #   parse_extend(loc)
-      # else
-      #   raise report_error(loc, "Unexpected keyword for top-level declaration: '#{keyword_data}'")
-      # end
     end
   end
 
@@ -502,17 +446,6 @@ module TopLevelItemParser
     end
   end
 
-  # # UNUSED; this was gonna be a wrapper function for parsing type parameters, 
-  # # type args, traits, and constraints
-  # def parse_list(delimiter : (Token::Comma.class | Operator::And.class), &block)
-  #   # peek # to skip the possible leading newline before entering into list context
-  #   # until eof?
-  #   #   yield block
-  #   #   consume?(delimiter) || break
-  #   # end
-  #   # consume!(delimiter)
-  # end
-
   # Parses `is Trait & Trait[Int]`
   def parse_traits?
     # consume colon or `is`
@@ -562,13 +495,6 @@ module TopLevelItemParser
     end
     constraints
   end
-
-  # macro parse_parameters(receiver)
-  #   {% unless receiver.is_a?(ArrayLiteral) && receiver.size <= 1 %}
-  #     {% raise "Receiver must be an array-literal of zero or one parameters." %}
-  #   {% end %}
-  #   parse_parameters_impl({{receiver}})
-  # end
 
   def parse_parameters(params : Array(Ast::Parameter))
     return params unless consume?(Token::LParen)
@@ -926,9 +852,6 @@ abstract struct SubParser
   def next_token
     parser.next_token
   end
-  # def parse_expression(block_indent : UInt32, stop_at : StopAt = StopAt::Normal)
-  #   parser.parse_expression(block_indent, stop_at)
-  # end
   def report_error(loc, msg)
     parser.report_error(loc, msg)
   end
@@ -956,22 +879,18 @@ struct ExpressionParser < SubParser
   property terms : Array(Ast::Expr) = [] of Ast::Expr
   property operators : Array(Operator) = [] of Operator
   getter expression_indent : UInt32
-  property line_indent : UInt32
   property stop : StopAt
   property expecting : Expecting = Expecting::Term
   
   def initialize(
     @parser : Parser, 
-    @expression_indent : UInt32, 
-    @line_indent : UInt32,
+    @expression_indent : UInt32,
     @stop : StopAt)
   end
   def initialize(@parser : Parser, @stop : StopAt = StopAt::Normal)
     @expression_indent = peek.location.indent
-    @line_indent = @expression_indent
   end
   def initialize(@parser : Parser, @expression_indent : UInt32, @stop : StopAt = StopAt::Normal)
-    @line_indent = @expression_indent
   end
   
   def parse : Ast::Expr
@@ -1044,11 +963,6 @@ struct ExpressionParser < SubParser
     when Operator::Neg
       t1 = pop_term!
       terms << Ast::NegNode.new(t1.location, t1)
-      # // terms.push(match pop_term()?
-      # // | let i: IntLiteral then IntLiteral(i.loc, i.value * -1)
-      # // | let f: FloatLiteral then FloatLiteral(f.loc, f.value * -1.0)
-      # // | let n: Node then NegNode(n)
-      # // end)
     when Operator::Not
       t1 = pop_term!
       terms << Ast::NotNode.new(t1.location, t1)
@@ -1197,8 +1111,7 @@ struct ExpressionParser < SubParser
           Expecting::Operator
         when Token::LParen, Token::LBracket
           raise report_error(tok.location, "only named functions are supported, cannot 'call' arbitrary expressions")
-          # terms << function_call(tok.location)
-          # Expecting::Operator
+          # otherwise this would have been caught in read_operand
         when Token::Error
           raise report_error(next_token.location, tok.data)
         else
@@ -1249,29 +1162,6 @@ struct ExpressionParser < SubParser
       Ast::Identifier.new(loc, word)
     end
   end
-
-  # def handle_arg_passing_mode(loc : Location, word : String)
-    # case tok = peek
-    # when Token::Type, Token::Variable
-    #   node = Ast::Identifier.new(tok.location, next_token.data.as(String))
-    #   if tok.is_a?(Token::Dot)
-    #     next_token
-    #     case tok = peek
-    #     when Token::Type, Token::Variable
-    #       # function_call(tok.location, tok.data, [Mode.from_string(word)], [node])
-    #       call = function_call(node.location, node.name)
-          
-    #     else 
-    #       raise report_error(peek.location, "Expected function name after dot.")
-    #     end
-    #   else
-    #     raise report_error(loc, "Illegal use of argument passing mode.  ")
-    #   end
-    # else
-    #   log.warning(loc, "Using argument passing mode as an identifier.")
-    #   Ast::Identifier.new(loc, word)
-    # end
-  # end
   
   def parse_paren_group(loc : Location)
     log.debug_descend(loc, "parse_paren_group") do
@@ -1304,61 +1194,6 @@ struct ExpressionParser < SubParser
       end
     end
   end
-  
-  # number parsing has been moved to the lexer
-  # def parse_number_literal(loc : Location, value : String)
-  #   log.debug_descend(loc, "parse_number_literal") do
-  #     try 
-  #       Ast::Int.new(loc, value.isize()?)
-  #     else
-  #       try 
-  #         Ast::Float.new(loc, value.f64()?)
-  #       else
-  #         raise report_error(loc, "unrecognized number literal: " + value)
-  #         error
-  #       end
-  #     end
-  
-  # handle a left paren or left bracket when encountered in operator position
-  # returns a Call node
-  # def function_call(loc : Location, fn_name : String? = nil) : Ast::Call
-  #   log.debug_descend(
-  #       loc, 
-  #       "function_call; top-term-of-stack: #{begin last_term! rescue "<none>" end};  next: #{peek()}") do
-  #     fn_name ||= case node = pop_term!
-  #     when Ast::Identifier then node.name
-  #     when Ast::Type
-  #       if node.type_args
-  #         report_error(node.location, "Type with type arguments cannot be used as a function name.")
-  #       end
-  #       node.name
-  #     when Ast::MethodCall
-  #       node.name
-  #     else 
-  #       raise report_error(node.location, "Expected function name; got #{node}")
-  #     end
-  #     type_args = parser.parse_type_args?
-  #     args = parse_args
-  #     Ast::Call.new(loc, fn_name, type_args, args)
-  #   end
-  # end
-  
-  # def handle_dot()
-  #   log.debug_descend(
-  #       peek.location, 
-  #       "handle_dot; top-term-of-stack: #{last_term { "<none>" }};  next: #{peek()}") do
-  #     node = pop_term!
-  #     name = consume_identifier
-  #     Ast::MethodCall.new(node, name)
-  #     # node = Ast::MethodCall.new(node, name)
-  #     # case peek()
-  #     # when Token::LBracket, Token::LParen
-  #     #   node.call = function_call(node.location, name)
-  #     # else
-  #     # end
-  #     # node
-  #   end
-  # end
 
   def handle_type(loc : Location, type : String)
     if consume?(Token::Dot)
@@ -1414,30 +1249,17 @@ struct ExpressionParser < SubParser
     exprs
   end
   
-  # def parse_let_declaration(loc : Location)
-  #   tok = peek
-  #   name = consume_identifier
-  #   if peek.is_a?(Token::Dot)
-  #     rewind()
-  #     handle_arg_passing_mode(loc, "let")
-  #   else
-  #     consume!(Token::Assign)
-  #     value = parse_expression(block_indent, StopAt::ExpressionEnd)
-  #     Ast::Let.new(loc, name, value)
-  #   end
-  # end
-  
   def parse_var_declaration(loc : Location)
     name = consume_identifier
     consume!(Operator::Assign)
-    value = ExpressionParser.new(parser, expression_indent, line_indent, stop).parse
+    value = ExpressionParser.new(parser, expression_indent, stop).parse
     Ast::Var.new(loc, name, value)
   end
     
   def parse_const_declaration(loc : Location)
     name = consume_identifier
     consume!(Operator::Assign)
-    value = ExpressionParser.new(parser, expression_indent, line_indent, stop).parse
+    value = ExpressionParser.new(parser, expression_indent, stop).parse
     Ast::Const.new(loc, name, value)
   end
     
@@ -1447,8 +1269,8 @@ struct ExpressionParser < SubParser
   end
   
   def parse_while_expression(loc : Location)
-    condition = ExpressionParser.new(parser, expression_indent, line_indent, StopAt::ColonOrAnd).parse
-    body = parser.parse_colon_and_block(line_indent)
+    condition = ExpressionParser.new(parser, expression_indent, StopAt::ColonOrAnd).parse
+    body = parser.parse_colon_and_block(parser.current_line_indent)
     Ast::WhileLoop.new(loc, condition, body)
   end
   
@@ -1458,8 +1280,8 @@ struct ExpressionParser < SubParser
     unless consume?(Operator::In)
       report_error(peek.location, "Expected \"in\" after variable name in for loop; got #{peek}")
     end
-    iterator = ExpressionParser.new(parser, expression_indent, line_indent, StopAt::ColonOrAnd).parse
-    body = parser.parse_colon_and_block(line_indent)
+    iterator = ExpressionParser.new(parser, expression_indent, StopAt::ColonOrAnd).parse
+    body = parser.parse_colon_and_block(parser.current_line_indent)
     Ast::ForLoop.new(loc, Ast::Identifier.new(var_loc, var_name), iterator, body)
   end
 end
@@ -1468,7 +1290,6 @@ class Parser
   property lexer : Lexer
   @peeked : Token? = nil
   property current_line_indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
-  # ^ or maybe this should be passed by methods on the stack?  since it's a little stacky
   property log : Logger
   getter declarations = [] of Ast::TopLevelItem # The final list of top-level AST nodes
 
@@ -1519,23 +1340,4 @@ class Parser
   def parse_expression(stop : StopAt = StopAt::Normal)
     ExpressionParser.new(self, peek.location.indent, stop).parse
   end
-  #   loc = peek.location
-  #   @log.debug(loc, "Parsing expression...")
-  #   report_error(loc, "parse_expression not yet implemented")
-  #   tokens_consumed = String.build do |str|
-  #     while true
-  #       if peek.is_a?(Token::Newline)
-  #         break
-  #       else
-  #         str << ' ' << next_token.short
-  #       end
-  #     end
-  #   end
-  #   @log.debug(loc, "Consumed expression:#{tokens_consumed}")
-  #   # consume_until(Token::Newline)
-  #   Ast::Nil.new(loc)
-  # end
-
-  # TODO: Implement ExpressionParser class (for `parse_expression`)
-  # TODO: Implement UcsParser class (for `parse_if_expression`)
 end
