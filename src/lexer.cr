@@ -10,10 +10,12 @@ class Lexer
   property tokens_emitted = [] of Token
 
   def initialize(@reader : Reader, @log : Logger)
+    skip_whitespace_and_comments
   end
   def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
     @reader = Reader.new(text)
     @log = Logger.new(log_level)
+    skip_whitespace_and_comments
   end
 
   class Reader
@@ -101,23 +103,23 @@ class Lexer
     @current_token = tok
   end
 
-  def next(context : ParserContext = ParserContext::Block)
+  def next
     @log.debug_descend(@reader.location, "next token") do
       loc = @reader.location
       @log.debug(loc, "next: '#{@reader.peek}'")
       case @reader.peek
       when '\n'
-        handle_newline(loc, context)
+        push_newline(loc)
       when .ascii_whitespace?
         skip_horizantal_whitespace
-        return self.next(context)
+        return self.next
       when ','
         push_token(Token.comma(loc))
         @reader.next
-        skip_whitespace_and_comments if context == ParserContext::List
+        # skip_whitespace_and_comments if context == ParserContext::List
       when ';'
         push_token(Token.semicolon(loc))
-        skip_whitespace_and_comments
+        # skip_whitespace_and_comments
       when ':'
         if @reader.peek_str?(":=")
           push_token(Token.operator(loc, Operator::Assign))
@@ -129,15 +131,15 @@ class Lexer
       when '{'
         push_token(Token.lbrace(loc))
         @reader.next
-        skip_whitespace_and_comments # if context == ParserContext::List
+        # skip_whitespace_and_comments # if context == ParserContext::List
       when '['
         push_token(Token.lbracket(loc))
         @reader.next
-        skip_whitespace_and_comments  # if context == ParserContext::List
+        # skip_whitespace_and_comments  # if context == ParserContext::List
       when '('
         push_token(Token.lparen(loc))
         @reader.next
-        skip_whitespace_and_comments  # if context == ParserContext::List
+        # skip_whitespace_and_comments  # if context == ParserContext::List
       when ')'
         push_token(Token.rparen(loc)); @reader.next
       when ']'
@@ -159,20 +161,28 @@ class Lexer
           push_operator(loc) # push_operator consumes
         end
       when .ascii_letter?, '_'
-        push_word(loc, read_word(loc), context)  # push_word consumes
+        push_word(loc, read_word(loc))  # push_word consumes
       when '\0'
         if @reader.has_next?
           push_token(Token.error(loc, "unexpected null character"))
           @reader.next
         else # End of file
-          # stupidly complex logic to determine whether to emit a newline or EOF
-          if context == ParserContext::TopLevel || (@current_token.is_a?(Token::Newline) && @current_token.data == 0)
+          case @current_token
+          when Token::Newline
             push_token(Token.eof(loc))
-          elsif @current_token.is_a?(Token::EOF)
+          when Token::EOF
             nil
           else
             push_token(Token.newline(loc, 0))
           end
+          # stupidly complex logic to determine whether to emit a newline or EOF
+          # if context == ParserContext::TopLevel || (@current_token.is_a?(Token::Newline) && @current_token.data == 0)
+          #   push_token(Token.eof(loc))
+          # elsif @current_token.is_a?(Token::EOF)
+          #   nil
+          # else
+          #   push_token(Token.newline(loc, 0))
+          # end
         end
       else
         push_token(Token.error(loc, "unrecognized character: '#{@reader.next}'"))
@@ -227,45 +237,45 @@ class Lexer
     end
   end
 
-  def handle_newline(loc : Location, context : ParserContext)
-    case context
-    in ParserContext::TopLevel
-      skip_whitespace_and_comments
-      self.next(context)
-    in ParserContext::Block
-      push_newline
-    in ParserContext::List
-      # newline is emitted as comma in List context
-      # ONLY if it is not a leading or trailing 'comma'
-      skip_whitespace_and_comments
-      if @current_token.is_a?(Token::LParen | Token::LBracket | Token::LBrace)
-        @log.debug(loc, "skipped whitespace after #{@current_token.class}")
-        return self.next(context)
-      end
-      case @reader.peek
-      when ']'
-        push_token(Token.rbracket(@reader.location))
-      when ')'
-        push_token(Token.rparen(@reader.location))
-      when '}'
-        push_token(Token.rbrace(@reader.location))
-      when ','
-        push_token(Token.comma(@reader.location))
-      else
-        @log.debug(loc, "emitting newline as comma")
-        push_token(Token.comma(loc))
-        return
-      end
-      @log.debug(loc, "(skipped trailing newline/comma)")
-      @reader.next
-    end
-  end
+  # def handle_newline(loc : Location, context : ParserContext)
+  #   # case context
+  #   # in ParserContext::TopLevel
+  #   #   skip_whitespace_and_comments
+  #   #   self.next(context)
+  #   # in ParserContext::Block
+  #   #   push_newline
+  #   # in ParserContext::List
+  #   #   # newline is emitted as comma in List context
+  #   #   # ONLY if it is not a leading or trailing 'comma'
+  #   #   skip_whitespace_and_comments
+  #   #   if @current_token.is_a?(Token::LParen | Token::LBracket | Token::LBrace)
+  #   #     @log.debug(loc, "skipped whitespace after #{@current_token.class}")
+  #   #     return self.next(context)
+  #   #   end
+  #   #   case @reader.peek
+  #   #   when ']'
+  #   #     push_token(Token.rbracket(@reader.location))
+  #   #   when ')'
+  #   #     push_token(Token.rparen(@reader.location))
+  #   #   when '}'
+  #   #     push_token(Token.rbrace(@reader.location))
+  #   #   when ','
+  #   #     push_token(Token.comma(@reader.location))
+  #   #   else
+  #   #     @log.debug(loc, "emitting newline as comma")
+  #   #     push_token(Token.comma(loc))
+  #   #     return
+  #   #   end
+  #   #   @log.debug(loc, "(skipped trailing newline/comma)")
+  #   #   @reader.next
+  #   # end
+  # end
 
   # handle the tokenization of a given word at the given location
-  def push_word(loc : Location, word : String, context : ParserContext)
+  def push_word(loc : Location, word : String)
     @log.debug_descend(loc, "push_word: #{word}") do
       # raise "breakpoint"
-      if key = KeyWord.parse?(word, context)
+      if key = KeyWord.parse?(word)
         if loc.column == 1 && key == KeyWord::Import
           skip_horizantal_whitespace
           handle_import
@@ -613,10 +623,4 @@ class Lexer
       end
     end
   end
-end
-
-enum ParserContext
-  TopLevel  # newline insensitive
-  List      # newline as delimiter (parameters, args, tuple literal, etc)
-  Block     # register newlines; inside function body or between sub-items of top-level blocks
 end

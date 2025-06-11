@@ -24,6 +24,8 @@ struct Location
 
   def indent
     @column - 1
+  rescue
+    0u32
   end
 
   def to_s(io : IO)
@@ -188,6 +190,9 @@ enum KeyWord
   Let
   Var
   Mut
+  Box
+  Ref
+  Move
   Const
   If
   Else
@@ -264,6 +269,26 @@ enum KeyWord
     end
   end
 
+  def self.parse?(str)
+    case str
+    when "let" then Let
+    when "var" then Var
+    when "mut" then Mut
+    when "box" then Box
+    when "ref" then Ref
+    when "move" then Move
+    when "if" then If
+    when "else" then Else
+    when "for" then For
+    when "while" then While
+    when "break" then Break
+    when "continue" then Continue
+    when "return" then Return
+    else
+      nil
+    end
+  end
+
   def to_s
     case self
     in Import then "import"
@@ -279,6 +304,9 @@ enum KeyWord
     in Let then "let"
     in Var then "var"
     in Mut then "mut"
+    in Box then "box"
+    in Ref then "ref"
+    in Move then "move"
     in Const then "const"
     in If then "if"
     in Else then "else"

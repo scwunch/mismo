@@ -35,18 +35,22 @@ end
 module TokenNavigation
   # Peeks at the current token without consuming
   def peek : Token
-    @peeked ||= @lexer.next(@context)
+    @peeked ||= @lexer.next
   end
 
   # Consumes the current token and returns it. Advances the index.
   # Returns the last token if already at EOF to prevent errors on multiple calls.
   def next_token : Token
     if tok = @peeked
+      # tok = @peeked.as(Token)
       @peeked = nil
-      tok
     else
-      @lexer.next(@context)
+      tok = @lexer.next
     end
+    if tok.is_a?(Token::Newline)
+      @current_line_indent = tok.data
+    end
+    tok
   end
 
   # Checks if the parser has reached the end of the token stream.
@@ -54,15 +58,15 @@ module TokenNavigation
     peek.is_a?(Token::EOF)
   end
 
-  def with_context(ctx : ParserContext, &block)
-    old_ctx = @context
-    @context = ctx
-    yield
-  ensure
-    # Crystal parser type-checks `old_ctx` as nilable, because the assignment
-    # occurs in the begin block.  However, we know it can't be nil here, so this is safe.
-    @context = old_ctx || ParserContext::TopLevel
-  end
+  # def with_context(ctx : ParserContext, &block)
+  #   old_ctx = @context
+  #   @context = ctx
+  #   yield
+  # ensure
+  #   # Crystal parser type-checks `old_ctx` as nilable, because the assignment
+  #   # occurs in the begin block.  However, we know it can't be nil here, so this is safe.
+  #   @context = old_ctx || ParserContext::TopLevel
+  # end
 
   # Reads an optional convention keyword (let, mut, move, copy, ref)
   def read_convention? : Convention # Convention = Mode | Nil
@@ -70,20 +74,18 @@ module TokenNavigation
     if tok.is_a?(Token::KeyWord)
       case tok.data
       when KeyWord::Let   then next_token; Mode::Let
-      # TODO: Add other keywords that map to Mode enum (mut, move, copy, ref)
-      # when KeyWord::Mut   then next_token; Mode::Mut
-      # when KeyWord::Move  then next_token; Mode::Move
-      # when KeyWord::Copy  then next_token; Mode::Copy
-      # when KeyWord::Ref   then next_token; Mode::Ref
+      when KeyWord::Mut   then next_token; Mode::Mut
+      when KeyWord::Move  then next_token; Mode::Move
+      when KeyWord::Box   then next_token; Mode::Box
+      when KeyWord::Ref   then next_token; Mode::Ref
       else 
         nil  # Not a convention keyword
       end
-    # Pony also allowed string matches for "mut", "move", etc.
     # If these are lexed as VariableName tokens but act as conventions:
-    elsif tok.is_a?(Token::Variable)
-      mode = Mode.from_string?(tok.data)
-      next_token if mode
-      mode
+    # elsif tok.is_a?(Token::Variable)
+    #   mode = Mode.from_string?(tok.data)  
+    #   next_token if mode
+    #   mode
     else
       nil # No convention keyword found
     end
@@ -198,6 +200,65 @@ module TokenNavigation
     # end
   end
 
+  # consumes a newline only if it's not the end of a block
+  # return true if end of block found
+  # End of block is determined to be a newline with indent ≤ block_indent
+  # EXCEPT if the token after newline is a closing bracket or `else`
+  def skip_newline_unless_block_end?(block_indent : UInt32, raise_on_outdent : String? = nil) : Bool
+    if (tok = peek).is_a?(Token::Newline)
+      if tok.data <= block_indent
+        # TODO: this is coupled too tightly to the lexer, might be fragile
+        unless @lexer.reader.peek.in?(']', '}', ')') || @lexer.reader.peek_str?("else ")
+          if raise_on_outdent
+            raise report_error(tok.location, raise_on_outdent)
+          else
+            log.debug(tok.location, "outdent detected; not skipping newline")
+            return true
+          end
+        end
+        log.debug(tok.location, "outdent detected, but followed by #{lexer.reader.peek}")
+      end
+      log.debug(tok.location, "skipping newline")
+      next_token  # consume newline
+    end
+    log.debug(tok.location, "no newline to skip")
+    false
+  end
+
+  # Consumes a comma or newline acting as a list separator
+  # Returns the consumed token or nil if end of list
+  # Trailing comma and/or newline are consumed but not returned.
+  def consume_list_separator?(list_indent) : Token::Comma | Token::Newline | Nil
+    case tok = peek
+    when Token::Newline
+      skip_newline_unless_block_end?(list_indent, "Unexpected outdent in list.")
+      case peek
+      when Token::Comma
+        consume_list_separator?(list_indent)
+      when Token::RBracket, Token::RParen
+        nil  # end of list
+      else
+        tok  # newline as separator
+      end
+    when Token::Comma
+      next_token
+      if (newline = peek).is_a?(Token::Newline)
+        # TODO: this is coupled too tightly to the lexer, might be fragile
+        if @lexer.reader.peek.in?(']', ')')
+          next_token  # consume newline after trailing comma
+          return nil  # trailing comma, end of list
+        elsif newline.data <= list_indent
+          raise report_error(newline.location, "Unexpected outdent in list after comma.")
+        else
+          next_token  # consume newline after comma
+        end
+      end
+      tok  # comma separator
+    else
+      nil  # no separator
+    end
+  end
+
   # --- Error Reporting & Recovery ---
   def report_error(location : Location, message : String) : Parser::ParseError
     @log.error(location, message)
@@ -243,36 +304,87 @@ module TokenNavigation
   end
 end
 
+enum TopLevelKey
+  Import
+  Struct
+  Enum
+  Function
+  Extend
+  Trait
+  Field
+  Constructor
+  Static
+  Def
+  Const
+
+  def self.parse?(str)
+    case str
+    when "import" then Import
+    when "struct" then Struct
+    when "enum" then Enum
+    when "function" then Function
+    when "extend" then Extend
+    when "trait" then Trait
+    when "field" then Field
+    when "constructor" then Constructor
+    when "static" then Static
+    when "def" then Def
+    when "const" then Const
+    else
+      nil
+    end
+  end
+end
+
 module TopLevelItemParser
   def parse_top_level_item : Ast::TopLevelItem?
     loc = peek.location
     @log.debug_descend(loc, "Parsing top-level item, current token: #{peek}") do
-      keyword_token = peek
-      unless keyword_token.is_a?(Token::KeyWord)
-        raise report_error(keyword_token.location, "Expected top-level declaration (struct, function, enum, etc.); got #{keyword_token}")
-      end
-
-      # Now we know it's a KeyWord token, get its data
-      keyword_data = keyword_token.data.as(KeyWord)
-      next_token # Consume the keyword token itself
-
-      case keyword_data
-      when KeyWord::Function
-        # parse_function_block will add Ast::Function nodes directly to @declarations
-        parse_function_block(loc)
-      when KeyWord::Struct
+      case next_token.data
+      when "import"
+        parse_import(loc)
+      when "struct"
         parse_struct(loc)
-      when KeyWord::Trait
-        parse_trait(loc)
-      when KeyWord::Enum
+      when "enum"
         parse_enum(loc)
-      when KeyWord::Import
-        raise "This should have been handled in the lexer"
-      when KeyWord::Extend
+      when "trait"
+        parse_trait(loc)
+      when "extend"
         parse_extend(loc)
+      when "def"
+        parse_function_block(loc)
+      when "const"
+        parse_const(loc)
       else
-        raise report_error(loc, "Unexpected keyword for top-level declaration: '#{keyword_data}'")
+        raise report_error(peek.location, "Expected top-level declaration (struct, function, enum, etc.); got #{peek}")
       end
+
+      # keyword_token = peek
+      # unless keyword_token.is_a?(Token::KeyWord)
+      #   raise report_error(keyword_token.location, "Expected top-level declaration (struct, function, enum, etc.); got #{keyword_token}")
+      # end
+
+      # # Now we know it's a KeyWord token, get its data
+      # keyword_data = keyword_token.data.as(KeyWord)
+      # next_token # Consume the keyword token itself
+
+      # case keyword_data
+      # when KeyWord::Function
+      #   # parse_function_block will add Ast::Function nodes directly to @declarations
+      #   parse_function_block(loc)
+      # when KeyWord::Struct
+      #   parse_struct(loc)
+      # when KeyWord::Trait
+      #   parse_trait(loc)
+      # when KeyWord::Enum
+      #   parse_enum(loc)
+      # when KeyWord::Import
+      #   raise "This should have been handled in the lexer"
+      # when KeyWord::Extend
+      #   parse_extend(loc)
+      # else
+      #   raise report_error(loc, "Unexpected keyword for top-level declaration: '#{keyword_data}'")
+      # end
     end
   end
 
@@ -343,7 +455,9 @@ module TopLevelItemParser
                       receiver : Ast::Parameter? = nil, 
                      ) : Ast::Signature?
     @log.debug_descend(sig_loc, "Parsing signature...") do
+      declaration_indent = @current_line_indent
       type_params = parse_type_parameters?(inherited_type_params)
+      skip_newline_unless_block_end?(declaration_indent)
       params : Array(Ast::Parameter)? = if receiver 
         parse_parameters([receiver])
       else
@@ -364,61 +478,55 @@ module TopLevelItemParser
   def parse_type_parameters?(inherited_type_params : Array(Ast::TypeParameter)? = nil) : Array(Ast::TypeParameter)?
     type_params = inherited_type_params.try &.dup
     return type_params unless peek.is_a?(Token::LBracket)
-    
+    params_indent = @current_line_indent
     type_params ||= [] of Ast::TypeParameter
     lbracket_loc = next_token.location  # consume '['
+    @log.debug(peek.location, "about to possibly skip a newline...")
+    skip_newline_unless_block_end?(params_indent, "Unexpected outdent in type parameters.")
     if consume?(Token::RBracket)
       return type_params
     end
     
-    @log.debug(peek.location, "peek=#{peek}")  # to skip the possible leading newline before entering into list context
-
     @log.debug_descend(lbracket_loc, "Parsing type parameters...") do
-      with_context ParserContext::List do
-        until eof?
-          # parse type parameter
-          param_loc = peek.location
-          name = consume_type_name!
-          constraints = parse_constraints
-          type_params << Ast::TypeParameter.new(param_loc, name, constraints)
-          unless consume?(Token::Comma) 
-            break if peek.is_a?(Token::RBracket)
-            raise "Expected ',' or ']' after type parameter; got #{peek}"  
-          end
-          break if peek.is_a?(Token::RBracket)
-        end
-        consume!(Token::RBracket)
-        type_params
+      until eof?
+        # parse type parameter
+        @log.debug(peek.location, "parsing type parameter")
+        param_loc = peek.location
+        name = consume_type_name!
+        constraints = parse_constraints
+        type_params << Ast::TypeParameter.new(param_loc, name, constraints)
+        consume_list_separator?(params_indent) || break
       end
+      consume!(Token::RBracket)
+      type_params
     end
   end
 
-  # UNUSED; this was gonna be a wrapper function for parsing type parameters, 
-  # type args, traits, and constraints
-  def parse_list(delimiter : (Token::Comma.class | Operator::And.class), &block)
-    peek # to skip the possible leading newline before entering into list context
-    until eof?
-      yield block
-      consume?(delimiter) || break
-    end
-    consume!(delimiter)
-  end
+  # # UNUSED; this was gonna be a wrapper function for parsing type parameters, 
+  # # type args, traits, and constraints
+  # def parse_list(delimiter : (Token::Comma.class | Operator::And.class), &block)
+  #   # peek # to skip the possible leading newline before entering into list context
+  #   # until eof?
+  #   #   yield block
+  #   #   consume?(delimiter) || break
+  #   # end
+  #   # consume!(delimiter)
+  # end
 
-  # Parses `: Trait & Trait[Int]`
+  # Parses `is Trait & Trait[Int]`
   def parse_traits?
-    # consume optional colon or `is`
+    # consume colon or `is`
     return nil unless consume?(Token::Colon) || consume?(Operator::Is)
     @log.debug_descend(peek.location, "Parsing traits...") do
-      # contraint parsing may occur in a list context, but we still want to require
-      # the `&` separator yet ignore newlines, so we use ParserContext::TopLevel
-      with_context ParserContext::TopLevel do
-        traits = [] of Ast::Type
-        until eof?
-          traits << parse_type_expression
-          consume?(Operator::And) || break
-        end
-        traits
+      traits = [] of Ast::Type
+      until eof?
+        skip_newline_unless_block_end?(0, "Unexpected outdent in traits parsing.")
+        traits << parse_type_expression
+        break if skip_newline_unless_block_end?(0)
+        break unless consume?(Operator::And)
       end
+      skip_newline_unless_block_end?(0)
+      traits
     end
   end
 
@@ -428,23 +536,27 @@ module TopLevelItemParser
     unless consume?(Token::Colon) || consume?(Operator::Is) || peek.data == Operator::Not || peek.is_a?(Token::Type)
       return constraints
     end
+    type_line_indent = @current_line_indent
     @log.debug_descend(peek.location, "Parsing constraints...") do
-      with_context ParserContext::TopLevel do
-        # parse first constraint
-        if consume?(Operator::Not)
-          constraints.exclude(parse_type_expression)
+      skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
+      # parse first constraint
+      if consume?(Operator::Not)
+        skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
+        constraints.exclude parse_type_expression
+      else
+        constraints.include parse_type_expression
+      end
+      # parse remaining constraints
+      until eof?
+        skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
+        if consume?(Operator::And)
+          skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
+          constraints.include parse_type_expression
+        elsif consume?(Operator::Not)
+          skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
+          constraints.exclude parse_type_expression
         else
-          constraints.include(parse_type_expression)
-        end
-        # parse remaining constraints
-        while true
-          if consume?(Operator::And)
-            constraints.include(parse_type_expression)
-          elsif consume?(Operator::Not)
-            constraints.exclude(parse_type_expression)
-          else
-            break
-          end
+          break
         end
       end
     end
@@ -460,19 +572,17 @@ module TopLevelItemParser
 
   def parse_parameters(params : Array(Ast::Parameter))
     return params unless consume?(Token::LParen)
+    fn_indent = @current_line_indent
+    skip_newline_unless_block_end?(fn_indent, "Unexpected outdent in empty parameters.")
     return params if consume?(Token::RParen)
-    
-    peek  # to skip the possible leading newline before entering into list context
 
     @log.debug_descend(peek.location, "Parsing parameters...") do
-      with_context ParserContext::List do
-        until eof?
-          params << parse_parameter
-          consume?(Token::Comma) || break
-        end
-        consume!(Token::RParen)
-        params
+      until eof?
+        params << parse_parameter
+        consume_list_separator?(fn_indent) || break
       end
+      consume!(Token::RParen)
+      params
     end
   end
   
@@ -505,48 +615,42 @@ module TopLevelItemParser
   # Parses type arguments, e.g., [Arg1, Arg2]
   def parse_type_args? : Array(Ast::Type)?
     consume?(Token::LBracket) || return nil
+    type_line_indent = @current_line_indent
+    skip_newline_unless_block_end?(type_line_indent, "Expected type argument; got end of block.")
     type_args = [] of Ast::Type
     return type_args if consume?(Token::RBracket)
-
-    peek  # to skip the possible leading newline before entering into list context
     
     @log.debug_descend(peek.location, "Parsing type arguments...") do
-      with_context ParserContext::List do
-        until eof?
-          type_args << parse_type_expression
-          consume?(Token::Comma) || break
-        end
-        consume!(Token::RBracket)
-        type_args
+      until eof?
+        type_args << parse_type_expression
+        consume_list_separator?(type_line_indent) || break
       end
+      consume!(Token::RBracket)
+      type_args
     end
   end
 
   # Parses `: BLOCK_OF_STATEMENTS`
-  def parse_colon_and_block(block_base_indent : UInt32)
-    loc = peek.location
-    @log.debug_descend(loc, "Parsing colon and block (base indent: #{block_base_indent})...") do
+  def parse_colon_and_block(block_base_indent : UInt32 = @current_line_indent)
+    @log.debug_descend(peek.location, "Parsing colon and block (base indent: #{block_base_indent})...") do
       consume!(Token::Colon)
-
       # Statements are parsed relative to the block_base_indent.
       # A statement belongs to the block if it's indented further than block_base_indent.
-      with_context ParserContext::Block do
-        statements = [] of Ast::Expr
-        until eof?
-          @log.debug(peek.location, "Parsing statement starting with #{peek}")
-          case tok = peek
-          when Token::Newline
-            break if tok.data <= block_base_indent
-            next_token
-          when Token::EOF, Token::RBrace, Token::RParen, Token::RBracket
-            break
-          else
-            break if tok.location.column <= block_base_indent
-            statements << parse_expression(peek.location.indent)
-          end
+      statements = [] of Ast::Expr
+      until eof?
+        @log.debug(peek.location, "Parsing statement starting with #{peek}")
+        case tok = peek
+        when Token::Newline
+          break if tok.data <= block_base_indent
+          next_token
+        when Token::EOF, Token::RBrace, Token::RParen, Token::RBracket
+          break
+        else
+          break if tok.location.column <= block_base_indent
+          statements << parse_expression(peek.location.indent)
         end
-        statements
       end
+      statements
     end
   end
   
@@ -592,18 +696,16 @@ module TopLevelItemParser
       struct_dec = Ast::Struct.new(decl_loc, convention, name, type_params, traits)
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name, Ast.to_type_args(type_params)))
       until eof?
-        if peek.location.column <= decl_loc.column
-          break
-        end
-        key_tok = consume!(Token::KeyWord)
+        break if skip_newline_unless_block_end?(decl_loc.indent)
+        key_tok = consume!(Token::Variable)
         case key_tok.data
-        when KeyWord::Field
+        when "field"
           struct_dec.fields << parse_field(key_tok.location)
-        when KeyWord::Def
+        when "def"
           @declarations << parse_method(key_tok.location, receiver, type_params)
-        when KeyWord::Constructor
+        when "constructor"
           @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
-        when KeyWord::Static
+        when "static"
           @declarations << parse_static(key_tok.location, name, type_params)
         else
           report_error(peek.location, "Unexpected token in struct declaration")
@@ -640,8 +742,7 @@ module TopLevelItemParser
       receiver.convention = convention if convention
       name = consume_identifier
       signature = parse_signature(peek.location, inherited_type_params, receiver)
-      indent = loc.column == 0 ? 0_u32 : loc.column - 1
-      block = parse_colon_and_block(indent)
+      block = parse_colon_and_block(loc.indent)
       consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
       Ast::Function.new(loc, name, signature, block)
     end
@@ -654,9 +755,8 @@ module TopLevelItemParser
       receiver.convention = convention if convention
       name = consume_identifier
       signature = parse_signature(peek.location, inherited_type_params, receiver)
-      indent = loc.column == 0 ? 0_u32 : loc.column - 1
       if peek.is_a?(Token::Colon)
-        block = parse_colon_and_block(indent)
+        block = parse_colon_and_block(loc.indent)
         consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
       end
       Ast::AbstractMethod.new(loc, name, signature, block)
@@ -670,8 +770,7 @@ module TopLevelItemParser
         report_error(t.location, "Constructor cannot have a return type")
       end
       signature.return_type = return_type
-      indent = loc.column == 0 ? 0_u32 : loc.column - 1
-      block = parse_colon_and_block(indent)
+      block = parse_colon_and_block(loc.indent)
       consume?(Token::Newline) || report_error(peek.location, "Expected newline after constructor body")
       Ast::Function.new(loc, return_type.name, signature, block)
     end
@@ -681,8 +780,7 @@ module TopLevelItemParser
     @log.debug_descend(loc, "Parsing static method...") do
       name = consume_identifier
       signature = parse_signature(peek.location, inherited_type_params)
-      indent = loc.column == 0 ? 0_u32 : loc.column - 1
-      block = parse_colon_and_block(indent)
+      block = parse_colon_and_block(loc.indent)
       consume?(Token::Newline) || report_error(peek.location, "Expected newline after static method body")
       Ast::Function.new(loc, "#{type_name}.#{name}", signature, block)
     end
@@ -694,20 +792,18 @@ module TopLevelItemParser
       trait_dec = Ast::Trait.new(decl_loc, convention, name, type_params, traits)
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, "Self"))
       until eof?
-        if peek.location.column <= decl_loc.column
-          break
-        end
-        key_tok = consume!(Token::KeyWord)
+        break if skip_newline_unless_block_end?(decl_loc.indent)
+        key_tok = consume!(Token::Variable)
         case key_tok.data
-        when KeyWord::Field
+        when "field"
           report_error(key_tok.location, "Fields not yet supported by traits.")
           parse_field(key_tok.location)
-        when KeyWord::Def
+        when "def"
           trait_dec.methods << parse_abstract_method(key_tok.location, receiver, type_params)
-        when KeyWord::Constructor
+        when "constructor"
           report_error(key_tok.location, "Constructors not yet supported by traits.")
           parse_constructor(key_tok.location, receiver.type, type_params)
-        when KeyWord::Static
+        when "static"
           @declarations << parse_static(key_tok.location, name, type_params)
         else
           report_error(peek.location, "Unexpected token in trait declaration")
@@ -725,27 +821,25 @@ module TopLevelItemParser
       enum_dec = Ast::Enum.new(decl_loc, convention, name, type_params, traits)
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name, Ast.to_type_args(type_params)))
       until eof?
-        if peek.location.column <= decl_loc.column
-          break
-        end
+        break if skip_newline_unless_block_end?(decl_loc.indent)
         if variant_token = consume?(Token::Type)
           enum_dec.variants << parse_variant(variant_token.location, variant_token.data.as(String))
           next
         end
-        key_tok = consume!(Token::KeyWord)
+        key_tok = consume!(Token::Variable)
         case key_tok.data
-        when KeyWord::Field
+        when "field"
           # enum_dec.fields << parse_field(key_tok.location)
           report_error(key_tok.location, "Enums cannot have fields directly, fields should be in variants.")
           parse_field(key_tok.location)
-        when KeyWord::Def
+        when "def"
           @declarations << parse_method(key_tok.location, receiver, type_params)
-        when KeyWord::Constructor
+        when "constructor"
           @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
-        when KeyWord::Static
+        when "static"
           @declarations << parse_static(key_tok.location, name, type_params)
         else
-          report_error(peek.location, "Unexpected token in struct declaration")
+          report_error(peek.location, "Unexpected token in enum declaration")
           break
         end
       end
@@ -759,28 +853,28 @@ module TopLevelItemParser
       unless consume?(Token::LParen)
         return Ast::Variant.new(loc, name)
       end
+      variant_line_indent = @current_line_indent
+      skip_newline_unless_block_end?(variant_line_indent, "Expected variant field; got end of block.")
       if consume?(Token::RParen)
         @log.warning(loc, "Variant #{name} has no fields.")
         return Ast::Variant.new(loc, name, [] of {String, Ast::Type})
       end
-      with_context ParserContext::List do
-        fields = [] of {String, Ast::Type}
-        until eof?
-          case peek
-          when Token::Type
-            field_type = parse_type_expression
-            fields << {fields.size.to_s, field_type}
-          else
-            field_name = consume_identifier
-            consume?(Token::Colon)
-            field_type = parse_type_expression
-            fields << {field_name, field_type}
-          end
-          consume?(Token::Comma) || break
+      fields = [] of {String, Ast::Type}
+      until eof?
+        case peek
+        when Token::Type
+          field_type = parse_type_expression
+          fields << {fields.size.to_s, field_type}
+        else
+          field_name = consume_identifier
+          consume?(Token::Colon)
+          field_type = parse_type_expression
+          fields << {field_name, field_type}
         end
-        consume!(Token::RParen)
-        Ast::Variant.new(loc, name, fields)
+        consume_list_separator?(variant_line_indent) || break
       end
+      consume!(Token::RParen)
+      Ast::Variant.new(loc, name, fields)
     end
   end
 
@@ -800,19 +894,17 @@ module TopLevelItemParser
       @declarations << extension
       receiver = Ast::Parameter.new(decl_loc, "self", type)
       until eof?
-        if peek.location.column <= decl_loc.column
-          break
-        end
-        key_tok = consume!(Token::KeyWord)
+        break if skip_newline_unless_block_end?(decl_loc.indent)
+        key_tok = consume!(Token::Variable)
         case key_tok.data
-        when KeyWord::Field
+        when "field"
           report_error(key_tok.location, "Type extensions cannot add fields, only methods.")
           parse_field(key_tok.location)
-        when KeyWord::Def
+        when "def"
           @declarations << parse_method(key_tok.location, receiver, type_params)
-        when KeyWord::Constructor
+        when "constructor"
           @declarations << parse_constructor(key_tok.location, type, type_params)
-        when KeyWord::Static
+        when "static"
           @declarations << parse_static(key_tok.location, type.name, type_params)
         else
           report_error(peek.location, "Unexpected #{peek.data} in extend declaration")
@@ -1196,17 +1288,19 @@ struct ExpressionParser < SubParser
   
   def parse_array_literal(loc : Location)
     log.debug_descend(loc, "parse_array_literal") do
-      parser.with_context ParserContext::List do
-        return Ast::EmptyArray.new(loc) if consume?(Token::RBracket)
-        statements = parse_list
-        consume?(Token::RBracket) || raise report_error(peek.location, "Expected closing bracket.")
-        if statements.size == 0
-          log.warning(loc, "empty array literal")
-          Ast::EmptyArray.new(loc)
-        else
-          log.debug(loc, "array literal with #{statements.size} elements")
-          Ast::Array.new(loc, statements)
-        end
+      list_indent = parser.current_line_indent
+      parser.skip_newline_unless_block_end?(list_indent, "Expected array element; got end of block.")
+      if consume?(Token::RBracket)
+        return Ast::EmptyArray.new(loc)
+      end
+      statements = parse_list
+      consume!(Token::RBracket)  # || raise report_error(peek.location, "Expected closing bracket.")
+      if statements.size == 0
+        log.warning(loc, "empty array literal")
+        Ast::EmptyArray.new(loc)
+      else
+        log.debug(loc, "array literal with #{statements.size} elements")
+        Ast::Array.new(loc, statements)
       end
     end
   end
@@ -1300,6 +1394,10 @@ struct ExpressionParser < SubParser
       unless consume?(Token::LParen)
         return args
       end
+      parser.skip_newline_unless_block_end?(@expression_indent)
+      if consume?(Token::RParen)
+        return args
+      end
       list = parse_list(args)
       consume!(Token::RParen)
       list
@@ -1307,25 +1405,13 @@ struct ExpressionParser < SubParser
   end
 
   def parse_list(exprs : Array(Ast::Expr) = [] of Ast::Expr) : Array(Ast::Expr)
-    parser.with_context ParserContext::List do
-      until expression_done?
-        # convention = parser.read_convention?
-        exprs << ExpressionParser.new(parser, expression_indent, StopAt::Comma).parse
-        next if consume?(Token::Comma)
-        # break if expression_done?
-        raise report_error(peek.location, "Expected comma or closing bracket/paren; got #{peek} in list!")
-        # case tok = peek
-        # when Token::Comma
-        #   next_token
-        # when Token::RParen, Token::RBracket, Token::RBrace
-        #   break
-        # else
-        #   raise report_error(tok.location, "should not encounter #{tok} in list")
-        # end
-      end
-      log.debug(peek.location, "done parsing list: #{exprs}")
-      exprs
+    until expression_done?
+      # convention = parser.read_convention?
+      exprs << ExpressionParser.new(parser, @expression_indent, StopAt::Comma).parse
+      parser.consume_list_separator?(@expression_indent) || break
     end
+    log.debug(peek.location, "done parsing list: #{exprs}")
+    exprs
   end
   
   # def parse_let_declaration(loc : Location)
@@ -1381,8 +1467,7 @@ end
 class Parser
   property lexer : Lexer
   @peeked : Token? = nil
-  property context : ParserContext = ParserContext::TopLevel
-  property indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
+  property current_line_indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
   # ^ or maybe this should be passed by methods on the stack?  since it's a little stacky
   property log : Logger
   getter declarations = [] of Ast::TopLevelItem # The final list of top-level AST nodes
@@ -1405,7 +1490,6 @@ class Parser
   # == Main Entry Point ==
   def parse : Array(Ast::TopLevelItem)
     @log.info(Location.zero, "Parser.parse start")
-    consume? Token::BeginFile
 
     until eof?
       begin
