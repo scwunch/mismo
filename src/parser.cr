@@ -238,7 +238,6 @@ module TokenNavigation
 
   def recover_to_next_declaration
     # Simple recovery: skip tokens until we find a keyword that typically starts a new declaration
-    @context = ParserContext::TopLevel
     @log.debug(peek.location, "Attempting recovery...")
     until eof?
       tok = peek
@@ -257,7 +256,6 @@ module TokenNavigation
   end
 
   def recover_to_next_def_or_sub_item
-    @context = ParserContext::TopLevel
     @log.debug(peek.location, "Attempting recovery to next sub-item...")
     until eof?
       if peek.is_a?(Token::KeyWord)
@@ -324,8 +322,8 @@ module TopLevelItemParser
         parse_extend(loc)
       when "def"
         parse_function_block(loc)
-      when "const"
-        parse_const(loc)
+      # when "const"
+      #   parse_const(loc)
       else
         raise report_error(peek.location, "Expected top-level declaration (struct, function, enum, etc.); got #{peek}")
       end
@@ -335,7 +333,7 @@ module TopLevelItemParser
   # --- Function Parsing ---
   # Handles `function NAME ... def ... end`
   # Adds Ast::Function nodes directly to @declarations.
-  def parse_function_block(function_keyword_loc : Location)
+  def parse_function_block(function_keyword_loc : Location) : Nil
     block_name = consume_identifier("function block name")
 
     @log.info(function_keyword_loc, "Parsing function block '#{block_name}'")
@@ -372,11 +370,9 @@ module TopLevelItemParser
   def parse_def_overload(def_loc : Location, name : String, inherited_type_params : Array(Ast::TypeParameter)?) : Ast::Function
     @log.debug_descend(def_loc, "Parsing def for '#{name}'") do
       sig = parse_signature(peek.location, inherited_type_params)
-      with_context(ParserContext::Block) do
-        body = parse_colon_and_block(def_loc.column)
-        consume?(Token::Newline) || report_error(peek.location, "Expected newline after function body")
-        Ast::Function.new(def_loc, name, sig, body)
-      end
+      body = parse_colon_and_block(def_loc.column)
+      consume?(Token::Newline) || report_error(peek.location, "Expected newline after function body")
+      Ast::Function.new(def_loc, name, sig, body)
     end
   end
 

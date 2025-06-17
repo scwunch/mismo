@@ -819,7 +819,7 @@ describe Parser do
       t = parser.parse_trait(loc)
       t.convention.should eq(Mode::Mut)
       t.name.should eq("Mutable")
-      t.type_parameters.should eq([Ast::TypeParameter.new(loc, "X")])
+      t.type_params.should eq([Ast::TypeParameter.new(loc, "X")])
       t.traits.should eq([Ast::Type.new(loc, "Dangerous"), Ast::Type.new(loc, "Fun")])
       mutate_me = t.methods[0]
       mutate_me.name.should eq("mutate_me")
