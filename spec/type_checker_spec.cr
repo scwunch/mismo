@@ -74,8 +74,14 @@ describe TypeEnv do
         struct Point
           field x Int
           field y Int
+
+          def check_me Int:
+            let p = Point.new(1, 2)
+            p.x = 3
+            p.y = 4
+            p.x + p.y
         MISMO
-      type_check_program(program, :debug)
+      type_check_program(program)  #, :debug)
     end
   end
 end

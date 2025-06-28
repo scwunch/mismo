@@ -68,6 +68,23 @@ module TokenNavigation
     end
   end
 
+  def read_binding? : Binding?
+    tok = peek
+    if tok.is_a?(Token::KeyWord)
+      case tok.data
+      when KeyWord::Var   then next_token; Binding::Var
+      when KeyWord::Let   then next_token; Binding::Let
+      when KeyWord::Mut   then next_token; Binding::Mut
+      when KeyWord::Box   then next_token; Binding::Box
+      when KeyWord::Ref   then next_token; Binding::Ref
+      else 
+        nil  # Not a binding keyword
+      end
+    else
+      nil # No binding keyword found
+    end
+  end
+
   def consume?(&block : Token -> Bool) : Token?
     if yield peek
       next_token
@@ -171,8 +188,19 @@ module TokenNavigation
     end
   end
 
-  # consumes a newline only if it's not the end of a block
-  # return true if end of block found
+  # Consumes a newline only if it begins a new block and returns that indent.
+  # Otherwise returns nil.
+  def consume_indent?(block_indent : UInt32) : UInt32?
+    if (tok = peek).is_a?(Token::Newline)
+      if tok.data > block_indent
+        next_token
+        tok.data
+      end
+    end
+  end
+
+  # Consumes a newline only if it's not the end of a block
+  # Returns true if end of block found
   # End of block is determined to be a newline with indent ≤ block_indent
   # EXCEPT if the token after newline is a closing bracket or `else`
   def skip_newline_unless_block_end?(block_indent : UInt32, raise_on_outdent : String? = nil) : Bool
@@ -245,7 +273,7 @@ module TokenNavigation
       if tok.is_a?(Token::KeyWord)
         case tok.data
         when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
-             KeyWord::Extend, KeyWord::Function, KeyWord::Def, KeyWord::Import
+             KeyWord::Extend, KeyWord::Def, KeyWord::Import
           @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
           return
         end
@@ -261,7 +289,7 @@ module TokenNavigation
       if peek.is_a?(Token::KeyWord)
         case peek.data
         when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
-             KeyWord::Extend, KeyWord::Function, KeyWord::Import,
+             KeyWord::Extend, KeyWord::Import,
              KeyWord::Def, KeyWord::Static, KeyWord::Constructor
           @log.debug(peek.location, "Recovery found #{peek.data}, resuming parse.")
           return
@@ -321,7 +349,8 @@ module TopLevelItemParser
       when "extend"
         parse_extend(loc)
       when "def"
-        parse_function_block(loc)
+        parse_def_block(loc)
+        nil  # so we don't add some declarations twice
       # when "const"
       #   parse_const(loc)
       else
@@ -329,66 +358,153 @@ module TopLevelItemParser
       end
     end
   end
-
-  # --- Function Parsing ---
-  # Handles `function NAME ... def ... end`
+  #region Function Parsing
+  # --- #region Function Parsing ---
+  # Handles top-level function declarations.
+  # Examples: 
+    # ```
+    # def foo:
+    #   1 + 1 
+    # 
+    # def bar(a Int, b Int):
+    #   a + b
+    # 
+    # def baz[T]
+    #   (a String, b T):
+    #     a + b
+    # 
+    #   (x T):
+    #     x
+    # 
+    # def quz
+    #   [T Stringable](a T) String:
+    #     a.String + " string"
+    # 
+    #   [U Intable]
+    #     (a Int, b U) Int:
+    #       a + b.Int
+    #     (a Float, b U) Int:
+    #       a.Int + b.Int
+    # 
+    #   (a String) String:
+    #     a + "string"
+    # ```
   # Adds Ast::Function nodes directly to @declarations.
-  def parse_function_block(function_keyword_loc : Location) : Nil
-    block_name = consume_identifier("function block name")
+  # def parse_def_block(loc : Location)
+    # block_indent = loc.indent
+    # type_params = parse_type_parameters?
+    # if consume_indent?(block_indent)
+    #   log.debug_descend(loc, "Parsing multi-function block...") do
+    #     while true
+    #       parse_def_overloads(loc, consume_identifier("function name"), type_params)
+    #       break if skip_newline_unless_block_end?(block_indent)
+    #     end
+    #   end
+    # else
+    #   function_name = consume_identifier("function name")
+    #   log.debug_descend(loc, "Parsing function block for '#{function_name}'") do
+    #     parse_def_overloads(loc, function_name, type_params)
+    #   end
+    # end
+    # nil
+  # end
 
-    @log.info(function_keyword_loc, "Parsing function block '#{block_name}'")
-    @log.debug_descend do
-      type_params = parse_type_parameters?
+  # def parse_def_block(def_loc : Location)
+    # top_type_params = parse_type_parameters?
+    # tree_branch(def_loc) do |is_branch|
+    #   name_loc = is_branch ? peek.location : def_loc
+    #   function_name = consume_identifier("function name")
+    #   tree_branch(name_loc) do |is_branch|
+    #     type_params_loc = is_branch ? peek.location : name_loc
+    #     type_params = parse_type_parameters?(top_type_params)
+    #     tree_branch(type_params_loc) do |is_branch|
+    #       sig_loc = is_branch ? peek.location : type_params_loc
+    #       sig = parse_signature(sig_loc, type_params)
+    #       # block = peek.is_a?(Token::Colon) ? parse_colon_and_block(loc.indent) : nil
+    #       block = parse_colon_and_block(sig_loc.indent)
+    #       func = Ast::Function.new(sig_loc, function_name, sig, block)
+    #       log.info(sig_loc, "parsed #{func}")
+    #       @declarations << func
+    #     end
+    #   end
+    # end
+    # nil
+  # end
 
-      # check if this is a single function or a function block
-      case peek
-      when KeyWord::Def
-        # continue
-      when Token::LBrace, Token::Type, Token::Colon
-        @declarations << parse_def_overload(function_keyword_loc, block_name, type_params)
-        return
-      else
-        raise report_error(peek.location, "Expected 'def' or function signature after function block name")
-      end
-
-      until eof?
-        break unless def_tok = consume?(KeyWord::Def)
-        
-        if overload_ast = parse_def_overload(def_tok.location, block_name, type_params)
-          @declarations << overload_ast
-        else
-          # Error in parsing overload, already reported. Attempt to recover to next 'def' or end of block.
-          recover_to_next_def_or_sub_item
+  def parse_def_block(
+    def_loc : Location, 
+    inherited_type_params : Array(Ast::TypeParameter)? = nil, 
+    receiver : Ast::Parameter? = nil, 
+    trait_method_array : Array(Ast::AbstractMethod)? = nil
+  )
+    inherited_type_params ||= parse_type_parameters?
+    tree_branch(def_loc) do |is_branch|
+      name_loc = is_branch ? peek.location : def_loc
+      function_name = consume_identifier("function name")
+      tree_branch(name_loc) do |is_branch|
+        type_params_loc = is_branch ? peek.location : name_loc
+        type_params = parse_type_parameters?(inherited_type_params)
+        tree_branch(type_params_loc) do |is_branch|
+          sig_loc = is_branch ? peek.location : type_params_loc
+          sig = parse_signature(sig_loc, type_params, receiver)          
+          if trait_method_array
+            block = peek.is_a?(Token::Colon) ? parse_colon_and_block(sig_loc.indent) : nil
+            method = Ast::AbstractMethod.new(sig_loc, function_name, sig, block)
+            log.info(sig_loc, "parsed #{method}")
+            trait_method_array << method
+            method
+          else
+            block = parse_colon_and_block(sig_loc.indent)
+            func = Ast::Function.new(sig_loc, function_name, sig, block)
+            log.info(sig_loc, "parsed #{func}")
+            @declarations << func
+            func
+          end
         end
       end
     end
-    @log.info(peek.location, "Finished parsing function block '#{block_name}'")
   end
 
-  # Parses a single `def [TYPE_PARAMS]? (PARAMS)? RETURN_TYPE : BODY`
-  # within a function block
-  def parse_def_overload(def_loc : Location, name : String, inherited_type_params : Array(Ast::TypeParameter)?) : Ast::Function
-    @log.debug_descend(def_loc, "Parsing def for '#{name}'") do
-      sig = parse_signature(peek.location, inherited_type_params)
-      body = parse_colon_and_block(def_loc.column)
-      consume?(Token::Newline) || report_error(peek.location, "Expected newline after function body")
-      Ast::Function.new(def_loc, name, sig, body)
-    end
-  end
 
-  # Parses a `def CONVENTION? NAME [TYPE_PARAMS]? (PARAMS)? RETURN_TYPE : BODY`
-  # within a struct or enum block
-  # The syntax sugar `def .method` is parsed as `def method(self SelfType)`
-  # and `def mut.method(mut self SelfType)` is parsed as `def method(mut self SelfType)`
-  def parse_def_method(name : String?, inherited_type_params : Array(Ast::TypeParameter)?) : Ast::Function
-    def_loc = peek.location
-    parse_def_overload(def_loc, name, inherited_type_params)
-  end
+  # This is called when the parser has already parsed a `def foo` and is now parsing the overloads
+  # yield type: {Signature, Ast::Block?}
+  # def parse_def_overloads(loc : Location, name : String, inherited_type_params : Array(Ast::TypeParameter)? = nil, receiver : Ast::Parameter? = nil, trait_method_array : Array(Ast::AbstractMethod)? = nil)
+    # block_indent = loc.indent
+    # log.debug(loc, "parse_def_overloads: block_indent=#{block_indent}")
+    # loc = peek.location
+    # type_params = parse_type_parameters?(inherited_type_params)
+    # if consume_indent?(block_indent)
+    #   loc = peek.location
+    #   log.debug_descend(loc, "Parsing multiple def overloads for '#{name}'") do
+    #     while true
+    #       parse_def_overloads(loc, name, type_params, receiver, trait_method_array)
+    #       break if skip_newline_unless_block_end?(block_indent)
+    #     end
+    #   end
+    # else
+    #   log.debug_descend(loc, "Parsing a def for '#{name}'") do
+    #     sig = parse_signature(peek.location, type_params, receiver)
+    #     if trait_method_array
+    #       block = peek.is_a?(Token::Colon) ? parse_colon_and_block(block_indent) : nil
+    #       trait_method_array << Ast::AbstractMethod.new(loc, name, sig, block)
+    #     else
+    #       @declarations << Ast::Function.new(loc, name, sig, parse_colon_and_block(block_indent))
+    #     end
+    #     # block = peek.is_a?(Token::Colon) ? parse_colon_and_block(block_indent) : nil
+    #     # if peek.is_a?(Token::Colon)
+    #     #   proc.call(sig, parse_colon_and_block(block_indent))
+    #     # else
+    #     #   proc.call(sig, nil)
+    #     # end
+    #     # consume?(Token::Newline) || report_error(peek.location, "Expected newline after function body")
+    #     # @functions << Ast::Function.new(loc, name, sig, body)
+    #   end
+    # end
+  # end
 
-  def parse_abstract_def_method(name : String?, inherited_type_params : Array(Ast::TypeParameter)?) : Ast::Function
-    def_loc = peek.location
-    parse_def_overload(def_loc, name, inherited_type_params)
-  end
+  # def parse_def_overloads(loc : Location, receiver : Ast::Parameter? = nil)
+    
+  # end
 
   def parse_signature(sig_loc : Location, 
                       inherited_type_params : Array(Ast::TypeParameter)? = nil,
@@ -403,13 +519,21 @@ module TopLevelItemParser
       else
         parse_parameters?
       end
+      convention = nil
       return_type = 
-        # optional right-arrow, optional convention, optional return type
-        if consume?(Operator::RArrow) || (convention = read_convention?) || peek.is_a?(Token::Type)
+        if consume?(Operator::RArrow)
+          convention = read_convention?
+          parse_type_expression
+        elsif convention = read_convention?
+          parse_type_expression
+        elsif peek.is_a?(Token::Type)
           parse_type_expression
         else
           nil
         end
+      if return_type && return_type.binding
+        report_error(return_type.location, "Return type cannot have a binding, only a passing convention.")
+      end
       Ast::Signature.new(sig_loc, type_params, params, return_type, convention)
     end
   end
@@ -521,16 +645,20 @@ module TopLevelItemParser
     # optional colon
     consume?(Token::Colon)
     type = parse_type_expression
+    if convention && type.binding && convention.to_binding != type.binding
+      report_error(loc, "Parameter convention #{convention} does not match type binding #{type.binding}")
+    end
     Ast::Parameter.new(loc, convention, name, type)
   end
 
   # Parses a type expression, e.g., MyType, MyGenericType[Arg1, Arg2]
   def parse_type_expression : Ast::Type
     loc = peek.location
+    binding = read_binding?
     name = consume_type_name!
     @log.debug_descend(loc, "Parsing type expression: #{name}") do
       type_args = parse_type_args?
-      Ast::Type.new(loc, name, type_args)
+      Ast::Type.new(loc, name, type_args, binding)
     end
   end
 
@@ -619,19 +747,23 @@ module TopLevelItemParser
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, name, Ast.to_type_args(type_params)))
       until eof?
         break if skip_newline_unless_block_end?(decl_loc.indent)
-        key_tok = consume!(Token::Variable)
-        case key_tok.data
-        when "field"
-          struct_dec.fields << parse_field(key_tok.location)
-        when "def"
-          @declarations << parse_method(key_tok.location, receiver, type_params)
-        when "constructor"
-          @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
-        when "static"
-          @declarations << parse_static(key_tok.location, name, type_params)
+        if (key = consume?(Token::KeyWord)) && key.data == KeyWord::Var
+          struct_dec.fields << parse_field(key.location)
         else
-          report_error(peek.location, "Unexpected token in struct declaration")
-          break
+          key_tok = consume!(Token::Variable)
+          case key_tok.data
+          when "field"
+            struct_dec.fields << parse_field(key_tok.location)
+          when "def"
+            parse_method(key_tok.location, receiver, type_params)
+          when "constructor"
+            @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
+          when "static"
+            @declarations << parse_static(key_tok.location, name, type_params)
+          else
+            report_error(peek.location, "Unexpected token in struct declaration")
+            break
+          end
         end
       end
       @declarations << struct_dec
@@ -658,31 +790,35 @@ module TopLevelItemParser
   # - `def +(other Self) -> Self: <function body>`    -- overloads + operator
   # - `def field_name -> FieldType: <function body>`  -- acts as a getter
   # - `def String String: <function body>`            -- overloads String constructor
-  def parse_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil) : Ast::Function
+  def parse_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil)
     @log.debug_descend(loc, "Parsing method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
       convention = read_convention?
       receiver.convention = convention if convention
-      name = consume_identifier
-      signature = parse_signature(peek.location, inherited_type_params, receiver)
-      block = parse_colon_and_block(loc.indent)
-      consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
-      Ast::Function.new(loc, name, signature, block)
+      # name = consume_identifier
+      parse_def_block(loc, inherited_type_params, receiver)
     end
-    
   end
 
-  def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil) : Ast::AbstractMethod
+  # def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil) : Ast::AbstractMethod
+  #   @log.debug_descend(loc, "Parsing abstract method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
+  #     convention = read_convention?
+  #     receiver.convention = convention if convention
+  #     name = consume_identifier
+  #     signature = parse_signature(peek.location, inherited_type_params, receiver)
+  #     if peek.is_a?(Token::Colon)
+  #       block = parse_colon_and_block(loc.indent)
+  #       consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
+  #     end
+  #     Ast::AbstractMethod.new(loc, name, signature, block)
+  #   end
+  # end
+
+  def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)?, trait_methods : Array(Ast::AbstractMethod))
     @log.debug_descend(loc, "Parsing abstract method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
       convention = read_convention?
       receiver.convention = convention if convention
-      name = consume_identifier
-      signature = parse_signature(peek.location, inherited_type_params, receiver)
-      if peek.is_a?(Token::Colon)
-        block = parse_colon_and_block(loc.indent)
-        consume?(Token::Newline) || report_error(peek.location, "Expected newline after method body")
-      end
-      Ast::AbstractMethod.new(loc, name, signature, block)
-    end
+      parse_def_block(loc, inherited_type_params, receiver, trait_methods)
+    end 
   end
 
   def parse_constructor(loc : Location, return_type : Ast::Type, type_params : Array(Ast::TypeParameter)? = nil)
@@ -721,7 +857,7 @@ module TopLevelItemParser
           report_error(key_tok.location, "Fields not yet supported by traits.")
           parse_field(key_tok.location)
         when "def"
-          trait_dec.methods << parse_abstract_method(key_tok.location, receiver, type_params)
+          parse_abstract_method(key_tok.location, receiver, type_params, trait_dec.methods)
         when "constructor"
           report_error(key_tok.location, "Constructors not yet supported by traits.")
           parse_constructor(key_tok.location, receiver.type, type_params)
@@ -755,7 +891,7 @@ module TopLevelItemParser
           report_error(key_tok.location, "Enums cannot have fields directly, fields should be in variants.")
           parse_field(key_tok.location)
         when "def"
-          @declarations << parse_method(key_tok.location, receiver, type_params)
+          parse_method(key_tok.location, receiver, type_params)
         when "constructor"
           @declarations << parse_constructor(key_tok.location, receiver.type, type_params)
         when "static"
@@ -823,7 +959,7 @@ module TopLevelItemParser
           report_error(key_tok.location, "Type extensions cannot add fields, only methods.")
           parse_field(key_tok.location)
         when "def"
-          @declarations << parse_method(key_tok.location, receiver, type_params)
+          parse_method(key_tok.location, receiver, type_params)
         when "constructor"
           @declarations << parse_constructor(key_tok.location, type, type_params)
         when "static"
@@ -1316,6 +1452,7 @@ class Parser
         if item = parse_top_level_item
           @declarations << item
         end
+        consume?(Token::Newline)
       rescue err : ParseError
         # Logged by report_error, here we just ensure we can continue to next top-level item
         @log.debug(err.location, "Caught ParseError: #{err.message}, attempting to find next top-level item.")
@@ -1335,5 +1472,22 @@ class Parser
   end
   def parse_expression(stop : StopAt = StopAt::Normal)
     ExpressionParser.new(self, peek.location.indent, stop).parse
+  end
+
+  # perform a block of code once if the parser finds a single line of code, 
+  # or multiple times if it finds indented items
+  # `loc` is the location of the beginning of the expression/definition
+  def tree_branch(loc : Location, &block)
+    block_indent = loc.indent
+    log.debug_descend(loc, "tree_branch (block_indent: #{block_indent})...") do
+      if consume_indent?(block_indent)
+        until eof?
+          res = yield true
+          break res if skip_newline_unless_block_end?(block_indent)
+        end
+      else
+        yield false
+      end
+    end
   end
 end

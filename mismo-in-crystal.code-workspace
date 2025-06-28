@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../../usr/share/crystal/src"
+		}
+	],
+	"settings": {}
+}

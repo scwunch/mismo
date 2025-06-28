@@ -180,7 +180,6 @@ enum KeyWord
   Import
   Struct
   Enum
-  Function
   Extend
   Trait
   Field
@@ -204,7 +203,7 @@ enum KeyWord
 
   def top_level_keyword?
     case self
-    when Def, Function, Import, Struct, Enum, Extend, Trait
+    when Def, Import, Struct, Enum, Extend, Trait
         true
     else
         false
@@ -239,7 +238,6 @@ enum KeyWord
     when "import" then Import
     when "struct" then Struct
     when "enum" then Enum
-    when "function" then Function
     when "extend" then Extend
     when "trait" then Trait
     when "field" then Field
@@ -294,7 +292,6 @@ enum KeyWord
     in Import then "import"
     in Struct then "struct"
     in Enum then "enum"
-    in Function then "function"
     in Extend then "extend"
     in Trait then "trait"
     in Field then "field"

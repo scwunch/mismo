@@ -1,5 +1,6 @@
 enum Mode
   Move
+  InOut
   Mut
   Let
   Box
@@ -8,12 +9,24 @@ enum Mode
   def self.from_string?(str : String)
     case str
     when "move" then Move
+    when "inout" then InOut
     when "mut" then Mut
     when "let" then Let
     when "box" then Box
     when "ref" then Ref
     # when "copy" then Copy
     else nil
+    end
+  end
+
+  def to_binding : Binding
+    case self
+    in Move then Binding::Var
+    in InOut then Binding::Var
+    in Mut then Binding::Mut
+    in Let then Binding::Let
+    in Box then Binding::Box
+    in Ref then Binding::Ref
     end
   end
 
@@ -24,9 +37,10 @@ end
   
 alias Convention = Mode | Nil
 
-# Bindings
-# Var
-# Mut
-# Let
-# Box
-# Ref
+enum Binding
+  Var
+  Mut
+  Let
+  Box
+  Ref
+end

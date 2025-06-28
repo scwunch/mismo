@@ -439,8 +439,8 @@ describe Parser do
     it "parses a struct with fields" do
       code = <<-MISMO
         struct Point
-          field x Int
-          field y Int
+          var x Int
+          var y Int
         MISMO
       parser = parser(code)
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
@@ -460,9 +460,9 @@ describe Parser do
     it "parses a struct with fields and type parameters" do
       code = <<-MISMO
         struct Array[T]
-          field _buffer Pointer[T]
-          field _length UInt
-          field _capacity UInt
+          var _buffer Pointer[T]
+          var _length UInt
+          var _capacity UInt
         MISMO
       parser = parser(code)
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
@@ -483,8 +483,8 @@ describe Parser do
     it "parses a struct with traits" do
       code = <<-MISMO
         struct Slice[T] is Sequence[T] & Indexable[T]
-          field _buffer Pointer[T]
-          field _length UInt
+          var _buffer Pointer[T]
+          var _length UInt
         MISMO
       parser = parser(code)
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Struct))
@@ -504,7 +504,7 @@ describe Parser do
     it "parses a struct with methods" do
       code = <<-MISMO
         struct Reader
-          field string String
+          var string String
           def read Char:
             nil -- string.at(0)
           def read Int:
@@ -553,9 +553,9 @@ describe Parser do
     it "parses a struct with methods and constructors" do
       code = <<-MISMO
         struct Array[T]
-          field _buffer Pointer[T]
-          field _count UInt
-          field _capacity UInt
+          var _buffer Pointer[T]
+          var _count UInt
+          var _capacity UInt
           
           constructor(cap UInt):
             nil
@@ -810,10 +810,13 @@ describe Parser do
         trait mut Mutable[X] is Dangerous & Fun
           def mutate_me(pls Please)
           
-          def let get(index Int) -> Something:
+          def let get(index Int) -> let Something:
             default + implementation
+
+          def get(index Int) -> mut Something:
+            default + implementation              
         MISMO
-      parser = parser(code)
+      parser = parser(code, :debug)
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
       parser.next_token.should eq(Token.variable({1, 1}, "trait"))
       t = parser.parse_trait(loc)
@@ -828,17 +831,28 @@ describe Parser do
         [Ast::TypeParameter.new(loc, "X")], 
         [self_param, Ast::Parameter.new(loc, "pls", Ast::Type.new(loc, "Please"))]
       ))
-      get = t.methods[1]
-      get.name.should eq("get")
-      get_self_param = self_param
-      get_self_param.convention = Mode::Let
-      get.signature.should eq(Ast::Signature.new(
+      let_get = t.methods[1]
+      let_get.name.should eq("get")
+      let_get_self_param = self_param
+      let_get_self_param.convention = Mode::Let
+      let_get.signature.should eq(Ast::Signature.new(
         loc, 
         [Ast::TypeParameter.new(loc, "X")], 
-        [get_self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
-        Ast::Type.new(loc, "Something")
+        [let_get_self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
+        Ast::Type.new(loc, "Something"),
+        Mode::Let
       ))
-      get.body.should_not be_nil
+      let_get.body.should_not be_nil
+      mut_get = t.methods[2]
+      mut_get.name.should eq("get")
+      mut_get.signature.should eq(Ast::Signature.new(
+        loc, 
+        [Ast::TypeParameter.new(loc, "X")], 
+        [self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
+        Ast::Type.new(loc, "Something"),
+        Mode::Mut
+      ))
+      mut_get.body.should_not be_nil
     end
   end
 
@@ -869,6 +883,175 @@ describe Parser do
         [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
         [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "T"))], 
         Ast::Type.new(loc, "String")
+      ))
+    end
+  end
+
+  describe "parse_def" do
+    it "parses a def block" do
+      code = <<-MISMO
+        def foo:
+            1 + 1 
+          
+        def bar(a Int, b Int):
+          a + b
+        
+        def baz[T]
+          (a String, b T):
+            a + b
+        
+          (x T):
+            x
+        
+        def quz
+          [T Stringable](a T) String:
+            a.String + " string"
+        
+          [U Intable]
+            (a Int, b U) Int:
+              a + b.Int
+            (a Float, b U) Int:
+              a.Int + b.Int
+        
+          (a String) String:
+            a + "string"
+        MISMO
+      parser = parser(code)
+      parser.parse
+      # parser.declarations.size.should eq(8)
+      parser.declarations.each do |dec| 
+        dec.should be_a(Ast::Function)
+      end
+      f1 = parser.declarations[0].as(Ast::Function)
+      f1.name.should eq("foo")
+      f1.signature.should eq(Ast::Signature.new(
+        loc,
+        nil
+      ))
+      f2 = parser.declarations[1].as(Ast::Function)
+      f2.name.should eq("bar")
+      f2.signature.should eq(Ast::Signature.new(
+        loc,
+        nil,
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "Int")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "Int"))]
+      ))
+      f3 = parser.declarations[2].as(Ast::Function)
+      f3.name.should eq("baz")
+      f3.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T")],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "String")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "T"))]
+      ))
+      f4 = parser.declarations[3].as(Ast::Function)
+      f4.name.should eq("baz")
+      f4.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T")],
+        [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "T"))]
+      ))
+      quz1 = parser.declarations[4].as(Ast::Function)
+      quz1.name.should eq("quz")
+      quz1.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Stringable")])],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T"))],
+        Ast::Type.new(loc, "String")
+      ))
+      quz2 = parser.declarations[5].as(Ast::Function)
+      quz2.name.should eq("quz")
+      quz2.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "Int")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
+        Ast::Type.new(loc, "Int")
+      ))
+      quz3 = parser.declarations[6].as(Ast::Function)
+      quz3.name.should eq("quz")
+      quz3.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "Float")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
+        Ast::Type.new(loc, "Int")
+      ))
+      quz4 = parser.declarations[7].as(Ast::Function)
+      quz4.name.should eq("quz")
+      quz4.signature.should eq(Ast::Signature.new(
+        loc,
+        nil,
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "String"))],
+        Ast::Type.new(loc, "String")
+      ))
+    end
+    it "parses multiple unrelated functions in one def block, with optional additional type parameters" do
+      code = <<-MISMO
+        def[T, U] 
+          foo(a T, b U) T:
+            a + b
+          bar[S] -> Nil: nil
+          baz[V]
+            (a V):
+              a
+            (x V) V:
+              x
+        
+        def
+          bar Nil:
+            nil
+          baz[T]
+            (a T):
+              a
+        MISMO
+      parser = parser(code)
+      parser.parse
+      parser.declarations.size.should eq(6)
+      parser.declarations.each do |dec| 
+        dec.should be_a(Ast::Function)
+      end
+      foo = parser.declarations[0].as(Ast::Function)
+      foo.name.should eq("foo")
+      foo.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U")],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
+        Ast::Type.new(loc, "T")
+      ))
+      bar = parser.declarations[1].as(Ast::Function)
+      bar.name.should eq("bar")
+      bar.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "S")],
+        nil,
+        Ast::Type.new(loc, "Nil")
+      ))
+      baz = parser.declarations[2].as(Ast::Function)
+      baz.name.should eq("baz")
+      baz.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "V"))]
+      ))
+      baz2 = parser.declarations[3].as(Ast::Function)
+      baz2.name.should eq("baz")
+      baz2.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
+        [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "V"))],
+        Ast::Type.new(loc, "V")
+      ))
+      bar2 = parser.declarations[4].as(Ast::Function)
+      bar2.name.should eq("bar")
+      bar2.signature.should eq(Ast::Signature.new(
+        loc,
+        nil,
+        nil,
+        Ast::Type.new(loc, "Nil")
+      ))
+      baz3 = parser.declarations[5].as(Ast::Function)
+      baz3.name.should eq("baz")
+      baz3.signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T")],
+        [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T"))]
       ))
     end
   end

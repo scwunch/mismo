@@ -496,7 +496,8 @@ module Ast
     property location : Location
     property name : ::String
     property type_args : ::Array(Type)?
-    def initialize(@location : Location, @name : ::String, @type_args : ::Array(Type)? = nil)
+    property binding : Binding?
+    def initialize(@location : Location, @name : ::String, @type_args : ::Array(Type)? = nil, @binding : Binding? = nil)
     end
     def to_s(io : IO)
       io << name
@@ -532,7 +533,7 @@ module Ast
       Extend.new(
         location, 
         type_params,
-        Type.new(location, name, Ast.to_type_args(type_params)), 
+        Type.new(location, name, Ast.to_type_args(type_params), convention.try &.to_binding), 
         traits)
     end
   end
@@ -619,8 +620,11 @@ module Ast
     property body : ::Array(Expr)
     def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
     end
+    def initialize(@name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
+      @location = @signature.location
+    end
     def to_s(io : IO)
-      io << "#{self.class.name}(#{name})"
+      io << "def #{name}#{signature}: #{body.join("\n")}"
     end
     def parameters
       signature.parameters
@@ -671,7 +675,19 @@ module Ast
     def initialize(@location : Location, @type_params : ::Array(TypeParameter)? = nil, @parameters : ::Array(Parameter)? = nil, @return_type : Type? = nil, @return_convention : Convention = nil)
     end
     def to_s(io : IO)
-      io << "#{parameters.join(", ")} -> #{return_convention} #{return_type}"
+      if tp = type_params
+        io << "[#{tp.join(", ")}]"
+      end
+      if params = parameters
+        io << "(#{params.join(", ")})"
+      end
+      if rt = return_type
+        io << " -> "
+        if rc = return_convention
+          io << "#{rc} "
+        end
+        io << rt
+      end
     end
   end
 
@@ -719,8 +735,12 @@ module Ast
       includes.nil? && excludes.nil?
     end
     def to_s(io : IO)
-      io << includes.join(" & ") if includes
-      io << " ~" << excludes.join(" ~") if excludes
+      if incl = includes
+        io << incl.join(" & ") 
+      end
+      if excl = excludes
+        io << " ~" << excl.join(" ~") 
+      end
     end
     def inspect(io : IO)
       io << "Ast::Constraints(includes: #{includes.inspect}, excludes: #{excludes.inspect})"
