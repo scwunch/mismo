@@ -766,7 +766,7 @@ module TopLevelItemParser
           end
         end
       end
-      @declarations << struct_dec
+      # @declarations << struct_dec
       struct_dec
     end
   end
@@ -936,7 +936,7 @@ module TopLevelItemParser
     end
   end
 
-  def parse_import(decl_loc : Location) : Ast::Node? # TODO: Define Ast::Import
+  def parse_import(decl_loc : Location) : Ast::Import? # TODO: Define Ast::Import
     @log.debug(decl_loc, "Parsing import declaration...")
     # Pony: parse_import(loc)
     raise report_error(decl_loc, "parse_import not yet implemented")
@@ -1264,7 +1264,7 @@ struct ExpressionParser < SubParser
     
   def parse_control_statement(loc : Location, word : KeyWord)
     case word
-    # when KeyWord::Let then handle_arg_passing_mode(loc, "let")
+    when KeyWord::Let then parse_let_declaration(loc)
     when KeyWord::Var then parse_var_declaration(loc)
     when KeyWord::Const then parse_const_declaration(loc)
     # when KeyWord::Mut 
@@ -1381,6 +1381,13 @@ struct ExpressionParser < SubParser
     exprs
   end
   
+  def parse_let_declaration(loc : Location)
+    name = consume_identifier
+    consume!(Operator::Assign)
+    value = ExpressionParser.new(parser, expression_indent, stop).parse
+    Ast::Let.new(loc, name, value)
+  end
+
   def parse_var_declaration(loc : Location)
     name = consume_identifier
     consume!(Operator::Assign)

@@ -51,15 +51,18 @@ def type_checker(level : Logger::Level = Logger::Level::Warning)
   TypeContext.new(type_env(level))
 end
 def type_check_program(code : String, level : Logger::Level = Logger::Level::Warning)
-  type_env = type_env(level)
-  type_env.type_check_program(parser(code, level).parse)
+  logger = Logger.new
+  type_env = TypeEnv.new(logger)
+  logger.level = level
+  type_env.type_check_program(parser(code, Logger::Level::Warning).parse)
+  type_env
 end
 
 describe TypeContext do
   describe "#type_check" do
     it "works" do
       type_checker = type_checker()
-      ast = expression_parser("nil").parse
+      ast : Ast::Expr = expression_parser("nil").parse
       hir = type_checker.type_check(ast)
       type_checker.unify(hir.type, Type.nil).should eq(:ok)
       hir.should eq(Hir::Nil.new(loc))
@@ -76,12 +79,27 @@ describe TypeEnv do
           field y Int
 
           def check_me Int:
-            let p = Point.new(1, 2)
+            var p = Point(1, 2)
             p.x = 3
             p.y = 4
             p.x + p.y
         MISMO
-      type_check_program(program)  #, :debug)
+      items = parser(program, Logger::Level::Info).parse
+      type_env = type_check_program(program, :debug)
+      point = type_env.user_types["Point"].as(StructBase)
+      check_me_func = type_env.functions["check_me"][0]
+      check_me_func.return_type.should eq(Type.int)
+      p! check_me_func.parameters[0].to_s
+      param = check_me_func.parameters[0]
+      p! param.location
+      p! param.mode
+      p! param.name
+      p! param.type
+      param.mode.should eq(Mode::Let)
+      param.name.should eq("self")
+      param.type.should eq(Type.struct(point))
+      check_me_func.parameters.should eq(
+        [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
     end
   end
 end

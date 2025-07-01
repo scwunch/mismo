@@ -1,4 +1,5 @@
 require "./type_env"
+require "./logger"
 
 # Type inference context
 class TypeContext
@@ -16,7 +17,7 @@ class TypeContext
     end
   end
 
-  def log
+  def log : Logger
     env.log
   end
 
@@ -24,7 +25,7 @@ class TypeContext
     ctx = TypeContext.new(env, function.type_params)
     # init scope with parameters
     function.parameters.each do |param|
-      ctx.scope[param.name] = Variable.new(param.location, param.mode, param.name, param.type)
+      ctx.scope[param.name] = Variable.new(param.location, param.mode.to_binding, param.name, param.type)
     end
     
     # check body, statement-by-statement
@@ -32,7 +33,14 @@ class TypeContext
     
     # check return type
     unless function.return_type == Type.nil
-      ctx.unify(function.body.last.type, function.return_type)
+      begin
+        ctx.unify(function.body.last.type, function.return_type)
+      rescue failure
+        if msg = failure.message
+          ctx.log.error(function.body.last.location, msg)
+        end
+        ctx.log.error(function.body.last.location, "Expected return type: #{function.return_type}; Actual return type: #{function.body.last.type}")
+      end
     end
   end
 
@@ -96,9 +104,11 @@ class TypeContext
     in {nil, nil}
       [] of Type
     in {nil, Array(Ast::Type)}
-      raise "#{type_name} does not expect type arguments, but #{type_args.size} were provided."
+      raise "#{type_name} does not expect type arguments, but #{type_args.size} were provided." unless type_args.size == 0
+      [] of Type
     in {Array(Ast::TypeParameter), nil}
-      raise "#{type_name} expects #{type_params.size} type arguments, but none were provided."
+      raise "#{type_name} expects #{type_params.size} type arguments, but none were provided." unless type_params.size == 0
+      [] of Type
     in {Array(Ast::TypeParameter), Array(Ast::Type)}
       if type_args.size != type_params.size
         raise "#{type_name} expects #{type_params.size} type arguments, but #{type_args.size} were provided."
@@ -250,29 +260,105 @@ class TypeContext
     when Ast::NotNode
       function_call(ast.location, "not", [type_check(ast.value)])
     when Ast::Binop
-      left = type_check(ast.left)
-      right = type_check(ast.right)
-      function_call(ast.location, ast.operator.to_s, [left, right])
+      case ast.operator
+      when Operator::Assign
+        expr = type_check(ast.right)
+        assign(ast.left.value, expr)
+      else
+        left = type_check(ast.left)
+        right = type_check(ast.right)
+        function_call(ast.location, ast.operator.to_s, [left, right])
+      end
+    when Ast::Call
+      function_call(ast.location, ast.method, ast.args.try &.map(&->type_check(Ast::Expr)) || [] of Hir)
+    when Ast::StaticCall
+      raise "static call should be implemented probably almost the same as 'Call'"
+    when Ast::Var
+      declare(Binding::Var, Hir::Var, ast.location, ast.name, ast.value)
+    when Ast::Let
+      declare(Binding::Let, Hir::Let, ast.location, ast.name, ast.value)
     else
       raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
     end
+  rescue type_error : TypeError
+    log.error(type_error.location, type_error.message)
+    Hir::Nil.new(ast.location)
   end
 
   def type_check(ast : Cell(Ast::Expr)) : Hir
     type_check(ast.value)
   end
 
-  def identifier(location : Location, name : ::String)
-    var = scope[name]
-    raise "#{name} not found in scope" unless var
-    raise "#{name} is not yet initialized" unless var.initialized?
-    raise "#{name} was already consumed @#{var.consumed}" if var.consumed
-    Hir::Identifier.new(location, name, var.type.as(Type))
+  def declare(binding : Binding, dec_type : Hir.class, loc : Location, name : ::String, value : Cell(Ast::Expr)? = nil) : Hir
+    if value
+      expr = type_check(value.value)
+      variable = Variable.new(loc, binding, name, expr.type)
+      scope[name] = variable
+      dec_type.new(loc, name, expr)
+    else
+      scope[name] = Variable.new(loc, binding, name)
+      dec_type.new(loc, name)
+    end
   end
 
-  def function_call(location : Location, name : ::String, args : ::Array(Hir))
-    log.warning(location, "function call not implemented yet")
-    Hir::Call.new(location, name, args, Type.nil)
+  def identifier(location : Location, name : ::String) : Hir
+    var = scope.get_var(location, name)
+    Hir::Identifier.new(location, name, var.binding, var.type.as(Type))
+  end
+
+  def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
+    log.warning(location, "function call not fully implemented yet")
+    overloads = env.functions[name]?
+    if overloads.nil?
+      raise TypeError.new(location, "function #{name} not found")
+    end
+
+    matches = overloads.select do |func|
+      func.parameters.size == args.size &&
+      func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
+    end
+
+    if matches.empty?
+      raise TypeError.new(location, "function call does not match any of the overloads:\n#{overloads.join("\n")}")
+    end
+    if matches.size > 1
+      raise TypeError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
+    end
+    func = matches.first
+    Hir::Call.new(location, func, args, func.return_type)
+  end
+
+  def assign(lhs : Ast::Expr, rhs : Hir) : Hir
+    case lhs
+    when Ast::Identifier
+      var = scope.assign(lhs.location, lhs.name, rhs, self)
+      Hir::Assign.new(lhs.location, var, rhs)
+    when Ast::Let
+      var = scope.let(lhs.location, lhs.name, rhs)
+      Hir::Assign.new(lhs.location, var, rhs)
+    when Ast::Call
+      if (ast = lhs.receiver?) && lhs.count_args == 1
+        object = type_check(ast)
+        if !object.mutable?
+          raise TypeError.new(lhs.location, "#{object} is not mutable")
+        end
+        case (t = object.type)
+        when Type::Struct
+          if (field = t.get_field?(lhs.method))
+            unify(field.type, rhs.type)
+            Hir::AssignField.new(lhs.location, object, field, rhs)
+          else
+            raise TypeError.new(lhs.location, "#{object} has no field #{lhs.method}")
+          end
+        else
+          raise TypeError.new(lhs.location, "#{object} is not a struct; it's #{t}")
+        end
+      else
+        raise TypeError.new(lhs.location, "function call #{lhs} is not a valid left-hand side of assignment")
+      end
+    else
+      raise TypeError.new(lhs.location, "#{lhs} is not a valid left-hand side of assignment")
+    end
   end
 
   def unify(a : Type, b : Type)
@@ -319,12 +405,45 @@ class TypeScope
   getter parent : TypeScope?
   getter vars = {} of String => Variable
 
+  # retrieve the variable from the given scope, including parent scope
+  # nil if not exists
   def [](name : String)
     vars[name]? || ((p=parent) && p[name])
   end
 
+  # retrieve the named variable, but raise error if missing, uninitialized, or consumed. 
+  def get_var(loc : Location, name : String)
+    var = vars[name]
+    raise TypeError.new(loc, "#{name} not found in scope") unless var
+    raise TypeError.new(loc, "#{name} is not yet initialized") unless var.initialized?
+    raise TypeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
+    var
+  end
+
   def []=(name : String, var : Variable)
     vars[name] = var
+  end
+
+  def let(loc : Location, name : String, expr : Hir)
+    if name.in? vars
+      print "Warning: shadowing variable #{name}\n"
+    end
+    vars[name] = Variable.new(loc, Binding::Let, name, expr.type)
+  end
+
+  def assign(loc : Location, name : String, expr : Hir, ctx : TypeContext)
+    if var = self[name]
+      raise TypeError.new(loc, "#{name} not found in scope") unless var
+      raise TypeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
+      if t = var.type
+        ctx.unify(t, expr.type)
+      else
+        var.type = expr.type
+      end
+      var
+    else
+      raise TypeError.new(loc, "#{name} not found in scope")
+    end
   end
 end
 
@@ -332,9 +451,9 @@ class Variable
   getter name : String
   getter declared : Location
   property consumed : Location?
-  getter binding : Mode?
+  getter binding : Binding
   property type : Type?
-  def initialize(@declared : Location, @binding : Mode?, @name : String, @type : Type?)
+  def initialize(@declared : Location, @binding : Binding, @name : String, @type : Type? = nil)
   end
 
   def initialized?
@@ -400,5 +519,14 @@ class TypeUnifier
     else
       typ
     end
+  end
+end
+
+class TypeError < Exception
+  property location : Location
+  def initialize(@location : Location, @message : String)
+  end
+  def message : String
+    @message || "<TYPE ERROR>"
   end
 end

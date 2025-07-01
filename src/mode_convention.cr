@@ -43,4 +43,14 @@ enum Binding
   Let
   Box
   Ref
+
+  def to_mode(if_var : Mode)
+    case self
+    in Var then if_var
+    in Mut then Mode::Mut
+    in Let then Mode::Let
+    in Box then Mode::Box
+    in Ref then Mode::Ref
+    end
+  end
 end

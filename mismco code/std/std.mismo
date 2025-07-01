@@ -6,22 +6,22 @@ struct Array[T]
   def len UInt: _len
   def cap UInt: _cap
 
-  def opt(index: UInt): Option[T]
+  def opt(index: UInt) -> let Option[let T]:
     if index < _len
       Some(_buffer.deref(index))
     else
       None
 
-  def mut opt(index: UInt): Option[T]
+  def mut opt(index: UInt): mut Option[mut T]
     if index < _len
       Some(_buffer.deref_mut(index))
     else
       None
     
-  def get(index: UInt): T
+  def get(index: UInt): let T
     _buffer.deref(index)
   
-  def mut get(index: UInt): T
+  def mut get(index: UInt): mut T
     _buffer.deref_mut(index)
 
 struct Array[T]
@@ -33,22 +33,22 @@ struct Array[T]
     len UInt: _len
     cap UInt: _cap
 
-    opt(index: UInt): Option[T]
+    opt(index: UInt): let Option[let T]
       if index < _len:
         Option.Some(_buffer.deref(index))
       else:
         None
 
-    mut opt(index: UInt): Option[T]
+    mut opt(index: UInt): mut Option[mut T]
       if index < _len
         Some(_buffer.deref_mut(index))
       else
         None
     
-    get(index: UInt): T
+    get(index: UInt): let T
       _buffer.deref(index)
   
-    mut get(index: UInt): T
+    mut get(index: UInt): mut T
       """ panics """
       _buffer.deref_mut(index)
     
@@ -58,12 +58,9 @@ enum Result[T, E]
   Err(E)
 
 
-alias Option[T] = Result[T, Nil]
-  static Some[T](t: T) Option[T]: 
-    Ok(t)
-  static None[T] Option[T]: 
-    Err(Nil)
-
+enum Option[T]
+  Some(T)
+  None
 
 trait Monad[T]
   def map[U](fn: T -> U) Self[U]
@@ -74,8 +71,83 @@ trait Monad[T]
 extend[T] Option[T] is Monad[T]
   def map[U](fn: T -> U) Option[U]
     if self is
-      Ok(t): Ok(fn(t))
-      Err(_): Err(Nil)
+      Some(t): Some(fn(t))
+      None: None
+
+
+-- binding downcast functions
+def[T]
+  as_mut(mut self T) -> mut T:
+    self
+  
+  as_let(self T) -> let T:
+    self
+  
+  to_ref(move self T) -> ref T:
+    self
+  
+  to_box(move self T) -> box T:
+    self
+
+trait Iterator[T]
+  def next -> Option[T]
+
+trait Iterable[T, Iter: Iterator[T]]
+  def iter -> Iter
+
+extend[T] Array[T] is Iterable[T, ArrayIterator[T]]
+  def iter -> ArrayIterator[T]:
+    ArrayIterator(self)
+
+
+struct ArrayIterator[T]
+  var _array: #T Array[T]
+  var _index: UInt
+
+  constructor(#T array: Array[T]):
+    _array = array
+    _index = 0
+
+  def mut next -> Option[T]
+    if _index < _array.len
+      Option.Some(_array.get(_index += 1))
+    else
+      Option.None
+
+
+
+def main:
+  var array = [1, 2, 3]
+  var iter = array.iter
+  
+
+
+---
+binding restriction notations:
+<no annotation> => any binding
+let: only let binding
+let+: let/ref binding
+ref: only ref binding
+mut: only mut binding
+mut+: mut/box/var binding
+box+: box/var binding
+store: box/ref/var binding
+var: var binding
+#T+: binding that is a super-type of T's binding
+
+
+...
+share: let/mut/box/ref
+mut+: mut/box/var
+store: box/ref/var
+send: var/ref
+
+
+
+
+
+
+
 
 
 -- 100 doors

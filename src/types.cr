@@ -1,5 +1,6 @@
 require "./hir_nodes"
 require "./cell"
+require "./abstract_node"
 
 abstract struct Type
 
@@ -84,7 +85,7 @@ abstract struct Type
   struct Struct < Type
     getter base : StructBase
     getter type_args : ::Array(Type)
-    def initialize(@base : StructBase, @type_args : ::Array(Type))
+    def initialize(@base : StructBase, @type_args : ::Array(Type) = [] of Type)
     end
     def Type.struct(*args) ; Struct.new(*args) end
     def to_s(io : IO)
@@ -92,12 +93,18 @@ abstract struct Type
       io << "[#{type_args.join(", ")}]" if type_args.any?
     end
     def mode : Mode ; base.mode end
+    def get_field?(field_name : ::String) : Field?
+      base.fields.each do |field|
+        return field if field.name == field_name
+      end
+      nil
+    end
   end
 
   struct Enum < Type
     getter base : EnumBase
     getter type_args : ::Array(Type)
-    def initialize(@base : EnumBase, @type_args : ::Array(Type))
+    def initialize(@base : EnumBase, @type_args : ::Array(Type) = [] of Type)
     end
     def Type.enum(*args) ; Enum.new(*args) end
     def to_s(io : IO)
@@ -147,20 +154,27 @@ class EnumBase < TypeInfo
   end
 end
 
-struct Field
+struct Field < IrNode
   getter location : Location
-  getter binding : Mode
+  getter binding : Binding
   getter name : String
   getter type : Type
-  def initialize(@location : Location, @binding : Mode, @name : String, @type : Type)
+  def initialize(@location : Location, @binding : Binding, @name : String, @type : Type)
+  end
+  def to_s(io : IO)
+    io << "#{binding} #{name}: #{type}"
   end
 end
 
-struct Variant
+struct Variant < IrNode
   getter location : Location
   getter name : String
   getter fields : ::Array(Field)
   def initialize(@location : Location, @name : String, @fields : ::Array(Field))
+  end
+  def to_s(io : IO)
+    io << @name
+    io << "(#{fields.join(", ")})" if fields.any?
   end
 end
 
@@ -185,18 +199,22 @@ class FunctionBase
   getter name : String
   getter type_params : ::Array(Ast::TypeParameter)
   property parameters : ::Array(Parameter) = [] of Parameter
+  property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
   property body : ::Array(Hir) = [] of Hir
   def initialize(@location : Location, @name : String, @type_params : ::Array(Ast::TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil)
   end
 end
 
-struct Parameter
+struct Parameter < IrNode
   getter location : Location
   getter mode : Mode
   getter name : String
   getter type : Type
   def initialize(@location : Location, @mode : Mode, @name : String, @type : Type)
+  end
+  def to_s(io : IO)
+    io << "#{mode} #{name}: #{type}"
   end
 end
 

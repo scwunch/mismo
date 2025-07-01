@@ -8,7 +8,7 @@ def loc
   Location.zero
 end
 
-describe Ast::Node do
+describe Ast::Expr do
   describe "#==" do
     it "returns true if the nodes are equal type and equal fields" do
       Ast::Nil.new(loc).should eq(Ast::Nil.new(loc))

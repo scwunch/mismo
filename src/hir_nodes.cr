@@ -2,30 +2,36 @@ require "./mode_convention"
 require "./tokens"
 require "./types"
 require "./cell"
+require "./abstract_node"
 
-abstract struct Hir
+abstract struct Hir < IrNode
   abstract def location : Location
-  property binding : Mode?
+  abstract def binding : Binding
   abstract def type : Type
   abstract def to_s(io : IO)
 
-  def ==(other)
-    if other.is_a?(self)
-      {% for ivar in @type.instance_vars %}
-        {% if ivar.name.id != "location" %}
-          return false unless @{{ivar.id}} == other.@{{ivar.id}}
-        {% end %}
-      {% end %}
-      true
-    else
-      false
-    end
+  # def ==(other)
+  #   if other.is_a?(self)
+  #     {% for ivar in @type.instance_vars %}
+  #       {% if ivar.name.id != "location" %}
+  #         return false unless @{{ivar.id}} == other.@{{ivar.id}}
+  #       {% end %}
+  #     {% end %}
+  #     true
+  #   else
+  #     false
+  #   end
+  # end
+
+  def mutable?
+    binding == Binding::Mut || binding == Binding::Var
   end
 
   struct Nil < Hir
     property location : Location
     def initialize(@location : Location)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.nil end
     def to_s(io : IO)
       io << "nil"
@@ -36,6 +42,7 @@ abstract struct Hir
     property location : Location
     def initialize(@location : Location)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.bool end
     def to_s(io : IO)
       io << "false"
@@ -46,6 +53,7 @@ abstract struct Hir
     property location : Location
     def initialize(@location : Location)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.bool end
     def to_s(io : IO)
       io << "true"
@@ -57,6 +65,7 @@ abstract struct Hir
     property value : Int128
     def initialize(@location : Location, @value : Int128)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.int end
     def to_s(io : IO)
       io << value.to_s
@@ -68,6 +77,7 @@ abstract struct Hir
     property value : Float64
     def initialize(@location : Location, @value : Float64)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.float end
     def to_s(io : IO)
       io << value.to_s
@@ -79,6 +89,7 @@ abstract struct Hir
     property value : ::String
     def initialize(@location : Location, @value : ::String)
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.string end
     def to_s(io : IO)
       io << "\"#{value}\""
@@ -88,8 +99,9 @@ abstract struct Hir
   struct Identifier < Hir
     property location : Location
     property name : ::String
+    property binding : Binding
     property type : Type
-    def initialize(@location : Location, @name : ::String, @type : Type)
+    def initialize(@location : Location, @name : ::String, @binding : Binding, @type : Type)
     end
     def to_s(io : IO)
       io << name
@@ -102,6 +114,7 @@ abstract struct Hir
     property elements : ::Array(Hir)
     def initialize(@location : Location, @element_type : Type, @elements : ::Array(Hir))
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.array(element_type) end
     def to_s(io : IO)
       io << "[#{elements.join(", ")}]"
@@ -113,6 +126,7 @@ abstract struct Hir
     property elements : ::Array(Hir)
     def initialize(@location : Location, @elements : ::Array(Hir))
     end
+    def binding : Binding ; Binding::Var end
     def type : Type ; Type.tuple(@elements.map &.type) end
     def to_s(io : IO)
       io << "[#{elements.join(", ")}]"
@@ -123,13 +137,94 @@ abstract struct Hir
 
   struct Call < Hir
     property location : Location
-    property name : ::String
+    property function : FunctionBase
     property args : ::Array(Hir)
     getter type : Type
-    def initialize(@location : Location, @name : ::String, @args : ::Array(Hir), @type : Type)
+    def initialize(@location : Location, @function : FunctionBase, @args : ::Array(Hir), @type : Type)
+    end
+    def binding : Binding
+      function.return_mode.to_binding
     end
     def to_s(io : IO)
-      io << "#{name}([#{args.join(", ")}]"
+      io << "#{function.name}(#{args.join(", ")})"
+    end
+  end
+
+  struct Assign < Hir
+    property location : Location
+    property variable : ::Variable
+    property value : Cell(Hir)
+    def initialize(@location : Location, @variable : ::Variable, @value : Cell(Hir))
+    end
+    def initialize(@location : Location, @variable : ::Variable, value : Hir)
+      @value = Cell.new(value.as(Hir))
+    end
+    def binding : Binding
+      variable.binding
+    end
+    def type : Type 
+      variable.type || Type.nil
+    end
+    def to_s(io : IO)
+      io << "#{variable.name} = #{value}"
+    end
+  end
+
+  struct AssignField < Hir
+    property location : Location
+    property object : Cell(Hir)
+    property field : ::Field
+    property value : Cell(Hir)
+    def initialize(@location : Location, @object : Cell(Hir), @field : ::Field, @value : Cell(Hir))
+    end
+    def initialize(@location : Location, object : Hir, @field : ::Field, value : Hir)
+      @object = Cell.new(object.as(Hir))
+      @value = Cell.new(value.as(Hir))
+    end
+    def binding : Binding
+      field.binding
+    end
+    def type : Type 
+      field.type
+    end
+    def to_s(io : IO)
+      io << "#{object}.#{field.name} = #{value.value}"
+    end
+  end
+
+  struct Let < Hir
+    property location : Location
+    property name : ::String
+    property value : Cell(Hir)?
+    def initialize(@location : Location, @name : ::String, @value : Cell(Hir)? = nil)
+    end
+    def initialize(@location : Location, @name : ::String, value : Hir)
+      @value = Cell.new(value.as(Hir))
+    end
+    def binding : Binding
+      Binding::Var
+    end
+    def type : Type ; Type.nil end
+    def to_s(io : IO)
+      io << "let #{name} = #{value}"
+    end
+  end
+
+  struct Var < Hir
+    property location : Location
+    property name : ::String
+    property value : Cell(Hir)?
+    def initialize(@location : Location, @name : ::String, @value : Cell(Hir)? = nil)
+    end
+    def initialize(@location : Location, @name : ::String, value : Hir)
+      @value = Cell.new(value.as(Hir))
+    end
+    def binding : Binding
+      Binding::Var
+    end
+    def type : Type ; Type.nil end
+    def to_s(io : IO)
+      io << "var #{name} = #{value}"
     end
   end
 end
