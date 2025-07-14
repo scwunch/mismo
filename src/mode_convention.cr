@@ -53,4 +53,14 @@ enum Binding
     in Ref then Mode::Ref
     end
   end
+
+  def to_s(io : IO)
+    io << case self
+    in Var then "var"
+    in Mut then "mut"
+    in Let then "let"
+    in Box then "box"
+    in Ref then "ref"
+    end
+  end
 end

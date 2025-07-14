@@ -780,6 +780,42 @@ describe Parser do
         Ast::Type.new(loc, "Color")
       ))
     end
+    it "parses an enum with type parameters and methods" do
+      code = <<-MISMO
+        enum Result[T, E]
+          Ok(T)
+          Error(E)
+
+          def ok -> Bool:
+            self is Ok
+
+        trait Equatable[T]
+          def ==(other : T) -> Bool
+        MISMO
+      parser = parser(code)
+      parser.next_token.should eq(Token.variable({1, 1}, "enum"))
+      e = parser.parse_enum(loc)
+      e.should eq(Ast::Enum.new(
+        loc, 
+        "Result", 
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")], 
+        nil,
+        [
+          Ast::Variant.new(loc, "Ok", [{"0", Ast::Type.new(loc, "T")}]),
+          Ast::Variant.new(loc, "Error", [{"0", Ast::Type.new(loc, "E")}])
+        ]
+      ))
+      parser.declarations.size.should eq(2)
+      ok = parser.declarations[0]
+      ok.should be_a(Ast::Function)
+      ok.name.should eq("ok")
+      ok.as(Ast::Function).signature.should eq(Ast::Signature.new(
+        loc,
+        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")],
+        [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Result", [Ast::Type.new(loc, "T"), Ast::Type.new(loc, "E")]))],
+        Ast::Type.new(loc, "Bool")
+      ))
+    end
   end
 
   describe "#parse_trait" do

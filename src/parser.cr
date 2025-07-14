@@ -766,7 +766,7 @@ module TopLevelItemParser
           end
         end
       end
-      # @declarations << struct_dec
+      @declarations << struct_dec
       struct_dec
     end
   end
@@ -1453,12 +1453,13 @@ class Parser
 
     until eof?
       begin
+        parse_top_level_item
         # parse_top_level_item is expected to add items to @declarations directly
         # if it parses a construct that can produce multiple items (like 'function' block).
         # Otherwise, it returns a single item.
-        if item = parse_top_level_item
-          @declarations << item
-        end
+        # if item = parse_top_level_item
+        #   @declarations << item
+        # end
         consume?(Token::Newline)
       rescue err : ParseError
         # Logged by report_error, here we just ensure we can continue to next top-level item

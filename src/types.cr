@@ -8,15 +8,35 @@ abstract struct Type
   abstract def mode : Mode
   def primitive? : Bool; false end
 
+  def inspect(io : IO)
+    io << {{@type.name.stringify}} << '('
+    {% for ivar, i in @type.instance_vars %}
+      io << {{ivar.name.id}}.inspect
+      {% if i < @type.instance_vars.size - 1 %}
+        io << ", "
+      {% end %}
+    {% end %}
+    io << ')'
+  end
+
+  abstract def substitute_Self_with(type : Type) : Type
+    
+
   macro primitive
     private def initialize; end
     def self.instance ; @@instance ||= new end
-    def Type.{{@type.name[6..].downcase}} ; {{@type.name[6..]}}.instance end
+    def Type.{{@type.name[6..].downcase}} : Type ; {{@type.name[6..]}}.instance end
     def to_s(io : IO)
       io << "{{@type.name[6..]}}"
     end
     def mode : Mode ; Mode::Move end
     def primitive? : Bool; true end
+    def ==(other : Type)
+      self.class == other.class
+    end
+    def substitute_Self_with(type : Type) : Type
+      self
+    end
   end
 
   struct Never < Type
@@ -43,32 +63,68 @@ abstract struct Type
     primitive
     def mode : Mode ; Mode::Ref end
   end
+  
+  struct Self < Type
+    primitive
+    def mode : Mode ; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      type
+    end
+  end
 
   struct Var < Type
     getter id : Int32
   
     def initialize(@id)
+      # raise "I found the T1!" if @id == 1
     end
+    def Type.var(id : Int32) ; Var.new(id) end
   
     def to_s(io : IO)
       io << "T#{@id}"
     end
 
     def mode : Mode ; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      self
+    end
   end
-  
+
+  struct Unknown < Type
+    getter name : ::String
+    getter type_args : ::Array(Type)
+    def initialize(@name : ::String, @type_args : ::Array(Type) = [] of Type)
+    end
+    def Type.unknown(name, type_args = [] of Type)
+      Unknown.new(name, type_args)
+    end
+    def to_s(io : IO)
+      io << "Unknown[#{@name}, #{@type_args.join(", ")}]"
+    end
+    def mode : Mode ; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      Type.unknown(@name, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    end
+  end
+
   struct Array < Type
     getter element_type : Cell(Type)
     def initialize(@element_type : Cell(Type))
     end
     def initialize(element_type : Type)
-      @element_type = Cell.new(element_type)
+      @element_type = Cell.new(element_type.as(Type))
     end
     def Type.array(type) ; Array.new(type) end
     def to_s(io : IO)
       io << "Array[#{@element_type}]"
     end
+    def to_s
+      "Array[#{@element_type}]"
+    end
     def mode : Mode ; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      Array.new(@element_type.value.substitute_Self_with(type))
+    end
   end
 
   struct Tuple < Type
@@ -80,6 +136,26 @@ abstract struct Type
       io << "Tuple[#{types.join(", ")}]"
     end
     def mode : Mode ; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      Tuple.new(@types.map { |t| t.substitute_Self_with(type) })
+    end
+  end
+
+  def Type.adt(base : StructBase, type_args : ::Array(Type) = [] of Type)
+    Struct.new(base, type_args)
+  end
+
+  def Type.adt(base : EnumBase, type_args : ::Array(Type) = [] of Type)
+    Enum.new(base, type_args)
+  end
+
+  def Type.adt(base : TypeInfo, type_args : ::Array(Type) = [] of Type)
+    case base
+    when StructBase then Struct.new(base, type_args)
+    when EnumBase then Enum.new(base, type_args)
+    else
+      raise "Type.adt: unknown type info: #{base}"
+    end
   end
 
   struct Struct < Type
@@ -92,7 +168,16 @@ abstract struct Type
       io << "struct #{@base.name}"
       io << "[#{type_args.join(", ")}]" if type_args.any?
     end
+    def inspect(io : IO)
+      io << "Type::Struct("
+      base.inspect(io)
+      io << "[#{type_args.join(", ")}]" if type_args.any?
+      io << ")"
+    end
     def mode : Mode ; base.mode end
+    def substitute_Self_with(type : Type) : Type
+      Struct.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    end
     def get_field?(field_name : ::String) : Field?
       base.fields.each do |field|
         return field if field.name == field_name
@@ -112,6 +197,9 @@ abstract struct Type
       io << "[#{type_args.join(", ")}]" if type_args.any?
     end
     def mode : Mode ; base.mode end
+    def substitute_Self_with(type : Type) : Type
+      Enum.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    end
   end
 
   struct Function < Type
@@ -127,30 +215,69 @@ abstract struct Type
       io << "(#{args.join(", ")}) -> #{@return_type}"
     end
     def mode : Mode; Mode::Let end
+    def substitute_Self_with(type : Type) : Type
+      Function.new(@args.map { |ta| ta.substitute_Self_with(type) }, @return_type.value.substitute_Self_with(type))
+    end
   end
 end
 
 
 # --- Type Information ---
 
+struct TypeParameter < IrNode
+  getter location : Location
+  getter name : String
+  getter required_traits : Array(Trait)?
+  getter excluded_traits : Array(Trait)?
+  def initialize(@location : Location, @name : String, @required_traits : Array(Trait)? = nil, @excluded_traits : Array(Trait)? = nil)
+  end
+  def to_s(io : IO)
+    io << name
+    if req = required_traits
+      io << ": #{req.join(" & ")}" if req.any?
+    end
+    if exc = excluded_traits
+      io << " ~#{exc.join(" ~")}" if exc.any?
+    end
+  end
+end
+
 abstract class TypeInfo
   getter location : Location
   getter mode : Mode
   getter name : String
-  getter type_params : Array(Ast::TypeParameter)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(Ast::TypeParameter) = [] of Ast::TypeParameter)
+  property type_params : Array(TypeParameter)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(TypeParameter) = [] of TypeParameter)
   end
 end
 
 class StructBase < TypeInfo
   getter fields : ::Array(Field)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(Ast::TypeParameter) = [] of Ast::TypeParameter, @fields : ::Array(Field) = [] of Field)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(TypeParameter) = [] of TypeParameter, @fields : ::Array(Field) = [] of Field)
+  end
+  def to_s(io : IO)
+    io << "struct #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+  end
+  def inspect(io : IO)
+    io << "struct #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+    io << "(#{fields.join(", ")})" if fields.any?
   end
 end
 
 class EnumBase < TypeInfo
   getter variants : ::Array(Variant)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(Ast::TypeParameter) = [] of Ast::TypeParameter, @variants : ::Array(Variant) = [] of Variant)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(TypeParameter) = [] of TypeParameter, @variants : ::Array(Variant) = [] of Variant)
+  end
+  def to_s(io : IO)
+    io << "enum #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+  end
+  def inspect(io : IO)
+    io << "enum #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+    io << "(#{variants.join(", ")})" if variants.any?
   end
 end
 
@@ -180,29 +307,38 @@ end
 
 class TraitBase < TypeInfo
   getter methods : ::Array(Ast::AbstractMethod)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(Ast::TypeParameter) = [] of Ast::TypeParameter, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Array(TypeParameter) = [] of TypeParameter, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
+  end
+  def to_s(io : IO)
+    io << "trait #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+  end
+  def inspect(io : IO)
+    io << "trait #{@name}"
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+    io << "(#{methods.join(", ")})" if methods.any?
   end
 end
 
 # struct Method
 #   getter location : Location
 #   getter name : String
-#   getter type_params : ::Array(Ast::TypeParameter)
+#   getter type_params : ::Array(TypeParameter)
 #   getter args : ::Array(Parameter)
 #   getter return_type : Type
-#   def initialize(@location : Location, @name : String, @type_params : ::Array(Ast::TypeParameter), @args : ::Array(Parameter), @return_type : Type)
+#   def initialize(@location : Location, @name : String, @type_params : ::Array(TypeParameter), @args : ::Array(Parameter), @return_type : Type)
 #   end
 # end
 
 class FunctionBase
   getter location : Location
   getter name : String
-  getter type_params : ::Array(Ast::TypeParameter)
+  property type_params : ::Array(TypeParameter)
   property parameters : ::Array(Parameter) = [] of Parameter
   property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
   property body : ::Array(Hir) = [] of Hir
-  def initialize(@location : Location, @name : String, @type_params : ::Array(Ast::TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil)
+  def initialize(@location : Location, @name : String, @type_params : ::Array(TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil)
   end
 end
 
@@ -221,11 +357,31 @@ end
 struct Trait
   getter base : TraitBase
   getter type_args : ::Array(Type)
-  def initialize(@base : TraitBase, @type_args : ::Array(Type))
+  def initialize(@base : TraitBase, @type_args : ::Array(Type) = [] of Type)
+    if @base.name == "Equatable" && @type_args.size > 1
+      raise "break: #{inspect}"
+    elsif @base.name == "SelfEquatable" && @type_args.size > 0
+      raise "break: #{inspect}"
+    end
+    if @base.type_params.size != @type_args.size
+      raise "break: #{inspect}"
+    end
+    if to_s == "trait Equatable[Int, T1]"
+      raise "break: #{inspect}"
+    end
   end
   def Type.trait(*args) ; Trait.new(*args) end
   def to_s(io : IO)
     io << "trait #{@base.name}"
     io << "[#{type_args.join(", ")}]" if type_args.any?
+  end
+  def mode : Mode ; base.mode end
+  def substitute_Self_with(type : Type) : Trait
+    Trait.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+  end
+  def inspect(io : IO)
+    io << "Trait(#{@base.name}"
+    io << "[#{type_args.join(", ")}]" if type_args.any?
+    io << ")"
   end
 end

@@ -18,7 +18,8 @@ class Cell(T)
       value.to_s(io)
       io << ")"
     end
-  end
+    def_hash @value
+end
 
 # class Object
 #   def ==(other : Cell(T))

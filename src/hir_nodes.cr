@@ -10,19 +10,6 @@ abstract struct Hir < IrNode
   abstract def type : Type
   abstract def to_s(io : IO)
 
-  # def ==(other)
-  #   if other.is_a?(self)
-  #     {% for ivar in @type.instance_vars %}
-  #       {% if ivar.name.id != "location" %}
-  #         return false unless @{{ivar.id}} == other.@{{ivar.id}}
-  #       {% end %}
-  #     {% end %}
-  #     true
-  #   else
-  #     false
-  #   end
-  # end
-
   def mutable?
     binding == Binding::Mut || binding == Binding::Var
   end

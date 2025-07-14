@@ -474,9 +474,10 @@ module Ast
 
   abstract struct TopLevelItem < IrNode
     property location : Location
-    property type_params : ::Array(TypeParameter)?
-    def initialize(@location : Location, @type_params : ::Array(TypeParameter)? = nil)
+    # property type_params : ::Array(TypeParameter)?
+    def initialize(@location : Location)
     end
+    abstract def type_params : ::Array(TypeParameter)?
     abstract def to_s(io : IO)
     # def inspect(io : IO)
     #   io << "#{self.class.name}(#{location})"
@@ -486,8 +487,9 @@ module Ast
   abstract struct TypeDeclaration < TopLevelItem
     property convention : Convention
     property name : ::String
+    property type_params : ::Array(TypeParameter)?
     property traits : ::Array(Type)?
-    def initialize(@location : Location, @name : ::String, @type_params : ::Array(Type)?, @convention : Convention, @traits : ::Array(Type)?)
+    def initialize(@location : Location, @name : ::String, @type_params : ::Array(TypeParameter)?, @convention : Convention, @traits : ::Array(Type)?)
     end
     def as_extension
       Extend.new(
@@ -561,6 +563,7 @@ module Ast
 
   struct Extend < TopLevelItem
     property type : Type
+    property type_params : ::Array(TypeParameter)?
     property traits : ::Array(Type)?
     def initialize(@location : Location, @type_params : ::Array(TypeParameter)?, @type : Type, @traits : ::Array(Type)? = nil)
     end
@@ -570,7 +573,10 @@ module Ast
       @type.name
     end
     def to_s(io : IO)
-      io << "extend #{name}"
+      io << "extend #{type}"
+      if t = traits
+        io << " is #{t.join(" & ")}"
+      end
     end
   end
 
@@ -585,6 +591,15 @@ module Ast
     end
     def to_s(io : IO)
       io << "def #{name}#{signature}: #{body.join("\n")}"
+    end
+    def count_type_params
+      signature.type_params.try &.size || 0
+    end
+    def type_params : ::Array(TypeParameter)?
+      signature.type_params
+    end
+    def count_params
+      signature.parameters.try &.size || 0
     end
     def parameters
       signature.parameters
@@ -609,7 +624,7 @@ module Ast
     def count_type_params
       signature.type_params.try &.size || 0
     end
-    def type_params
+    def type_params : ::Array(TypeParameter)?
       signature.type_params
     end
     def count_params
@@ -662,6 +677,10 @@ module Ast
     end
     def to_s(io : IO)
       io << "#{name}"
+      io << ": " << constraints.to_s unless constraints.empty?
+    end
+    def inspect(io : IO)
+      io << "#{self.class.name}(#{name})"
       io << ": " << constraints.to_s unless constraints.empty?
     end
   end
