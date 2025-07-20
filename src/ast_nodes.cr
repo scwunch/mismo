@@ -243,19 +243,19 @@ module Ast
   #   # def location : Location
   #   #   @receiver.value.location
   #   # end
-  #   # def initialize(receiver : Expr, location : Location, method : ::String, type_args : ::Array(Type)? = nil, args : Args? = nil)
+  #   # def initialize(receiver : Expr, location : Location, method : ::String, type_args : Slice(Type) = nil, args : Args? = nil)
   #   #   @receiver = Cell.new(receiver.as(Expr))
   #   #   @call = Call.new(location, method, type_args, args)
   #   # end
-  #   # def initialize(receiver : Expr, location : Location, method : ::String, args : Args? = nil, type_args : ::Array(Type)? = nil)
+  #   # def initialize(receiver : Expr, location : Location, method : ::String, args : Args? = nil, type_args : Slice(Type) = nil)
   #   #   @receiver = Cell.new(receiver.as(Expr))
   #   #   @call = Call.new(location, method, type_args, args)
   #   # end
-  #   # def initialize(receiver : Expr, method : ::String, type_args : ::Array(Type)? = nil, args : Args? = nil)
+  #   # def initialize(receiver : Expr, method : ::String, type_args : Slice(Type) = nil, args : Args? = nil)
   #   #   @receiver = Cell.new(receiver.as(Expr))
   #   #   @call = Call.new(location, method, type_args, args)
   #   # end
-  #   # def initialize(receiver : Expr, method : ::String, args : Args? = nil, type_args : ::Array(Type)? = nil)
+  #   # def initialize(receiver : Expr, method : ::String, args : Args? = nil, type_args : Slice(Type) = nil)
   #   #   @receiver = Cell.new(receiver.as(Expr))
   #   #   @call = Call.new(location, method, type_args, args)
   #   # end
@@ -266,7 +266,7 @@ module Ast
   #   # def method : ::String
   #   #   call.method
   #   # end
-  #   # def type_args : ::Array(Type)?
+  #   # def type_args : Slice(Type)
   #   #   call.type_args
   #   # end
   #   # def args : Args?
@@ -278,24 +278,32 @@ module Ast
   #   # end
   # end 
 
+  # alias Args = ::Array({Convention, Expr})
+  # changed because we now have ModeExpr
+  alias Args = ::Array(Expr)
+
   struct Call < Expr
     property location : Location
     property method : ::String
-    property type_args : ::Array(Type)?
+    property type_args : Slice(Type)
     property args : Args?
-    def initialize(@location : Location, @method : ::String, @type_args : ::Array(Type)? = nil, @args : Args? = nil)
+    def initialize(
+      @location : Location, 
+      @method : ::String, 
+      @type_args : Slice(Type), 
+      @args : Args?)
     end
-    def initialize(@location : Location, @method : ::String, @args : Args? = nil, @type_args : ::Array(Type)? = nil)
+    def initialize(@location : Location, @method : ::String, @args : Args? = nil, @type_args : Slice(Type) = Slice(Type).empty)
     end
-    def initialize(@location : Location, @method : ::String, args : ::Array(Expr), @type_args : ::Array(Type)? = nil)
-      @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
+    # def initialize(@location : Location, @method : ::String, args : ::Array(Expr), @type_args : Slice(Type) = Slice(Type).empty)
+    #   @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
+    # end
+    # def initialize(@location : Location, @method : ::String, @type_args : Slice(Type), args : ::Array(Expr))
+    #   @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
+    # end
+    def initialize(@location : Location, @method : ::String, @type_args : Slice(Type) = Slice(Type).empty)
     end
-    def initialize(@location : Location, @method : ::String, @type_args : ::Array(Type)?, args : ::Array(Expr))
-      @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
-    end
-    def initialize(@location : Location, @method : ::String, @type_args : ::Array(Type)? = nil)
-    end
-    def initialize(@method : ::String, @args : Args? = nil, @type_args : ::Array(Type)? = nil)
+    def initialize(@method : ::String, @args : Args? = nil, @type_args : Slice(Type) = Slice(Type).empty)
       if @type_args && @type_args.size > 0
         @location = @type_args[0].location -(@method.size + 1)
       elsif @args && @args.size > 0
@@ -326,9 +334,6 @@ module Ast
       end
     end
   end
-  # alias Args = ::Array({Convention, Expr})
-  # changed because we now have ModeExpr
-  alias Args = ::Array(Expr)
 
   struct StaticCall < Expr
     property location : Location
@@ -455,9 +460,12 @@ module Ast
   struct Type < IrNode
     property location : Location
     property name : ::String
-    property type_args : ::Array(Type)?
+    property type_args : Slice(Type)
     property binding : Binding?
-    def initialize(@location : Location, @name : ::String, @type_args : ::Array(Type)? = nil, @binding : Binding? = nil)
+    def initialize(@location : Location, @name : ::String, @type_args : Slice(Type) = Slice(Type).empty, @binding : Binding? = nil)
+    end
+    def initialize(@location : Location, @name : ::String, type_args : ::Array(Type)? = nil, @binding : Binding? = nil)
+      @type_args = type_args.try &.to_unsafe_slice || Slice(Type).empty
     end
     def to_s(io : IO)
       io << name
@@ -474,10 +482,10 @@ module Ast
 
   abstract struct TopLevelItem < IrNode
     property location : Location
-    # property type_params : ::Array(TypeParameter)?
+    # property type_params : Slice(TypeParameter)
     def initialize(@location : Location)
     end
-    abstract def type_params : ::Array(TypeParameter)?
+    abstract def type_params : Slice(TypeParameter)
     abstract def to_s(io : IO)
     # def inspect(io : IO)
     #   io << "#{self.class.name}(#{location})"
@@ -487,9 +495,9 @@ module Ast
   abstract struct TypeDeclaration < TopLevelItem
     property convention : Convention
     property name : ::String
-    property type_params : ::Array(TypeParameter)?
+    property type_params : Slice(TypeParameter)
     property traits : ::Array(Type)?
-    def initialize(@location : Location, @name : ::String, @type_params : ::Array(TypeParameter)?, @convention : Convention, @traits : ::Array(Type)?)
+    def initialize(@location : Location, @name : ::String, @type_params : Slice(TypeParameter), @convention : Convention, @traits : ::Array(Type)? = nil)
     end
     def as_extension
       Extend.new(
@@ -503,9 +511,9 @@ module Ast
   
   struct Struct < TypeDeclaration
     property fields : ::Array(Field)
-    def initialize(@location : Location, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field, @convention : Convention = nil)
+    def initialize(@location : Location, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field, @convention : Convention = nil)
     end
-    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field)
+    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @fields : ::Array(Field) = [] of Field)
     end
     def to_s(io : IO)
       io << "struct #{name}"
@@ -530,9 +538,9 @@ module Ast
 
   struct Enum < TypeDeclaration
     property variants : ::Array(Variant)
-    def initialize(@location : Location, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant, @convention : Convention = nil)
+    def initialize(@location : Location, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant, @convention : Convention = nil)
     end
-    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant)
+    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @variants : ::Array(Variant) = [] of Variant)
     end
     def to_s(io : IO)
       io << "enum #{name}"
@@ -552,9 +560,9 @@ module Ast
 
   struct Trait < TypeDeclaration
     property methods : ::Array(AbstractMethod)
-    def initialize(@location : Location, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod, @convention : Convention = nil)
+    def initialize(@location : Location, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod, @convention : Convention = nil)
     end
-    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod)
+    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod)
     end
     def to_s(io : IO)
       io << "trait #{name}"
@@ -563,11 +571,11 @@ module Ast
 
   struct Extend < TopLevelItem
     property type : Type
-    property type_params : ::Array(TypeParameter)?
-    property traits : ::Array(Type)?
-    def initialize(@location : Location, @type_params : ::Array(TypeParameter)?, @type : Type, @traits : ::Array(Type)? = nil)
+    property type_params : Slice(TypeParameter)
+    property traits : ::Array(Type)
+    def initialize(@location : Location, @type_params : Slice(TypeParameter), @type : Type, @traits : ::Array(Type) = [] of Type)
     end
-    def initialize(@location : Location, @type : Type, *, @type_params : ::Array(TypeParameter)? = nil, @traits : ::Array(Type)? = nil)
+    def initialize(@location : Location, @type : Type, *, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type) = [] of Type)
     end
     def name 
       @type.name
@@ -595,7 +603,7 @@ module Ast
     def count_type_params
       signature.type_params.try &.size || 0
     end
-    def type_params : ::Array(TypeParameter)?
+    def type_params : Slice(TypeParameter)
       signature.type_params
     end
     def count_params
@@ -624,7 +632,7 @@ module Ast
     def count_type_params
       signature.type_params.try &.size || 0
     end
-    def type_params : ::Array(TypeParameter)?
+    def type_params : Slice(TypeParameter)
       signature.type_params
     end
     def count_params
@@ -643,11 +651,12 @@ module Ast
 
   struct Signature < IrNode
     property location : Location
-    property type_params : ::Array(TypeParameter)?
-    property parameters : ::Array(Parameter)?
+    property type_params : Slice(TypeParameter)
+    property parameters : ::Array(Parameter)
     property return_type : Type?
     property return_convention : Convention?
-    def initialize(@location : Location, @type_params : ::Array(TypeParameter)? = nil, @parameters : ::Array(Parameter)? = nil, @return_type : Type? = nil, @return_convention : Convention = nil)
+    def initialize(@location : Location, type_params : Slice(TypeParameter)? = nil, @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type? = nil, @return_convention : Convention = nil)
+      @type_params = type_params || Slice(TypeParameter).empty
     end
     def to_s(io : IO)
       if tp = type_params
@@ -672,8 +681,11 @@ module Ast
     property constraints : Constraints
     def initialize(@location : Location, @name : ::String, @constraints : Constraints = Constraints.new)
     end
-    def initialize(@location : Location, @name : ::String, include_traits : ::Array(Type)? = nil, exclude_traits : ::Array(Type)? = nil)
+    def initialize(@location : Location, @name : ::String, include_traits = Slice(Type).empty, exclude_traits = Slice(Type).empty)
       @constraints = Constraints.new(include_traits, exclude_traits)
+    end
+    def initialize(@location : Location, @name : ::String, include_traits = Array(Type))
+      @constraints = Constraints.new(include_traits)
     end
     def to_s(io : IO)
       io << "#{name}"
@@ -686,32 +698,42 @@ module Ast
   end
 
   struct Constraints
-    property includes : ::Array(Type)?
-    property excludes : ::Array(Type)?
-    def initialize(@includes : ::Array(Type)? = nil, @excludes : ::Array(Type)? = nil)
+    property includes : Slice(Type)
+    property excludes : Slice(Type)
+    def initialize(@includes : Slice(Type) = Slice(Type).empty, @excludes : Slice(Type) = Slice(Type).empty)
+    end
+    def initialize(includes : (::Array(Type)? | Slice(Type)) = nil, excludes : (::Array(Type)? | Slice(Type)) = nil)
+      @includes = if includes.is_a?(Slice)
+        includes
+      else
+        includes.try &.to_unsafe_slice || Slice(Type).empty
+      end
+      @excludes = if excludes.is_a?(Slice)
+        excludes
+      else
+        excludes.try &.to_unsafe_slice || Slice(Type).empty
+      end
     end
     def self.include(trait : Type)
-      new([trait])
+      new(includes: Slice[trait])
     end
     def self.exclude(trait : Type)
-      new(nil, [trait])
+      new(excludes: Slice[trait])
     end
-    def include(trait : Type)
-      if i = @includes
-        i << trait
-      else
-        @includes = [trait]
-      end
+    def +(trait : Type)
+      new(@includes.push(trait), @excludes)
     end
-    def exclude(trait : Type)
-      if e = @excludes
-        e << trait
-      else
-        @excludes = [trait]
-      end
+    def -(trait : Type)
+      new(@includes, @excludes.push(trait))
     end
+    # def include(trait : Type)
+    #   push(@includes, trait)
+    # end
+    # def exclude(trait : Type)
+    #   push(@excludes, trait)
+    # end
     def empty?
-      includes.nil? && excludes.nil?
+      includes.empty? && excludes.empty?
     end
     def to_s(io : IO)
       if incl = includes
@@ -741,8 +763,8 @@ module Ast
     end
   end
 
-  def self.to_type_args(type_params : ::Array(TypeParameter)?) : ::Array(Type)?
-    return nil unless type_params
+  def self.to_type_args(type_params : Slice(TypeParameter)) : Slice(Type)
+    return Slice(Type).empty unless type_params
     type_params.map { |tp| Type.new(tp.location, tp.name) }
   end
 end

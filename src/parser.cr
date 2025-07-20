@@ -433,11 +433,11 @@ module TopLevelItemParser
 
   def parse_def_block(
     def_loc : Location, 
-    inherited_type_params : Array(Ast::TypeParameter)? = nil, 
+    inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty, 
     receiver : Ast::Parameter? = nil, 
     trait_method_array : Array(Ast::AbstractMethod)? = nil
   )
-    inherited_type_params ||= parse_type_parameters?
+    inherited_type_params = parse_type_parameters? if inherited_type_params.empty?
     tree_branch(def_loc) do |is_branch|
       name_loc = is_branch ? peek.location : def_loc
       function_name = consume_identifier("function name")
@@ -468,7 +468,7 @@ module TopLevelItemParser
 
   # This is called when the parser has already parsed a `def foo` and is now parsing the overloads
   # yield type: {Signature, Ast::Block?}
-  # def parse_def_overloads(loc : Location, name : String, inherited_type_params : Array(Ast::TypeParameter)? = nil, receiver : Ast::Parameter? = nil, trait_method_array : Array(Ast::AbstractMethod)? = nil)
+  # def parse_def_overloads(loc : Location, name : String, inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty, receiver : Ast::Parameter? = nil, trait_method_array : Slice(Ast::AbstractMethod) = Slice(Ast::AbstractMethod).empty)
     # block_indent = loc.indent
     # log.debug(loc, "parse_def_overloads: block_indent=#{block_indent}")
     # loc = peek.location
@@ -507,14 +507,14 @@ module TopLevelItemParser
   # end
 
   def parse_signature(sig_loc : Location, 
-                      inherited_type_params : Array(Ast::TypeParameter)? = nil,
+                      inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty,
                       receiver : Ast::Parameter? = nil, 
                      ) : Ast::Signature?
     @log.debug_descend(sig_loc, "Parsing signature...") do
       declaration_indent = @current_line_indent
       type_params = parse_type_parameters?(inherited_type_params)
       skip_newline_unless_block_end?(declaration_indent)
-      params : Array(Ast::Parameter)? = if receiver 
+      params : Array(Ast::Parameter) = if receiver 
         parse_parameters([receiver])
       else
         parse_parameters?
@@ -539,17 +539,18 @@ module TopLevelItemParser
   end
 
   # Parses `[T, U: Constraint]` or `[A, B: Constraint1 & Constraint2]`
-  def parse_type_parameters?(inherited_type_params : Array(Ast::TypeParameter)? = nil) : Array(Ast::TypeParameter)?
-    type_params = inherited_type_params.try &.dup
-    return type_params unless peek.is_a?(Token::LBracket)
+  def parse_type_parameters?(inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty) : Slice(Ast::TypeParameter) 
+    # type_params = inherited_type_params.try &.dup
+    return inherited_type_params unless peek.is_a?(Token::LBracket)
     params_indent = @current_line_indent
-    type_params ||= [] of Ast::TypeParameter
+    # type_params ||= [] of Ast::TypeParameter
     lbracket_loc = next_token.location  # consume '['
     @log.debug(peek.location, "about to possibly skip a newline...")
     skip_newline_unless_block_end?(params_indent, "Unexpected outdent in type parameters.")
     if consume?(Token::RBracket)
-      return type_params
+      return inherited_type_params
     end
+    type_params = inherited_type_params
     
     @log.debug_descend(lbracket_loc, "Parsing type parameters...") do
       until eof?
@@ -558,20 +559,21 @@ module TopLevelItemParser
         param_loc = peek.location
         name = consume_type_name!
         constraints = parse_constraints
-        type_params << Ast::TypeParameter.new(param_loc, name, constraints)
+        # type_params << Ast::TypeParameter.new(param_loc, name, constraints)
+        type_params = type_params.push(Ast::TypeParameter.new(param_loc, name, constraints))
         consume_list_separator?(params_indent) || break
       end
       consume!(Token::RBracket)
-      type_params
     end
+    type_params
   end
 
   # Parses `is Trait & Trait[Int]`
   def parse_traits?
     # consume colon or `is`
     return nil unless consume?(Token::Colon) || consume?(Operator::Is)
+    traits = [] of Ast::Type
     @log.debug_descend(peek.location, "Parsing traits...") do
-      traits = [] of Ast::Type
       until eof?
         skip_newline_unless_block_end?(0, "Unexpected outdent in traits parsing.")
         traits << parse_type_expression
@@ -585,35 +587,36 @@ module TopLevelItemParser
 
   # Parses `: Trait & Trait[Int]`
   def parse_constraints : Ast::Constraints
-    constraints = Ast::Constraints.new
     unless consume?(Token::Colon) || consume?(Operator::Is) || peek.data == Operator::Not || peek.is_a?(Token::Type)
-      return constraints
+      return Ast::Constraints.new
     end
+    includes = Slice(Ast::Type).empty
+    excludes = Slice(Ast::Type).empty
     type_line_indent = @current_line_indent
     @log.debug_descend(peek.location, "Parsing constraints...") do
       skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
       # parse first constraint
       if consume?(Operator::Not)
         skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
-        constraints.exclude parse_type_expression
+        push!(excludes, parse_type_expression)
       else
-        constraints.include parse_type_expression
+        push!(includes, parse_type_expression)
       end
       # parse remaining constraints
       until eof?
         skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
         if consume?(Operator::And)
           skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
-          constraints.include parse_type_expression
+          push!(includes, parse_type_expression)
         elsif consume?(Operator::Not)
           skip_newline_unless_block_end?(type_line_indent, "Unexpected outdent in constraints.")
-          constraints.exclude parse_type_expression
+          push!(excludes, parse_type_expression)
         else
           break
         end
       end
     end
-    constraints
+    Ast::Constraints.new(includes, excludes)
   end
 
   def parse_parameters(params : Array(Ast::Parameter))
@@ -633,8 +636,8 @@ module TopLevelItemParser
   end
   
   # Parses (p1: Type, p2: Type)
-  def parse_parameters? : Array(Ast::Parameter)?
-    return nil unless peek.is_a?(Token::LParen)
+  def parse_parameters? : Array(Ast::Parameter) 
+    return [] of Ast::Parameter unless peek.is_a?(Token::LParen)
     parse_parameters([] of Ast::Parameter)
   end
 
@@ -663,16 +666,16 @@ module TopLevelItemParser
   end
 
   # Parses type arguments, e.g., [Arg1, Arg2]
-  def parse_type_args? : Array(Ast::Type)?
-    consume?(Token::LBracket) || return nil
+  def parse_type_args? : Slice(Ast::Type) 
+    consume?(Token::LBracket) || return Slice(Ast::Type).empty
     type_line_indent = @current_line_indent
     skip_newline_unless_block_end?(type_line_indent, "Expected type argument; got end of block.")
-    type_args = [] of Ast::Type
+    type_args = Slice(Ast::Type).empty
     return type_args if consume?(Token::RBracket)
     
     @log.debug_descend(peek.location, "Parsing type arguments...") do
       until eof?
-        type_args << parse_type_expression
+        push!(type_args, parse_type_expression)
         consume_list_separator?(type_line_indent) || break
       end
       consume!(Token::RBracket)
@@ -725,7 +728,7 @@ module TopLevelItemParser
     end
   end
 
-  def parse_type_header : {Convention, String, Array(Ast::TypeParameter)?, Array(Ast::Type)?}
+  def parse_type_header : {Convention, String, Slice(Ast::TypeParameter) , Array(Ast::Type)? }
     convention = read_convention?
     name = consume_identifier
     type_params = parse_type_parameters?
@@ -790,7 +793,7 @@ module TopLevelItemParser
   # - `def +(other Self) -> Self: <function body>`    -- overloads + operator
   # - `def field_name -> FieldType: <function body>`  -- acts as a getter
   # - `def String String: <function body>`            -- overloads String constructor
-  def parse_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil)
+  def parse_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty)
     @log.debug_descend(loc, "Parsing method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
       convention = read_convention?
       receiver.convention = convention if convention
@@ -799,7 +802,7 @@ module TopLevelItemParser
     end
   end
 
-  # def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)? = nil) : Ast::AbstractMethod
+  # def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty) : Ast::AbstractMethod
   #   @log.debug_descend(loc, "Parsing abstract method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
   #     convention = read_convention?
   #     receiver.convention = convention if convention
@@ -813,7 +816,7 @@ module TopLevelItemParser
   #   end
   # end
 
-  def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Array(Ast::TypeParameter)?, trait_methods : Array(Ast::AbstractMethod))
+  def parse_abstract_method(loc : Location, receiver : Ast::Parameter, inherited_type_params : Slice(Ast::TypeParameter) , trait_methods : Array(Ast::AbstractMethod))
     @log.debug_descend(loc, "Parsing abstract method with receiver: #{receiver}, inherited type params: #{inherited_type_params}") do
       convention = read_convention?
       receiver.convention = convention if convention
@@ -821,7 +824,7 @@ module TopLevelItemParser
     end 
   end
 
-  def parse_constructor(loc : Location, return_type : Ast::Type, type_params : Array(Ast::TypeParameter)? = nil)
+  def parse_constructor(loc : Location, return_type : Ast::Type, type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty)
     @log.debug_descend(loc, "Parsing constructor...") do
       signature = parse_signature(loc, type_params)
       if t = signature.return_type
@@ -834,7 +837,7 @@ module TopLevelItemParser
     end
   end
 
-  def parse_static(loc : Location, type_name : String, inherited_type_params : Array(Ast::TypeParameter)? = nil)
+  def parse_static(loc : Location, type_name : String, inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty)
     @log.debug_descend(loc, "Parsing static method...") do
       name = consume_identifier
       signature = parse_signature(peek.location, inherited_type_params)
@@ -947,7 +950,7 @@ module TopLevelItemParser
     @log.debug_descend(decl_loc, "Parsing extend declaration...") do
       type_params = parse_type_parameters?
       type = parse_type_expression
-      traits = parse_traits?
+      traits = parse_traits? || [] of Ast::Type
       extension = Ast::Extend.new(decl_loc, type_params, type, traits)
       @declarations << extension
       receiver = Ast::Parameter.new(decl_loc, "self", type)

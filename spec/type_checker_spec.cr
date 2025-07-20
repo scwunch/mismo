@@ -181,27 +181,27 @@ describe TypeEnv do
       [
         TraitClaim.new(
           loc,
-          [TypeParameter.new(loc, "T")],
-          Type.struct(list, [Type.var(0).as Type]),
+          Slice[TypeParameter.new(loc, "T")],
+          Type.struct(list, Slice[Type.var(0).as Type]),
           [Trait.new(stringable)]
         ),
         TraitClaim.new(
           loc,
-          [TypeParameter.new(loc, "T")],
-          Type.struct(list, [Type.var(0).as Type]),
-          [Trait.new(sequence, [Type.var(0).as Type])]
+          Slice[TypeParameter.new(loc, "T")],
+          Type.struct(list, Slice[Type.var(0).as Type]),
+          [Trait.new(sequence, Slice[Type.var(0).as Type])]
         ),
         TraitClaim.new(
           loc,
-          [TypeParameter.new(loc, "T")],
+          Slice[TypeParameter.new(loc, "T")],
           Type.array(Type.var(0).as Type),
-          [Trait.new(stringable), Trait.new(sequence, [Type.var(0).as Type])]
+          [Trait.new(stringable), Trait.new(sequence, Slice[Type.var(0)])]
         ),
         TraitClaim.new(
           loc,
-          [] of TypeParameter,
+          Slice(TypeParameter).empty,
           Type.array(Type.int),
-          [Trait.new(sequence, [Type.int.as Type])]
+          [Trait.new(sequence, Slice[Type.int])]
         )
       ].each do |claim|
         type_env.trait_claims.should contain(claim)
@@ -231,9 +231,9 @@ describe TypeEnv do
       impls[{Type.array(Type.int), Trait.new(stringable)}].should eq(Implements::False)
       impls[{Type.array(Type.int), Trait.new(stringable)}].ok?.should be_false
 
-      equatable_base_trait = TraitBase.new(loc, Mode::Let, "Equatable", [TypeParameter.new(loc, "T")])
+      equatable_base_trait = TraitBase.new(loc, Mode::Let, "Equatable", Slice[TypeParameter.new(loc, "T")])
       equatable = ->(type : Type) do
-        Trait.new(equatable_base_trait, [type])
+        Trait.new(equatable_base_trait, Slice[type])
       end
       impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}] = Implements::True
       impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}].should eq(Implements::True)
@@ -287,7 +287,7 @@ describe TypeEnv do
       sequence = type_env.traits["Sequence"]
       type_env.implementations[{Type.int, Trait.new(trivial)}]?.should eq(Implements::True)
       type_env.implementations[{Type.int, Trait.new(stringable)}]?.should eq(Implements::True)
-      type_env.implementations[{Type.array(Type.var(0)), Trait.new(sequence, [Type.var(0).as Type])}]?.should eq(Implements::True)
+      type_env.implementations[{Type.array(Type.var(0)), Trait.new(sequence, Slice[Type.var(0).as Type])}]?.should eq(Implements::True)
       type_env.implementations[{Type.array(Type.var(0)), Trait.new(stringable)}]?.should eq(Implements::True)
       # type_env.trait_claims.each do |claim|
       #   print claim; print '\n'
@@ -329,7 +329,7 @@ describe TypeEnv do
       type_env.implementations[{Type.int, Trait.new(trivial)}]?.should eq(Implements::True)
       type_env.implementations[{Type.int, Trait.new(marker)}]?.should eq(Implements::True)
       ctx.type_implements_trait?(Type.int, Trait.new(marker)).should be_true
-      ctx.type_implements_trait?(Type.int, Trait.new(equatable, [Type.int.as Type])).should be_true
+      ctx.type_implements_trait?(Type.int, Trait.new(equatable, Slice[Type.int.as Type])).should be_true
       type_env.implementations.each do |impl|
         print impl; print '\n'
         trait = impl[0][1]
@@ -338,7 +338,7 @@ describe TypeEnv do
           raise "break: #{trait}"
         end
       end
-      type_env.implementations[{Type.int, Trait.new(equatable, [Type.int.as Type])}]?.should eq(Implements::True)
+      type_env.implementations[{Type.int, Trait.new(equatable, Slice[Type.int.as Type])}]?.should eq(Implements::True)
       type_env.implementations[{Type.int, Trait.new(self_equatable)}]?.should eq(Implements::True)
     end
   end

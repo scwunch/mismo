@@ -89,14 +89,11 @@ class TypeEnv
           if item.name.in?(user_types)
             log.error(item.location, "type #{item.name} already defined")
           end
-          type_params = item.type_params.try &.map { |tp| 
-              TypeParameter.new(tp.location, tp.name) 
-            } || [] of TypeParameter
           user_types[item.name] = StructBase.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
-            item.type_params.try &.map { |tp| TypeParameter.new(tp.location, tp.name) } || [] of TypeParameter
+            item.type_params.map { |tp| TypeParameter.new(tp.location, tp.name) }
           )
           # if declared_traits = item.traits
           #   trait_claims << item.as_extension
@@ -106,14 +103,11 @@ class TypeEnv
           if item.name.in?(user_types)
             log.error(item.location, "type #{item.name} already defined")
           end
-          type_params = item.type_params.try &.map { |tp| 
-              TypeParameter.new(tp.location, tp.name) 
-            } || [] of TypeParameter
           user_types[item.name] = EnumBase.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
-            item.type_params.try &.map { |tp| TypeParameter.new(tp.location, tp.name) } || [] of TypeParameter
+            item.type_params.map { |tp| TypeParameter.new(tp.location, tp.name) }
           )
           # if declared_traits = item.traits
           #   trait_claims << item.as_extension
@@ -123,14 +117,11 @@ class TypeEnv
           if item.name.in?(traits)
             log.error(item.location, "trait #{item.name} already defined")
           end
-          type_params = item.type_params.try &.map { |tp| 
-              TypeParameter.new(tp.location, tp.name) 
-            } || [] of TypeParameter
           traits[item.name] = TraitBase.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
-            item.type_params.try &.map { |tp| TypeParameter.new(tp.location, tp.name) } || [] of TypeParameter,
+            item.type_params.map { |tp| TypeParameter.new(tp.location, tp.name) },
             item.methods
           )
         when Ast::Extend
@@ -322,24 +313,24 @@ end
 BUILTINS = [
   FunctionBase.new(Location.zero, 
     "print", 
-    [TypeParameter.new(Location.zero, "T")], 
+    Slice[TypeParameter.new(Location.zero, "T")], 
     [Parameter.new(Location.zero, Mode::Let, "value", Type.var(1))],
     Type.nil),
   FunctionBase.new(Location.zero, 
     "+",
-    [] of TypeParameter,
+    Slice(TypeParameter).empty,
     [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
      Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
     Type.int),
   FunctionBase.new(Location.zero, 
     "-",
-    [] of TypeParameter,
+    Slice(TypeParameter).empty,
     [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
      Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
     Type.int),
   FunctionBase.new(Location.zero, 
     "*",
-    [] of TypeParameter,
+    Slice(TypeParameter).empty,
     [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
      Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
     Type.int)
@@ -347,10 +338,10 @@ BUILTINS = [
 
 struct TraitClaim < IrNode
   getter location : Location
-  getter type_params : Array(TypeParameter)
+  getter type_params : Slice(TypeParameter)
   getter type : Type
   getter traits : Array(Trait)
-  def initialize(@location : Location, @type_params : Array(TypeParameter), @type : Type, @traits : Array(Trait))
+  def initialize(@location : Location, @type_params : Slice(TypeParameter), @type : Type, @traits : Array(Trait))
   end
   def to_s(io : IO)
     io << "trait claim: #{type} implements #{traits.join(", ")}" 

@@ -4,8 +4,8 @@ require "./logger"
 # Type inference context
 class TypeContext
   getter env : TypeEnv
-  property type_parameters = [] of TypeParameter
-  property type_args = [] of Type
+  property type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty
+  property type_args : Slice(Type) = Slice(Type).empty
   property self_type : Type?
   property scope = TypeScope.new
   getter generics = {} of String => Type::Var
@@ -19,49 +19,93 @@ class TypeContext
   #     end
   #   end
   # end
-  def initialize(@env, @type_parameters, @type_args = [] of Type, @self_type = nil)
+  def initialize(@env)
+  end
+  def initialize(@env, @type_parameters, @type_args = Slice(Type).empty, @self_type = nil)
+    # @type_args = type_args
     (@type_args.size .. @type_parameters.size).each do |i|
-      @type_args << Type.var(i)
+      push!(@type_args, Type.var(i))
     end
   end
-  def initialize(@env, ast_type_params : Array(Ast::TypeParameter)? = nil, @type_args = [] of Type, @self_type = nil)
-    log.debug_descend(Location.zero, "TypeContext.new(type parameters: #{ast_type_params}, type_args: #{@type_args}, self_type: #{@self_type})") do
-      if ast_type_params
-        # create type parameters first with no constraints
-        ast_type_params.each do |tp|
-          type_parameters << TypeParameter.new(
-            tp.location, 
-            tp.name, 
-            tp.constraints.includes ? [] of Trait : nil, 
-            tp.constraints.excludes ? [] of Trait : nil
-          )
-        end
-        # then set constraints
-        ast_type_params.zip(type_parameters).each do |ast_type_param, type_param|
-          if incl = ast_type_param.constraints.includes
-            req = type_param.required_traits.as(Array(Trait))
-            incl.each do |trait|
-              req << eval_trait(trait)
-            end
-          end
-          if excl = ast_type_param.constraints.excludes
-            req_not = type_param.excluded_traits.as(Array(Trait))
-            excl.each do |trait|
-              req_not << eval_trait(trait)
-            end
+  def initialize(@env, ast_type_params : Slice(Ast::TypeParameter), type_args = nil, @self_type = nil)
+    log.debug_descend(Location.zero, "TypeContext.new(type parameters: #{ast_type_params}, type_args: #{@type_args})") do
+      @type_args = type_args = 
+        if type_args.nil?
+          @type_parameters.map_with_index { |tp, i| Type.var(i) }
+        elsif type_args.size == @type_parameters.size
+          type_args
+        else
+          Slice(Type).new(@type_parameters.size) do |i|
+            type_args[i]? || Type.var(i)
           end
         end
-        @type_args = @type_args.dup
-        (@type_args.size .. @type_parameters.size).each do |i|
-          # raise "the problem is here: consider replacing all type_args arrays and type_params arrays with slices."
-          @type_args << Type.var(i)
-        end
+      
+      temp_ctx = TypeContext.new(
+        @env, 
+        ast_type_params.map { |tp| TypeParameter.new(tp.location, tp.name) },
+        type_args,
+        @self_type
+      )
+      
+      @type_parameters = ast_type_params.map_with_index do |tp, i|
+        TypeParameter.new(
+          tp.location, 
+          tp.name,
+          tp.constraints.includes.map { |trait| temp_ctx.eval_trait(trait) },
+          tp.constraints.excludes.map { |trait| temp_ctx.eval_trait(trait) }
+        )
       end
+      
+      # # set constraints on type parameters
+      # ast_type_params.each_with_index do |atp, i|
+      #   atp.constraints.includes.each do |trait|
+      #     @type_parameters[i].required_traits << ghost_context.eval_trait(trait)
+      #   end
+      #   atp.constraints.excludes.each do |trait|
+      #     @type_parameters[i].excluded_traits << ghost_context.eval_trait(trait)
+      #   end
+      # end
     end
   end
+  # def initialize(@env, ast_type_params : Slice(Ast::TypeParameter), @type_args = Slice(Type).empty, @self_type = nil)
+    # log.debug_descend(Location.zero, "TypeContext.new(type parameters: #{ast_type_params}, type_args: #{@type_args}, self_type: #{@self_type})") do
+    #   # create type parameters first with no constraints
+    #   type_params = ast_type_params.map { |tp| TypeParameter.new(tp.location, tp.name) }
+    #   # ast_type_params.each do |tp|
+    #   #   type_parameters << TypeParameter.new(
+    #   #     tp.location, 
+    #   #     tp.name, 
+    #   #     tp.constraints.includes ? [] of Trait : nil, 
+    #   #     tp.constraints.excludes ? [] of Trait : nil
+    #   #   )
+    #   # end
 
-  def type_params_as_args : Array(Type)
-    type_parameters.size.times.map { |i| Type.var(i).as Type }.to_a
+    #   # then set constraints
+    #   ast_type_params.zip(type_params).each do |ast_type_param, type_param|
+    #     if incl = ast_type_param.constraints.includes
+    #       req = type_param.required_traits.as(Array(Trait))
+    #       incl.each do |trait|
+    #         req << eval_trait(trait)
+    #       end
+    #     end
+    #     if excl = ast_type_param.constraints.excludes
+    #       req_not = type_param.excluded_traits.as(Array(Trait))
+    #       excl.each do |trait|
+    #         req_not << eval_trait(trait)
+    #       end
+    #     end
+    #   end
+    #   @type_parameters = type_params.to_unsafe_slice
+    #   (@type_args.size .. @type_parameters.size).each do |i|
+    #     push(@type_args, Type.var(i))
+    #   end
+    # end
+  # end
+
+  def type_params_as_args : Slice(Type)
+    Slice(Type).new(type_parameters.size) do |i|
+      Type.var(i)
+    end
   end
 
   def log : Logger
@@ -97,7 +141,7 @@ class TypeContext
     end
     type_parameters.each_with_index do |type_param, i|
       if type_param.name == type_node.name
-        eval_type_args(type_node, nil, "Generic type ")
+        assert_no_type_args(type_node, "Generic type ")
         return @type_args[i]
       end
     end
@@ -105,30 +149,30 @@ class TypeContext
     log.debug_descend(type_node.location, "eval(#{type_node})") do
       case type_node.name
       when "Never"
-        eval_type_args(type_node, nil, "Primitive type ")
+        assert_no_type_args(type_node, "Primitive type ")
         Type.never
       when "Nil" 
-        eval_type_args(type_node, nil, "Primitive type ")
+        assert_no_type_args(type_node, "Primitive type ")
         Type.nil
       when "Bool" 
-        eval_type_args(type_node, nil, "Primitive type ")
+        assert_no_type_args(type_node, "Primitive type ")
         Type.bool
       when "Int" 
-        eval_type_args(type_node, nil, "Primitive type ")
+        assert_no_type_args(type_node, "Primitive type ")
         Type.int
       when "Float" 
-        eval_type_args(type_node, nil, "Primitive type ")
+        assert_no_type_args(type_node, "Primitive type ")
         Type.float
       when "String" 
-        eval_type_args(type_node, nil)
+        assert_no_type_args(type_node)
         Type.string
       when "Array"
-        type_args = eval_type_args(type_node, [TypeParameter.new(Location.zero, "T")])
+        type_args = eval_type_args(type_node, Slice[TypeParameter.new(Location.zero, "T")])
         Type.array(type_args[0]? || Type.never)
       when "Tuple"
-        Type.tuple((type_node.type_args || [] of Ast::Type).map { |t| eval(t) })
+        Type.tuple(type_node.type_args.map { |t| eval(t) })
       when "Self"
-        eval_type_args(type_node, nil, "Special type Self")
+        assert_no_type_args(type_node, "Special type Self")
         @self_type || Type.self
       # when "Function" then Type.function(*type_node.types.map { |t| eval(t) })
       else
@@ -145,7 +189,7 @@ class TypeContext
           )
         else
           log.error(type_node.location, "eval: unknown type: #{type_node.name}")
-          Type.unknown(type_node.name, type_node.type_args.try &.map { |t| eval(t).as Type } || [] of Type)
+          Type.unknown(type_node.name, type_node.type_args.map { |t| eval(t).as Type })
         end
       end
     end
@@ -159,31 +203,54 @@ class TypeContext
     env.eval_depth -= 1
   end
 
-  def eval_type_args(type_node : Ast::Type, type_params : Array(TypeParameter)?, error_prefix = "") : Array(Type)
-    log.debug_descend(type_node.location, "#eval_type_args(#{type_node}, #{type_params}, #{error_prefix})") do
+  # def eval_type_args(type_node : Ast::Type, type_params : Array(TypeParameter)?, error_prefix = "") : Array(Type)
+    # log.debug_descend(type_node.location, "#eval_type_args(#{type_node}, #{type_params}, #{error_prefix})") do
+    #   if (env.eval_depth += 1) > 100
+    #     raise "TypeContext#eval_type_args: maximum depth exceeded"
+    #   end
+    #   case {type_params, t_args = type_node.type_args}
+    #   in {nil, nil}
+    #     [] of Type
+    #   in {nil, Array(Ast::Type)}
+    #     log.error(type_node.location, "#{error_prefix}#{type_node.name} does not expect type arguments, but #{t_args.size} were provided.") unless t_args.size == 0
+    #     [] of Type
+    #   in {Array(TypeParameter), nil}
+    #     log.error(type_node.location, "#{error_prefix}#{type_node.name} expects #{type_params.size} type arguments, but none were provided.") unless type_params.size == 0
+    #     [] of Type
+    #   in {Array(TypeParameter), Array(Ast::Type)}
+    #     if t_args.size != type_params.size
+    #       log.error(type_node.location, "#{error_prefix}#{type_node.name} expects #{type_params.size} type arguments, but #{t_args.size} were provided.")
+    #     end
+    #     type_params.zip(t_args).map do |type_param, type_arg|
+    #       eval(type_arg, type_param)
+    #     end
+    #   end
+    # end
+  # ensure
+  #   env.eval_depth -= 1
+  # end
+
+  def eval_type_args(type_node : Ast::Type, type_params : Slice(TypeParameter)) : Slice(Type)
+    log.debug_descend(type_node.location, "#eval_type_args(#{type_node}, #{type_params})") do
       if (env.eval_depth += 1) > 100
         raise "TypeContext#eval_type_args: maximum depth exceeded"
       end
-      case {type_params, t_args = type_node.type_args}
-      in {nil, nil}
-        [] of Type
-      in {nil, Array(Ast::Type)}
-        log.error(type_node.location, "#{error_prefix}#{type_node.name} does not expect type arguments, but #{t_args.size} were provided.") unless t_args.size == 0
-        [] of Type
-      in {Array(TypeParameter), nil}
-        log.error(type_node.location, "#{error_prefix}#{type_node.name} expects #{type_params.size} type arguments, but none were provided.") unless type_params.size == 0
-        [] of Type
-      in {Array(TypeParameter), Array(Ast::Type)}
-        if t_args.size != type_params.size
-          log.error(type_node.location, "#{error_prefix}#{type_node.name} expects #{type_params.size} type arguments, but #{t_args.size} were provided.")
-        end
-        type_params.zip(t_args).map do |type_param, type_arg|
-          eval(type_arg, type_param)
-        end
+      t_args = type_node.type_args
+      if t_args.size != type_params.size
+        log.error(type_node.location, "#{type_node.name} expects #{type_params.size} type arguments, but #{t_args.size} were provided.")
+      end
+      Slice(Type).new(t_args.size) do |i|
+        eval(t_args[i], type_params[i])
       end
     end
   ensure
     env.eval_depth -= 1
+  end
+
+  def assert_no_type_args(type_node : Ast::Type, error_prefix = "")
+    if type_node.type_args.any?
+      log.error(type_node.location, "#{error_prefix}#{type_node.name} does not expect type arguments, but #{type_node.type_args.size} were provided.")
+    end
   end
 
   # def validate_type_args(type : Type, type_args : Array(Ast::Type)?) : String?
@@ -280,9 +347,10 @@ class TypeContext
   # Check if each required method of a trait is implemented for the given type
   def _type_implements_trait?(type : Type, trait : Trait) : Implements
     log.debug_descend(Location.zero, "#_type_implements_trait? #{type}, #{trait}") do
-      env.implementations[{type, trait}] = 
-        if trait.base.methods.all? { |method| method.body || (
-          errors = type_has_method?(type, method, trait.type_args)
+    env.implementations[{type, trait}] = 
+      if trait.base.methods.all? { |method| method.body || (
+          context = TypeContext.new(env, method.type_params, trait.type_args, self_type: type)
+          errors = context.type_has_method?(type, method)
           if errors.nil?
             true
           else
@@ -301,7 +369,7 @@ class TypeContext
 
   # When asking if a type implements a given abstract method, we must provide
   # the list of type_args of the trait owning the method so that types can be substituted
-  def type_has_method?(type : Type, method : Ast::AbstractMethod, type_args : Array(Type)) : Array(TypeError)?
+  def type_has_method?(type : Type, method : Ast::AbstractMethod) : Array(TypeError)?
     log.debug_descend(Location.zero, "#type_has_method?(#{type}, #{method})") do
       overloads = env.functions[method.name]?
       unless overloads
@@ -315,8 +383,9 @@ class TypeContext
             errors << TypeError.new(func.location, "#{method.name} requires #{method_params.size} parameters, but #{func_params.size} were provided.")
             next
           end
-          method_context = TypeContext.new(env, method.type_params, type_args, self_type: type)
-          params_match = log.debug_descend(method.location, "context switch to method to eval parameters of method #{method} (context=#{method_context})") do
+          # method_context = TypeContext.new(env, method.type_params, type_args, self_type: type)
+          # params_match = log.debug_descend(method.location, "context switch to method to eval parameters of method #{method} (context=#{method_context})") do
+          params_match = begin
             # WAIT!  You know what we gotta do here?  We have to actually *substitute* some type params."
             # So if we have `Equatable[T]` requiring `def ==(other T)`, 
             # then `Equatable[Int]` should require `def ==(other Int)`! 
@@ -335,7 +404,7 @@ class TypeContext
               #     t
               #   end
               # end
-              method_param_type = method_context.eval(method_param.type)
+              method_param_type = eval(method_param.type)
               if param.type != method_param_type
                 errors << TypeError.new(func.location, "#{method.name} requires parameter #{method_param.name} to be of type #{method_param_type}, but #{param.type} was provided.")
                 false
@@ -371,24 +440,18 @@ class TypeContext
     end
   end
 
-  def eval_trait(trait : Ast::Type)
+  def eval_trait(trait : Ast::Type) : Trait
     log.debug(trait.location, "eval_trait #{trait}")
     unless trait_base = env.traits[trait.name]?
       raise TypeError.new(trait.location, "unknown trait: #{trait.name}")
-    end 
-    p! trait.name
-    p! trait.type_args
-    p! eval_type_args(trait, trait_base.type_params)
-    if trait.name == "Equatable" && (trait.type_args.try &.size || 0) > 1
-      raise TypeError.new(trait.location, "Equatable can only have one type arg")
-    end
+    end     
     Trait.new(
       trait_base, 
       begin
         eval_type_args(trait, trait_base.type_params)
       rescue err : TypeError
         log.error(trait.location, err.message || "<type arg error")
-        [] of Type
+        Slice(Type).empty
       end
     )
   end

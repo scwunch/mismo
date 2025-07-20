@@ -72,55 +72,51 @@ describe Parser do
     end
     it "parses a type as a positive constraint" do
       parser("String]").parse_constraints.should eq(
-        Ast::Constraints.new([Ast::Type.new(loc, "String")]))
+        Ast::Constraints.include(Ast::Type.new(loc, "String")))
     end
     it "parses multiple &-separated types as constraints" do
       parser("Compare & Read & Format]").parse_constraints.should eq(
-        Ast::Constraints.new([Ast::Type.new(loc, "Compare"), Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Format")]))
+        Ast::Constraints.new(Slice[Ast::Type.new(loc, "Compare"), Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Format")]))
     end
     it "parses bounds prefixed with ~ as prohibitions" do
       parser("Read ~Write]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "Read")], 
-          [Ast::Type.new(loc, "Write")]))
+          Slice[Ast::Type.new(loc, "Read")], 
+          Slice[Ast::Type.new(loc, "Write")]))
     end
     it "parses bounds prefixed with ~ as prohibitions, with multiple prohibitions" do
       parser("Read ~Write ~Format]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "Read")], 
-          [Ast::Type.new(loc, "Write"), Ast::Type.new(loc, "Format")]))
+          Slice[Ast::Type.new(loc, "Read")], 
+          Slice[Ast::Type.new(loc, "Write"), Ast::Type.new(loc, "Format")]))
     end
     it "the first bound may be negative" do
       parser("~Read]").parse_constraints.should eq(
-        Ast::Constraints.new(
-          nil, 
-          [Ast::Type.new(loc, "Read")]))
+        Ast::Constraints.exclude(Ast::Type.new(loc, "Read")))
     end
     it "the first bound may be negative, with multiple prohibitions" do
       parser("~Read ~Write]").parse_constraints.should eq(
-        Ast::Constraints.new(
-          nil,
-          [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")]))
+        Ast::Constraints.new(excludes: Slice[Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")]))
     end
     it "the first bound may be negative, with a positive constraint" do
       parser("~Read & String]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "String")],
-          [Ast::Type.new(loc, "Read")]))
+          Slice[Ast::Type.new(loc, "String")],
+          Slice[Ast::Type.new(loc, "Read")]))
     end
     it "required and prohibited constraints can be mixed " do
       parser("~Read & String ~ Int & Format]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "String"), Ast::Type.new(loc, "Format")],
-          [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Int")]))
+          Slice[Ast::Type.new(loc, "String"), Ast::Type.new(loc, "Format")],
+          Slice[Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Int")]))
     end
     it "parses constraints after an optional 'is' or ':'" do
       parser("is Compare]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "Compare")]))
+          Slice[Ast::Type.new(loc, "Compare")]))
       parser(": Compare]").parse_constraints.should eq(
         Ast::Constraints.new(
-          [Ast::Type.new(loc, "Compare")]))
+          Slice[Ast::Type.new(loc, "Compare")]))
     end
   end
 
@@ -130,10 +126,10 @@ describe Parser do
     end
     it "parses a type with type arguments, recursively" do
       parser = parser("Option[Int] Result[Option[String], Result[Int, String]]")
-      parser.parse_type_expression.should eq(Ast::Type.new(loc, "Option", [Ast::Type.new(loc, "Int")]))
-      parser.parse_type_expression.should eq(Ast::Type.new(loc, "Result", [
-        Ast::Type.new(loc, "Option", [Ast::Type.new(loc, "String")]),
-        Ast::Type.new(loc, "Result", [
+      parser.parse_type_expression.should eq(Ast::Type.new(loc, "Option", Slice[Ast::Type.new(loc, "Int")]))
+      parser.parse_type_expression.should eq(Ast::Type.new(loc, "Result", Slice[
+        Ast::Type.new(loc, "Option", Slice[Ast::Type.new(loc, "String")]),
+        Ast::Type.new(loc, "Result", Slice[
           Ast::Type.new(loc, "Int"),
           Ast::Type.new(loc, "String")
         ])
@@ -145,55 +141,55 @@ describe Parser do
 
   describe "#parse_type_parameters?" do
     it "returns nil if no type parameters" do
-      parser("").parse_type_parameters?.should be_nil
+      parser("").parse_type_parameters?.should be_empty
     end
     it "parses type parameters with constraints" do
-      parser("[T, U: Constraint, V: Read & Write]").parse_type_parameters?.should eq([
+      parser("[T, U: Constraint, V: Read & Write]").parse_type_parameters?.should eq(Slice[
         Ast::TypeParameter.new(loc, "T"), 
-        Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Constraint")]),
-        Ast::TypeParameter.new(loc, "V", [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")])
+        Ast::TypeParameter.new(loc, "U", Slice[Ast::Type.new(loc, "Constraint")]),
+        Ast::TypeParameter.new(loc, "V", Slice[Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")])
       ])
     end
     it "parses type parameters with constraints with optional colon" do
-      parser("[T, U Constraint, V Read & Write]").parse_type_parameters?.should eq([
+      parser("[T, U Constraint, V Read & Write]").parse_type_parameters?.should eq(Slice[
         Ast::TypeParameter.new(loc, "T"), 
-        Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Constraint")]),
-        Ast::TypeParameter.new(loc, "V", [Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")])
+        Ast::TypeParameter.new(loc, "U", Slice[Ast::Type.new(loc, "Constraint")]),
+        Ast::TypeParameter.new(loc, "V", Slice[Ast::Type.new(loc, "Read"), Ast::Type.new(loc, "Write")])
       ])
     end
     it "adds type parameters to inherited type parameters" do
-      original_type_params = [
+      original_type_params = Slice[
         Ast::TypeParameter.new(loc, "T"), 
-        Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Constraint")])
+        Ast::TypeParameter.new(loc, "U", Slice[Ast::Type.new(loc, "Constraint")])
       ]
       parser = parser("[A] [B]")
-      parser.parse_type_parameters?(original_type_params).should eq([
+      parser.parse_type_parameters?(original_type_params).should eq(Slice[
         Ast::TypeParameter.new(loc, "T"), 
-        Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Constraint")]),
+        Ast::TypeParameter.new(loc, "U", Slice[Ast::Type.new(loc, "Constraint")]),
         Ast::TypeParameter.new(loc, "A")
       ])
-      parser.parse_type_parameters?(original_type_params).should eq([
+      parser.parse_type_parameters?(original_type_params).should eq(Slice[
         Ast::TypeParameter.new(loc, "T"), 
-        Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Constraint")]),
+        Ast::TypeParameter.new(loc, "U", Slice[Ast::Type.new(loc, "Constraint")]),
         Ast::TypeParameter.new(loc, "B")
       ])
       parser.parse_type_parameters?(original_type_params).should eq(original_type_params)
     end
     it "returns empty array if empty type parameters" do
-      parser("[]").parse_type_parameters?.should eq([] of Ast::TypeParameter)
+      parser("[]").parse_type_parameters?.should eq(Slice(Ast::TypeParameter).empty)
     end
   end
 
   describe "#parse_type_args?" do
     it "returns nil if no type arguments" do
-      parser("").parse_type_args?.should be_nil
+      parser("").parse_type_args?.should eq(Slice(Ast::Type).empty)
     end
     it "parses one type argument" do
-      parser("[T]").parse_type_args?.should eq([Ast::Type.new(loc(1, 2), "T")])
+      parser("[T]").parse_type_args?.should eq(Slice[Ast::Type.new(loc(1, 2), "T")])
     end
     it "parses multiple type arguments" do
       parser = parser("[T, U, V, String, Int32]")
-      parser.parse_type_args?.should eq([
+      parser.parse_type_args?.should eq(Slice[
         Ast::Type.new(loc(1, 2), "T"), 
         Ast::Type.new(loc(1, 5), "U"), 
         Ast::Type.new(loc(1, 8), "V"), 
@@ -210,7 +206,7 @@ describe Parser do
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
           loc, 
-          [Ast::TypeParameter.new(loc, "T")], 
+          Slice[Ast::TypeParameter.new(loc, "T")], 
           [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "Int32"))], 
           Ast::Type.new(loc, "Int32")))
     end
@@ -226,7 +222,7 @@ describe Parser do
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
           loc, 
-          [] of Ast::TypeParameter, 
+          nil, 
           [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "Int32"))], 
           Ast::Type.new(loc, "Int32")))
     end
@@ -236,7 +232,7 @@ describe Parser do
       .should eq(Ast::Signature.new(
           loc, 
           nil, 
-          nil, 
+          [] of Ast::Parameter, 
           Ast::Type.new(loc, "Int32")))
       parser("() Int32")
       .parse_signature(loc)
@@ -270,7 +266,7 @@ describe Parser do
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U")], 
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U")], 
         [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "Int")), Ast::Parameter.new(loc, "y", Ast::Type.new(loc, "Float"))], 
         nil
       ))
@@ -280,7 +276,7 @@ describe Parser do
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
           loc, 
-          [Ast::TypeParameter.new(loc, "T")], 
+          Slice[Ast::TypeParameter.new(loc, "T")], 
           [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "Int32"))], 
           Ast::Type.new(loc, "Int32")))
     end
@@ -373,9 +369,7 @@ describe Parser do
         Ast::Signature.new(
           loc, 
           nil, 
-          [
-            self_param
-          ], 
+          [self_param], 
           Ast::Type.new(loc, "Int")
         ),
         [] of Ast::Expr
@@ -392,9 +386,7 @@ describe Parser do
         Ast::Signature.new(
           loc, 
           nil, 
-          [
-            self_param
-          ], 
+          [self_param], 
           Ast::Type.new(loc, "String")
         ),
         [] of Ast::Expr
@@ -409,7 +401,7 @@ describe Parser do
       .should eq({
         nil, 
         "Type", 
-        [Ast::TypeParameter.new(loc, "T")], 
+        Slice[Ast::TypeParameter.new(loc, "T")], 
         [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
       })
     end
@@ -419,7 +411,7 @@ describe Parser do
       .should eq({
         Mode::Mut, 
         "Type", 
-        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Bound")])], 
+        Slice[Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Bound")])], 
         [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
       })
     end
@@ -429,7 +421,7 @@ describe Parser do
       .should eq({
         Mode::Mut, 
         "Type", 
-        [Ast::TypeParameter.new(loc, "T")], 
+        Slice[Ast::TypeParameter.new(loc, "T")], 
         [Ast::Type.new(loc, "Trait1"), Ast::Type.new(loc, "Trait2")]
       })
     end
@@ -449,9 +441,7 @@ describe Parser do
       s.should eq(Ast::Struct.new(
         loc, 
         "Point", 
-        nil, 
-        nil,
-        [
+        fields: [
           Ast::Field.new(loc, "x", Ast::Type.new(loc, "Int")),
           Ast::Field.new(loc, "y", Ast::Type.new(loc, "Int"))
         ]
@@ -471,9 +461,8 @@ describe Parser do
       s.should eq(Ast::Struct.new(
         loc, 
         "Array", 
-        [Ast::TypeParameter.new(loc, "T")], 
-        nil,
-        [
+        Slice[Ast::TypeParameter.new(loc, "T")], 
+        fields: [
           Ast::Field.new(loc, "_buffer", Ast::Type.new(loc, "Pointer", [Ast::Type.new(loc, "T")])),
           Ast::Field.new(loc, "_length", Ast::Type.new(loc, "UInt")),
           Ast::Field.new(loc, "_capacity", Ast::Type.new(loc, "UInt"))
@@ -493,7 +482,7 @@ describe Parser do
       s.should eq(Ast::Struct.new(
         loc, 
         "Slice", 
-        [Ast::TypeParameter.new(loc, "T")], 
+        Slice[Ast::TypeParameter.new(loc, "T")], 
         [Ast::Type.new(loc, "Sequence", [Ast::Type.new(loc, "T")]), Ast::Type.new(loc, "Indexable", [Ast::Type.new(loc, "T")])],
         [
           Ast::Field.new(loc, "_buffer", Ast::Type.new(loc, "Pointer", [Ast::Type.new(loc, "T")])),
@@ -517,9 +506,7 @@ describe Parser do
       .should eq(Ast::Struct.new(
         loc, 
         "Reader", 
-        nil, 
-        nil,
-        [
+        fields: [
           Ast::Field.new(loc, "string", Ast::Type.new(loc, "String"))
         ]
       ))
@@ -530,21 +517,16 @@ describe Parser do
       read1.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc,
         nil,
-          [
-            Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Reader"))
-          ],
-          Ast::Type.new(loc, "Char")
-        )
-      )
+        [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Reader"))],
+        Ast::Type.new(loc, "Char")
+      ))
       read2 = parser.declarations[1]
       read2.should be_a(Ast::Function)
       read2.name.should eq("read")
       read2.as(Ast::Function).signature.should eq(Ast::Signature.new(
           loc,
           nil,
-          [
-            Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Reader"))
-          ],
+          [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Reader"))],
           Ast::Type.new(loc, "Int")
         )
       )
@@ -574,7 +556,7 @@ describe Parser do
       s.should eq(Ast::Struct.new(
         loc, 
         "Array", 
-        [Ast::TypeParameter.new(loc, "T")], 
+        Slice[Ast::TypeParameter.new(loc, "T")], 
         nil,
         [
           Ast::Field.new(loc, "_buffer", Ast::Type.new(loc, "Pointer", [Ast::Type.new(loc, "T")])),
@@ -588,7 +570,7 @@ describe Parser do
       constructor.name.should eq("Array")
       constructor.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [Ast::Parameter.new(loc, "cap", Ast::Type.new(loc, "UInt"))],
         Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "T")])
       ))
@@ -597,7 +579,7 @@ describe Parser do
       cap.name.should eq("cap")
       cap.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [self_param],
         Ast::Type.new(loc, "UInt")
       ))
@@ -606,7 +588,7 @@ describe Parser do
       count.name.should eq("count")
       count.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [self_param],
         Ast::Type.new(loc, "UInt")
       ))
@@ -626,9 +608,7 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Token", 
-        nil, 
-        nil,
-        [] of Ast::Variant
+        variants: [] of Ast::Variant
       ))
     end
     it "parses an enum with basic variants" do
@@ -645,9 +625,7 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Color", 
-        nil, 
-        nil,
-        [
+        variants: [
           Ast::Variant.new(loc, "Red"),
           Ast::Variant.new(loc, "Blue"),
           Ast::Variant.new(loc, "Green"),
@@ -669,9 +647,7 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Token", 
-        nil, 
-        nil,
-        [
+        variants: [
           Ast::Variant.new(loc, "EOF"),
           Ast::Variant.new(loc, "Var", [{"0", Ast::Type.new(loc, "String")}]),
           Ast::Variant.new(loc, "Func", [{"0", Ast::Type.new(loc, "String")}, {"1", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}, {"2", Ast::Type.new(loc, "String")}]),
@@ -693,9 +669,9 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Result", 
-        [Ast::TypeParameter.new(loc, "R"), Ast::TypeParameter.new(loc, "E")], 
-        [Ast::Type.new(loc, "Awesome", [Ast::Type.new(loc, "R")]), Ast::Type.new(loc, "Cool", [Ast::Type.new(loc, "E")])],
-        [
+        type_params: Slice[Ast::TypeParameter.new(loc, "R"), Ast::TypeParameter.new(loc, "E")], 
+        traits: [Ast::Type.new(loc, "Awesome", [Ast::Type.new(loc, "R")]), Ast::Type.new(loc, "Cool", [Ast::Type.new(loc, "E")])],
+        variants: [
           Ast::Variant.new(loc, "Ok", [{"0", Ast::Type.new(loc, "R")}]),
           Ast::Variant.new(loc, "Err", [{"0", Ast::Type.new(loc, "E")}])
         ]
@@ -716,9 +692,7 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Token", 
-        nil, 
-        nil,
-        [
+        variants: [
           Ast::Variant.new(loc, "EOF"),
           Ast::Variant.new(loc, "Var", [{"0", Ast::Type.new(loc, "String")}]),
           Ast::Variant.new(loc, "Func", [{"caller", Ast::Type.new(loc, "String")}, {"args", Ast::Type.new(loc, "Array", [Ast::Type.new(loc, "String")])}, {"return", Ast::Type.new(loc, "String")}]),
@@ -752,9 +726,7 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Color", 
-        nil, 
-        nil,
-        [
+        variants: [
           Ast::Variant.new(loc, "Red"),
           Ast::Variant.new(loc, "Green"),
           Ast::Variant.new(loc, "Blue")
@@ -798,9 +770,8 @@ describe Parser do
       e.should eq(Ast::Enum.new(
         loc, 
         "Result", 
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")], 
-        nil,
-        [
+        type_params: Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")], 
+        variants: [
           Ast::Variant.new(loc, "Ok", [{"0", Ast::Type.new(loc, "T")}]),
           Ast::Variant.new(loc, "Error", [{"0", Ast::Type.new(loc, "E")}])
         ]
@@ -811,7 +782,7 @@ describe Parser do
       ok.name.should eq("ok")
       ok.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")],
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "E")],
         [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Result", [Ast::Type.new(loc, "T"), Ast::Type.new(loc, "E")]))],
         Ast::Type.new(loc, "Bool")
       ))
@@ -833,9 +804,7 @@ describe Parser do
       t.should eq(Ast::Trait.new(
         loc, 
         "IO", 
-        nil, 
-        nil,
-        [
+        methods: [
           Ast::AbstractMethod.new(loc, "read", Ast::Signature.new(loc, nil, [self_param], Ast::Type.new(loc, "String"))),
           Ast::AbstractMethod.new(loc, "write", Ast::Signature.new(loc, nil, [self_param, Ast::Parameter.new(loc, "str", Ast::Type.new(loc, "String"))]))
         ]
@@ -858,13 +827,13 @@ describe Parser do
       t = parser.parse_trait(loc)
       t.convention.should eq(Mode::Mut)
       t.name.should eq("Mutable")
-      t.type_params.should eq([Ast::TypeParameter.new(loc, "X")])
+      t.type_params.should eq(Slice[Ast::TypeParameter.new(loc, "X")])
       t.traits.should eq([Ast::Type.new(loc, "Dangerous"), Ast::Type.new(loc, "Fun")])
       mutate_me = t.methods[0]
       mutate_me.name.should eq("mutate_me")
       mutate_me.signature.should eq(Ast::Signature.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "X")], 
         [self_param, Ast::Parameter.new(loc, "pls", Ast::Type.new(loc, "Please"))]
       ))
       let_get = t.methods[1]
@@ -873,7 +842,7 @@ describe Parser do
       let_get_self_param.convention = Mode::Let
       let_get.signature.should eq(Ast::Signature.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "X")], 
         [let_get_self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
         Ast::Type.new(loc, "Something"),
         Mode::Let
@@ -883,7 +852,7 @@ describe Parser do
       mut_get.name.should eq("get")
       mut_get.signature.should eq(Ast::Signature.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "X")], 
         [self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
         Ast::Type.new(loc, "Something"),
         Mode::Mut
@@ -905,7 +874,7 @@ describe Parser do
       e = parser.parse_extend(loc)
       e.should eq(Ast::Extend.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
+        Slice[Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
         Ast::Type.new(loc, "T"), 
         [Ast::Type.new(loc, "Format")]
       ))
@@ -916,7 +885,7 @@ describe Parser do
       format.name.should eq("format")
       format.as(Ast::Function).signature.should eq(Ast::Signature.new(
         loc, 
-        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
+        Slice[Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "String")])], 
         [Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "T"))], 
         Ast::Type.new(loc, "String")
       ))
@@ -975,21 +944,21 @@ describe Parser do
       f3.name.should eq("baz")
       f3.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "String")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "T"))]
       ))
       f4 = parser.declarations[3].as(Ast::Function)
       f4.name.should eq("baz")
       f4.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "T"))]
       ))
       quz1 = parser.declarations[4].as(Ast::Function)
       quz1.name.should eq("quz")
       quz1.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Stringable")])],
+        Slice[Ast::TypeParameter.new(loc, "T", [Ast::Type.new(loc, "Stringable")])],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T"))],
         Ast::Type.new(loc, "String")
       ))
@@ -997,7 +966,7 @@ describe Parser do
       quz2.name.should eq("quz")
       quz2.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
+        Slice[Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "Int")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
         Ast::Type.new(loc, "Int")
       ))
@@ -1005,7 +974,7 @@ describe Parser do
       quz3.name.should eq("quz")
       quz3.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
+        Slice[Ast::TypeParameter.new(loc, "U", [Ast::Type.new(loc, "Intable")])],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "Float")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
         Ast::Type.new(loc, "Int")
       ))
@@ -1037,7 +1006,7 @@ describe Parser do
             (a T):
               a
         MISMO
-      parser = parser(code)
+      parser = parser(code, :debug)
       parser.parse
       parser.declarations.size.should eq(6)
       parser.declarations.each do |dec| 
@@ -1047,7 +1016,7 @@ describe Parser do
       foo.name.should eq("foo")
       foo.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U")],
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U")],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T")), Ast::Parameter.new(loc, "b", Ast::Type.new(loc, "U"))],
         Ast::Type.new(loc, "T")
       ))
@@ -1055,22 +1024,22 @@ describe Parser do
       bar.name.should eq("bar")
       bar.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "S")],
-        nil,
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "S")],
+        [] of Ast::Parameter,
         Ast::Type.new(loc, "Nil")
       ))
       baz = parser.declarations[2].as(Ast::Function)
       baz.name.should eq("baz")
       baz.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "V"))]
       ))
       baz2 = parser.declarations[3].as(Ast::Function)
       baz2.name.should eq("baz")
       baz2.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
+        Slice[Ast::TypeParameter.new(loc, "T"), Ast::TypeParameter.new(loc, "U"), Ast::TypeParameter.new(loc, "V")],
         [Ast::Parameter.new(loc, "x", Ast::Type.new(loc, "V"))],
         Ast::Type.new(loc, "V")
       ))
@@ -1078,15 +1047,13 @@ describe Parser do
       bar2.name.should eq("bar")
       bar2.signature.should eq(Ast::Signature.new(
         loc,
-        nil,
-        nil,
-        Ast::Type.new(loc, "Nil")
+        return_type: Ast::Type.new(loc, "Nil")
       ))
       baz3 = parser.declarations[5].as(Ast::Function)
       baz3.name.should eq("baz")
       baz3.signature.should eq(Ast::Signature.new(
         loc,
-        [Ast::TypeParameter.new(loc, "T")],
+        Slice[Ast::TypeParameter.new(loc, "T")],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T"))]
       ))
     end
@@ -1228,7 +1195,7 @@ describe ExpressionParser do
       Ast::Call.new(
         loc,
         "alloc",
-        [Ast::Type.new(loc, "T")],
+        Slice[Ast::Type.new(loc, "T")],
         [Ast::Identifier.new(loc, "cap").as(Ast::Expr)]
       )
     ))
@@ -1246,7 +1213,7 @@ describe ExpressionParser do
     expression_parser("generic-fn", "awesome[Int](1)").parse.should eq(Ast::Call.new(
       loc,
       "awesome",
-      [Ast::Type.new(loc, "Int")],
+      Slice[Ast::Type.new(loc, "Int")],
       [Ast::Int.new(loc, 1).as(Ast::Expr)]
     ))
   end
@@ -1264,7 +1231,7 @@ describe ExpressionParser do
     expression_parser("generic-method", "self.awesome[Int](1)").parse.should eq(Ast::Call.new(
       loc,
       "awesome",
-      [Ast::Type.new(loc, "Int")],
+      Slice[Ast::Type.new(loc, "Int")],
       [
         Ast::Identifier.new(loc, "self").as(Ast::Expr),
         Ast::Int.new(loc, 1).as(Ast::Expr)
