@@ -1006,7 +1006,7 @@ describe Parser do
             (a T):
               a
         MISMO
-      parser = parser(code, :debug)
+      parser = parser(code)
       parser.parse
       parser.declarations.size.should eq(6)
       parser.declarations.each do |dec| 
