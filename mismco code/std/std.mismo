@@ -114,12 +114,54 @@ struct ArrayIterator[T]
     else
       Option.None
 
+trait Iterator[Self, T]
+  def next(mut self Self) -> Option[T]
+
+impl[T] Iterator[ArrayIterator[T], T]
+  def next(mut self ArrayIterator[T]) -> Option[T]
+    self.next
+
+
+def need_iterator[I: Iterator[T], T](iter: I) -> T
+  iter.next.or_panic("iterator is empty")
+
+def need_iterator[I, T](iter: I) -> T with Iterator[I, T]
+  iter.next.or_panic("iterator is empty")
+handle next(mut self I) -> Option[T]
+  Option.None
+
+def main:
+  var array = [1, 2, 3]
+  var iter = array.iter
+  need_iterator(iter)
 
 
 def main:
   var array = [1, 2, 3]
   var iter = array.iter
   
+
+def foo[T: Inter[String]](msg: String):
+  let t = bar(msg)
+  t.count
+
+
+implement Result[T = String, E = String]
+
+implement String.Result[E = String]
+
+def foo[T.Stringable, R.Any](msg: T) -> R:
+  let t = bar(msg)
+  t.count
+
+def foo(msg: T#Stringable) -> R#Any:
+  let t = bar(msg)
+  t.count
+
+enum Option
+  Some(T#)
+  None
+
 
 
 ---
@@ -221,4 +263,4 @@ extend Array[Wheel]
         return Option.Some(wheel)
     Option.None
     
-  
+

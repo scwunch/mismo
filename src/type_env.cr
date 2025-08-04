@@ -20,7 +20,7 @@ class TypeEnv
   property log : Logger
   property user_types = {} of String => TypeInfo
   property traits = {} of String => TraitBase
-  property implementations : ::Hash({Type, Trait}, Implements) = {} of {Type, Trait} => Implements
+  property implementations : ::Hash(Trait, Implements) = {} of Trait => Implements
   property trait_claims = [] of TraitClaim
   property ast_functions = {} of String => Array(Ast::Function)
   property functions = {} of String => Array(FunctionBase)
@@ -87,7 +87,7 @@ class TypeEnv
         when Ast::Struct
           log.info(item.location, "register struct #{item.name}")
           if item.name.in?(user_types)
-            log.error(item.location, "type #{item.name} already defined")
+            log.error(item.location, "E#{__LINE__} type #{item.name} already defined")
           end
           user_types[item.name] = StructBase.new(
             item.location, 
@@ -101,7 +101,7 @@ class TypeEnv
         when Ast::Enum
           log.info(item.location, "register enum #{item.name}")
           if item.name.in?(user_types)
-            log.error(item.location, "type #{item.name} already defined")
+            log.error(item.location, "E#{__LINE__} type #{item.name} already defined")
           end
           user_types[item.name] = EnumBase.new(
             item.location, 
@@ -115,8 +115,16 @@ class TypeEnv
         when Ast::Trait
           log.info(item.location, "register trait #{item.name}")
           if item.name.in?(traits)
-            log.error(item.location, "trait #{item.name} already defined")
+            log.error(item.location, "E#{__LINE__} trait #{item.name} already defined")
           end
+          # type_params = Slice(TypeParameter).new(item.type_params.size + 1) do |i|
+          #   if i == 0
+          #     TypeParameter.new(item.location, "Self")
+          #   else
+          #     TypeParameter.new(item.type_params[i - 1].location, item.type_params[i - 1].name)
+          #   end
+          # end
+          # p! type_params
           traits[item.name] = TraitBase.new(
             item.location, 
             item.convention || Mode::Let, 
@@ -124,6 +132,7 @@ class TypeEnv
             item.type_params.map { |tp| TypeParameter.new(tp.location, tp.name) },
             item.methods
           )
+          p! traits[item.name]
         when Ast::Extend
           # if item.traits
           #   trait_claims << item
@@ -138,31 +147,40 @@ class TypeEnv
   def eval_type_params_and_trait_claims(items : Array(Ast::TopLevelItem))
     log.info_descend(Location.zero, "evaluate type params and trait claims") do
       items.each do |item|
-        context = TypeContext.new(self, item.type_params)
-        log.debug_descend(item.location, "eval_type_params_and_trait_claims #{item.name} (context=#{context})") do
+        # raise "BREAK" if item.name == "Equatable"
+        log.debug_descend(item.location, "eval_type_params_and_trait_claims #{item}") do
           case item
           when Ast::Function
           when Ast::Struct, Ast::Enum
+            context = TypeContext.new(self, item.type_params)
+            log.debug(item.location, "context: #{context}")
             type = user_types[item.name]
             type.type_params = context.type_parameters
             if claimed_traits = item.traits
               trait_claims << TraitClaim.new(
                 item.location, 
                 context.type_parameters, 
-                Type.adt(type, context.type_params_as_args), 
-                claimed_traits.map { |t| context.eval_trait(t) }
+                claimed_traits.map { |t| 
+                  context.eval_trait(t, Type.adt(type, context.type_params_as_args))
+                }
               )
             end
           when Ast::Trait
+            # context = TypeContext.new(self, Slice[Ast::TypeParameter.new(item.location, "Self")] + item.type_params)
+            context = TypeContext.new(self, item.type_params)
+            log.debug(item.location, "context: #{context}")
             trait = traits[item.name].as(TraitBase)
             trait.type_params = context.type_parameters
           when Ast::Extend
             if claimed_traits = item.traits
+              context = TypeContext.new(self, item.type_params)
+              log.debug(item.location, "context: #{context}")
               trait_claims << TraitClaim.new(
                 item.location, 
                 context.type_parameters, 
-                context.eval(item.type), 
-                claimed_traits.map { |t| context.eval_trait(t) }
+                claimed_traits.map { |t| 
+                  context.eval_trait(t, context.eval(item.type)) 
+                }
               )
             end
           end
@@ -211,24 +229,25 @@ class TypeEnv
   def check_trait_implementations
     log.info_descend(Location.zero, "Check trait implementations (#{trait_claims.size})") do
       # first, assume that all claims are valid, contradictions will be caught later
-      trait_claims.each do |extension|
-        log.debug_descend(extension.location, "Assume #{extension.type} implements #{extension.traits}") do
-          extension.traits.try &.each do |trait|
-            implementations[{extension.type, trait}] = Implements::Calculating
-          end
-        end
-      end
+      # trait_claims.each do |extension|
+      #   log.debug_descend(extension.location, "Assume #{extension.traits} implemented") do
+      #     extension.traits.try &.each do |trait|
+      #       implementations[trait] = Implements::Calculating
+      #     end
+      #   end
+      # end
 
       @ready_to_validate_types = true
 
       # now reevaluate all claims, given the assumption, and check for inconsistencies
       trait_claims.each do |extension|
         context = TypeContext.new(self, extension.type_params)
-        log.info_descend(extension.location, "Check #{extension.type} implements #{extension.traits} (context=#{context})") do
+        # ummm, what is this context supposed to do???
+        log.info_descend(extension.location, "Check #{extension.traits} implemented (context=#{context})") do
           extension.traits.try &.each do |trait|
-            log.debug_descend(extension.location, "Check #{extension.type} implements #{trait}") do
-              unless context._type_implements_trait?(extension.type, trait)
-                log.error(extension.location, "type #{extension.type} does not implement trait #{trait}")
+            log.debug_descend(extension.location, "Check #{trait} implemented") do
+              unless try_trait_implementation(trait)
+                log.error(extension.location, "E#{__LINE__} #{trait} not implemented")
               end
             end
           end
@@ -236,6 +255,47 @@ class TypeEnv
       end
     end
     # TODO: support trait inheritance
+  end
+
+  # Check if each required method of a trait is actually implemented.  Cache results.
+  def trait_implemented?(trait : Trait) : Bool
+    log.debug_descend(Location.zero, "#trait_implemented? #{trait}") do
+      return true if implementations[trait]?.try &.ok?
+      trait.base.methods.all? do |method|
+        # log.error(method.location, "you have to add the Self type parameter to the method")
+        # raise "you have to add the Self type parameter to the method"
+        context = TypeContext.new(self, method.type_params, trait.type_args)
+        context.method_implemented?(method)
+      end
+    end
+  end
+
+  # Check if each required method of a trait is actually implemented. 
+  # If a trait method is missing but has a default implementation, add that 
+  # implementation.  Otherwise raise an error.
+  # Cache results.
+  def try_trait_implementation(trait : Trait)
+    log.debug_descend(Location.zero, "#try_trait_implementation #{trait}") do
+      case implementations[trait]?
+      in Implements::Calculating
+        true
+      in Implements::True
+        true
+      in Implements::False
+        false
+      in Nil
+        implementations[trait] = Implements::Calculating
+        impl = true
+        trait.base.methods.each do |method|
+          context = TypeContext.new(self, method.type_params, trait.type_args)
+          if !context.try_method_implementation(method)
+            impl = false
+          end
+        end
+        implementations[trait] = impl ? Implements::True : Implements::False
+        impl
+      end
+    end
   end
 
   # evaluate all type nodes for the fields of structs and of enum variants
@@ -339,11 +399,15 @@ BUILTINS = [
 struct TraitClaim < IrNode
   getter location : Location
   getter type_params : Slice(TypeParameter)
-  getter type : Type
   getter traits : Array(Trait)
-  def initialize(@location : Location, @type_params : Slice(TypeParameter), @type : Type, @traits : Array(Trait))
+  def initialize(@location : Location, @type_params : Slice(TypeParameter), @traits : Array(Trait))
+  end
+  def initialize(@location : Location, @type_params : Slice(TypeParameter), type : Type, traits : Array(Trait))
+    @traits = traits.map do |trait|
+      Trait.new(trait.base, Slice[type] + trait.type_args)
+    end
   end
   def to_s(io : IO)
-    io << "trait claim: #{type} implements #{traits.join(", ")}" 
+    io << "trait claim: [#{type_params.join(", ")}] #{traits.join(", ")}" 
   end
 end

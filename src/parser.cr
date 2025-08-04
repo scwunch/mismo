@@ -850,6 +850,14 @@ module TopLevelItemParser
   def parse_trait(decl_loc : Location) : Ast::Trait?
     @log.debug_descend(decl_loc, "Parsing trait declaration...") do
       convention, name, type_params, traits = parse_type_header
+      # add implicit `Self` type parameter
+      type_params = Slice(Ast::TypeParameter).new(type_params.size + 1) do |i|
+        if i == 0
+          Ast::TypeParameter.new(decl_loc, "Self")
+        else
+          Ast::TypeParameter.new(type_params[i - 1].location, type_params[i - 1].name)
+        end
+      end
       trait_dec = Ast::Trait.new(decl_loc, convention, name, type_params, traits)
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, "Self"))
       until eof?

@@ -182,14 +182,15 @@ describe TypeEnv do
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Type.struct(list, Slice[Type.var(0).as Type]),
-          [Trait.new(stringable)]
+          [Trait.new(stringable, Slice[Type.struct(list, Slice[Type.var(0)])])]
         ),
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Type.struct(list, Slice[Type.var(0).as Type]),
-          [Trait.new(sequence, Slice[Type.var(0).as Type])]
+          [Trait.new(sequence, Slice[
+            Type.struct(list, Slice[Type.var(0)]), 
+            Type.var(0)
+          ])]
         ),
         TraitClaim.new(
           loc,
@@ -219,30 +220,30 @@ describe TypeEnv do
       impls = type_env.implementations
       impls.should eq({} of {Type, Trait} => Implements)
       stringable = TraitBase.new(loc, Mode::Let, "Stringable")
-      impls[{Type.int, Trait.new(stringable)}] = Implements::True
-      impls[{Type.int, Trait.new(stringable)}].should eq(Implements::True)
-      impls[{Type.int, Trait.new(stringable)}].ok?.should be_true
+      impls[Trait.new(stringable, Type.int)] = Implements::True
+      impls[Trait.new(stringable, Type.int)].should eq(Implements::True)
+      impls[Trait.new(stringable, Type.int)].ok?.should be_true
 
-      impls[{Type.array(Type.int), Trait.new(stringable)}] = Implements::True
-      impls[{Type.array(Type.int), Trait.new(stringable)}].should eq(Implements::True)
-      impls[{Type.array(Type.int), Trait.new(stringable)}].ok?.should be_true
+      impls[Trait.new(stringable, Type.array(Type.int))] = Implements::True
+      impls[Trait.new(stringable, Type.array(Type.int))].should eq(Implements::True)
+      impls[Trait.new(stringable, Type.array(Type.int))].ok?.should be_true
 
-      impls[{Type.array(Type.int), Trait.new(stringable)}] = Implements::False
-      impls[{Type.array(Type.int), Trait.new(stringable)}].should eq(Implements::False)
-      impls[{Type.array(Type.int), Trait.new(stringable)}].ok?.should be_false
+      impls[Trait.new(stringable, Type.array(Type.int))] = Implements::False
+      impls[Trait.new(stringable, Type.array(Type.int))].should eq(Implements::False)
+      impls[Trait.new(stringable, Type.array(Type.int))].ok?.should be_false
 
       equatable_base_trait = TraitBase.new(loc, Mode::Let, "Equatable", Slice[TypeParameter.new(loc, "T")])
       equatable = ->(type : Type) do
         Trait.new(equatable_base_trait, Slice[type])
       end
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}] = Implements::True
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}].should eq(Implements::True)
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}].ok?.should be_true
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(1))}]? .should be_nil
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])] = Implements::True
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].should eq(Implements::True)
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].ok?.should be_true
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(1)])]?.should be_nil
 
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}] = Implements::False
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}].should eq(Implements::False)
-      impls[{Type.array(Type.var(0)), equatable.call(Type.var(0))}].ok?.should be_false
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])] = Implements::False
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].should eq(Implements::False)
+      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].ok?.should be_false
     end
   end
   describe "#check_trait_implementations" do
@@ -323,23 +324,23 @@ describe TypeEnv do
       marker = type_env.traits["Marker"]
       equatable = type_env.traits["Equatable"]
       self_equatable = type_env.traits["SelfEquatable"]
-      ctx = TypeContext.new(type_env)
-      type_env.implementations[{Type.int, Trait.new(trivial)}]?.should be_nil
-      ctx.type_implements_trait?(Type.int, Trait.new(trivial)).should be_true
-      type_env.implementations[{Type.int, Trait.new(trivial)}]?.should eq(Implements::True)
-      type_env.implementations[{Type.int, Trait.new(marker)}]?.should eq(Implements::True)
-      ctx.type_implements_trait?(Type.int, Trait.new(marker)).should be_true
-      ctx.type_implements_trait?(Type.int, Trait.new(equatable, Slice[Type.int.as Type])).should be_true
-      type_env.implementations.each do |impl|
-        print impl; print '\n'
-        trait = impl[0][1]
-        if trait.type_args.size > trait.base.type_params.size
-          p! trait.to_s == "trait Equatable[Int, T1]"
-          raise "break: #{trait}"
-        end
-      end
-      type_env.implementations[{Type.int, Trait.new(equatable, Slice[Type.int.as Type])}]?.should eq(Implements::True)
-      type_env.implementations[{Type.int, Trait.new(self_equatable)}]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(trivial, Type.int)]?.should be_nil
+      type_env.try_trait_implementation(Trait.new(trivial, Type.int)).should be_true
+      type_env.implementations[Trait.new(trivial, Type.int)]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(marker, Type.int)]?.should eq(Implements::True)
+      type_env.trait_implemented?(Trait.new(marker, Type.int)).should be_true
+      type_env.trait_implemented?(Trait.new(equatable, Slice[Type.int, Type.int])).should be_true
+      # type_env.implementations.each do |impl|
+      #   print impl; print '\n'
+      #   trait = impl[0][1]
+      # end
+      type_env.implementations[Trait.new(equatable, Slice[Type.int, Type.int])]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(self_equatable, Type.int)]?.should eq(Implements::True)
+
+      type_env.trait_implemented?(Trait.new(trivial, Type.string)).should be_true
+      type_env.trait_implemented?(Trait.new(marker, Type.string)).should be_false
+      type_env.trait_implemented?(Trait.new(equatable, Slice[Type.string, Type.string])).should be_false
+      type_env.trait_implemented?(Trait.new(self_equatable, Type.string)).should be_false
     end
   end
 end

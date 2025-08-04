@@ -469,7 +469,7 @@ module Ast
     end
     def to_s(io : IO)
       io << name
-      if t_args = type_args
+      if (t_args = type_args).any?
         io << "[#{t_args.join(", ")}]"
       end
     end
@@ -692,8 +692,9 @@ module Ast
       io << ": " << constraints.to_s unless constraints.empty?
     end
     def inspect(io : IO)
-      io << "#{self.class.name}(#{name})"
+      io << "#{self.class.name}(#{name}"
       io << ": " << constraints.to_s unless constraints.empty?
+      io << ")"
     end
   end
 
@@ -726,21 +727,13 @@ module Ast
     def -(trait : Type)
       new(@includes, @excludes.push(trait))
     end
-    # def include(trait : Type)
-    #   push(@includes, trait)
-    # end
-    # def exclude(trait : Type)
-    #   push(@excludes, trait)
-    # end
     def empty?
       includes.empty? && excludes.empty?
     end
     def to_s(io : IO)
-      if incl = includes
-        io << incl.join(" & ") 
-      end
-      if excl = excludes
-        io << " ~" << excl.join(" ~") 
+      io << includes.join(" & ") 
+      if excludes.any?
+        io << " ~" << excludes.join(" ~") 
       end
     end
     def inspect(io : IO)

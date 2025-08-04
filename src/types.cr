@@ -19,7 +19,7 @@ abstract struct Type
     io << ')'
   end
 
-  abstract def substitute_Self_with(type : Type) : Type
+  # abstract def substitute_Self_with(type : Type) : Type
     
 
   macro primitive
@@ -34,9 +34,9 @@ abstract struct Type
     def ==(other : Type)
       self.class == other.class
     end
-    def substitute_Self_with(type : Type) : Type
-      self
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   self
+    # end
   end
 
   struct Never < Type
@@ -64,13 +64,13 @@ abstract struct Type
     def mode : Mode ; Mode::Ref end
   end
   
-  struct Self < Type
-    primitive
-    def mode : Mode ; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      type
-    end
-  end
+  # struct Self < Type
+  #   primitive
+  #   def mode : Mode ; Mode::Let end
+  #   def substitute_Self_with(type : Type) : Type
+  #     type
+  #   end
+  # end
 
   struct Var < Type
     getter id : Int32
@@ -85,9 +85,9 @@ abstract struct Type
     end
 
     def mode : Mode ; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      self
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   self
+    # end
   end
 
   struct Unknown < Type
@@ -102,9 +102,9 @@ abstract struct Type
       io << "Unknown[#{@name}, #{@type_args.join(", ")}]"
     end
     def mode : Mode ; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      Type.unknown(@name, @type_args.map { |ta| ta.substitute_Self_with(type) })
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Type.unknown(@name, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    # end
   end
 
   struct Array < Type
@@ -114,7 +114,7 @@ abstract struct Type
     def initialize(element_type : Type)
       @element_type = Cell.new(element_type.as(Type))
     end
-    def Type.array(type) ; Array.new(type.as(Type)) end
+    def Type.array(type) ; Array.new(type.as(Type)).as(Type) end
     def to_s(io : IO)
       io << "Array[#{@element_type}]"
     end
@@ -122,9 +122,9 @@ abstract struct Type
       "Array[#{@element_type}]"
     end
     def mode : Mode ; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      Array.new(@element_type.value.substitute_Self_with(type))
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Array.new(@element_type.value.substitute_Self_with(type))
+    # end
   end
 
   struct Tuple < Type
@@ -139,9 +139,9 @@ abstract struct Type
       io << "Tuple[#{@types.join(", ")}]"
     end
     def mode : Mode ; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      Tuple.new(@types.map { |t| t.substitute_Self_with(type) })
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Tuple.new(@types.map { |t| t.substitute_Self_with(type) })
+    # end
   end
 
   def Type.adt(base : StructBase, type_args : Slice(Type) = Slice(Type).empty)
@@ -158,7 +158,7 @@ abstract struct Type
     when EnumBase then Enum.new(base, type_args)
     else
       raise "Type.adt: unknown type info: #{base}"
-    end
+    end.as Type
   end
 
   struct Struct < Type
@@ -178,9 +178,9 @@ abstract struct Type
       io << ")"
     end
     def mode : Mode ; base.mode end
-    def substitute_Self_with(type : Type) : Type
-      Struct.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Struct.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    # end
     def get_field?(field_name : ::String) : Field?
       base.fields.each do |field|
         return field if field.name == field_name
@@ -200,9 +200,9 @@ abstract struct Type
       io << "[#{@type_args.join(", ")}]" if @type_args.any?
     end
     def mode : Mode ; base.mode end
-    def substitute_Self_with(type : Type) : Type
-      Enum.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Enum.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    # end
   end
 
   struct Function < Type
@@ -218,9 +218,9 @@ abstract struct Type
       io << "(#{args.join(", ")}) -> #{@return_type.value}"
     end
     def mode : Mode; Mode::Let end
-    def substitute_Self_with(type : Type) : Type
-      Function.new(@args.map { |ta| ta.substitute_Self_with(type) }, @return_type.value.substitute_Self_with(type))
-    end
+    # def substitute_Self_with(type : Type) : Type
+    #   Function.new(@args.map { |ta| ta.substitute_Self_with(type) }, @return_type.value.substitute_Self_with(type))
+    # end
   end
 end
 
@@ -361,16 +361,17 @@ struct Trait
   getter base : TraitBase
   getter type_args : Slice(Type)
   def initialize(@base : TraitBase, @type_args : Slice(Type) = Slice(Type).empty)
-    if @base.name == "Equatable" && @type_args.size > 1
-      raise "break: #{inspect}"
-    elsif @base.name == "SelfEquatable" && @type_args.size > 0
-      raise "break: #{inspect}"
-    end
     if @base.type_params.size != @type_args.size
-      raise "break: #{inspect}"
+      raise "wrong number of type args: #{inspect}"
     end
-    if to_s == "trait Equatable[Int, T1]"
-      raise "break: #{inspect}"
+  end
+  def initialize(@base, type_arg : Type)
+    @type_args = Slice[type_arg]
+    if @base.type_params.size != @type_args.size
+      p! @base
+      p! @base.type_params
+      p! @type_args
+      raise "wrong number of type args: #{inspect}"
     end
   end
   def Type.trait(*args) ; Trait.new(*args).as Trait end
@@ -379,8 +380,13 @@ struct Trait
     io << "[#{type_args.join(", ")}]" if type_args.any?
   end
   def mode : Mode ; base.mode end
+  # def substitute_Self_with(type : Type) : Trait
+  #   Trait.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+  # end
   def substitute_Self_with(type : Type) : Trait
-    Trait.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    type_args = @type_args.dup
+    type_args[0] = type
+    Trait.new(@base, type_args)
   end
   def inspect(io : IO)
     io << "Trait(#{@base.name}"
