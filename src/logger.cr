@@ -18,27 +18,37 @@ class Logger
     end
   end
 
-  getter file_path : String = ""
+  getter file_path : Nil
   @indent : UInt32 = 0
   @out : IO = STDOUT
   property level : Level
 
   def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : (String | Nil) = nil)
-    if file_path && !file_path.ends_with?(':')
-      @file_path = file_path + ':'
-    else
-      @file_path = file_path || ""
-    end
+    @file_path = nil
+    # if file_path && !file_path.ends_with?(':')
+    #   @file_path = file_path + ':'
+    # else
+    #   @file_path = file_path
+    # end
+    # if file_path && file_path.to_unsafe.address == 0x10000000c
+    #   print "\033[31m***LOGGER.FILE_PATH CORRUPTED IN INITIALIZER***\033[0m\n"
+    #   @file_path = nil
+    # end
   end
 
   macro def_log(level)
     def {{level.id.downcase}}(loc : Location, msg : String)
       if @level <= Level::{{level}}
+        if (fp = @file_path) && fp.to_unsafe.address == 0x10000000c
+          print "\033[31m***LOGGER.FILE_PATH CORRUPTED***\033[0m\n"
+          @file_path = nil
+        end
         # @out.puts "#{"  " * @indent}#{ Level::{{level}}.color } #{loc} #{msg}\033[0m"
         @out << "\033[90m "
         @out << " \u{2502}" * @indent
         @out << Level::{{level}}.color
-        @out << file_path << loc
+        @out << @file_path if @file_path
+        @out << loc
         @out << ' ' << msg << "\033[0m"
         @out << '\n'
       end
