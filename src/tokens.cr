@@ -17,6 +17,13 @@ struct Location
     @line = line.to_u32
     @column = column.to_u32
   end
+  def initialize(tuple : {Int32, Int32})
+    @line = tuple[0].to_u32
+    @column = tuple[1].to_u32
+  end
+  def self.new(loc : Location)
+    loc
+  end
 
   def self.zero
     Location.new(0, 0)

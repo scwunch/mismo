@@ -162,7 +162,9 @@ enum Option
   Some(T#)
   None
 
-
+enum Result
+  Ok(#)
+  Error(#)
 
 ---
 binding restriction notations:

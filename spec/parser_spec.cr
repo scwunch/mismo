@@ -801,13 +801,23 @@ describe Parser do
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
       parser.next_token.should eq(Token.variable({1, 1}, "trait"))
       t = parser.parse_trait(loc)
+      read_method = Ast::AbstractMethod.new(loc, "read", Ast::Signature.new(
+        loc, 
+        Slice[Ast::TypeParameter.new(loc, "Self")], 
+        [self_param], 
+        Ast::Type.new(loc, "String")
+      ))
+      write_method = Ast::AbstractMethod.new(loc, "write", Ast::Signature.new(
+        loc, 
+        Slice[Ast::TypeParameter.new(loc, "Self")], 
+        [self_param, Ast::Parameter.new(loc, "str", Ast::Type.new(loc, "String"))]
+      ))
+      t.methods[0].should eq(read_method)
+      t.methods[1].should eq(write_method)
       t.should eq(Ast::Trait.new(
         loc, 
         "IO", 
-        methods: [
-          Ast::AbstractMethod.new(loc, "read", Ast::Signature.new(loc, nil, [self_param], Ast::Type.new(loc, "String"))),
-          Ast::AbstractMethod.new(loc, "write", Ast::Signature.new(loc, nil, [self_param, Ast::Parameter.new(loc, "str", Ast::Type.new(loc, "String"))]))
-        ]
+        methods: [read_method, write_method]
       ))
     end
     it "parses a trait with convention and type parameters and super traits" do
@@ -827,13 +837,13 @@ describe Parser do
       t = parser.parse_trait(loc)
       t.convention.should eq(Mode::Mut)
       t.name.should eq("Mutable")
-      t.type_params.should eq(Slice[Ast::TypeParameter.new(loc, "X")])
+      t.type_params.should eq(Slice[Ast::TypeParameter.new(loc, "Self"), Ast::TypeParameter.new(loc, "X")])
       t.traits.should eq([Ast::Type.new(loc, "Dangerous"), Ast::Type.new(loc, "Fun")])
       mutate_me = t.methods[0]
       mutate_me.name.should eq("mutate_me")
       mutate_me.signature.should eq(Ast::Signature.new(
         loc, 
-        Slice[Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "Self"), Ast::TypeParameter.new(loc, "X")], 
         [self_param, Ast::Parameter.new(loc, "pls", Ast::Type.new(loc, "Please"))]
       ))
       let_get = t.methods[1]
@@ -842,7 +852,7 @@ describe Parser do
       let_get_self_param.convention = Mode::Let
       let_get.signature.should eq(Ast::Signature.new(
         loc, 
-        Slice[Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "Self"), Ast::TypeParameter.new(loc, "X")], 
         [let_get_self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
         Ast::Type.new(loc, "Something"),
         Mode::Let
@@ -852,7 +862,7 @@ describe Parser do
       mut_get.name.should eq("get")
       mut_get.signature.should eq(Ast::Signature.new(
         loc, 
-        Slice[Ast::TypeParameter.new(loc, "X")], 
+        Slice[Ast::TypeParameter.new(loc, "Self"), Ast::TypeParameter.new(loc, "X")], 
         [self_param, Ast::Parameter.new(loc, "index", Ast::Type.new(loc, "Int"))], 
         Ast::Type.new(loc, "Something"),
         Mode::Mut

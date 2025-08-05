@@ -1,13 +1,10 @@
-require "./tokens" # Assumed to define Token, Location, Keyword, Operator, ControlWord, TokenKind, Conventions etc.
+require "./tokens"
 require "./logger"
-require "./ast_nodes"
 
 class Lexer
   getter reader : Reader
   getter current_token : Token = Token::BeginFile.new(Location.zero)
-  # getter next_token : Token = Token::BeginFile.new(Location.zero)
   getter log : Logger
-  property tokens_emitted = [] of Token
 
   def initialize(@reader : Reader, @log : Logger)
     skip_whitespace_and_comments
@@ -85,22 +82,23 @@ class Lexer
       end
     end
 
-    # Note: Original iter! and iter methods from user code are removed as they are not used in the lexer logic below.
-    # If they are needed elsewhere, they can be re-added.
-
     def location
-      # Location should represent the start of the current token being processed
-      # `col` is updated *after* a char is processed by `next`.
-      # So, if `next` was just called, `col - 1` might be the char's col.
-      # However, Pony's `reader.location()` usually means current read head.
       Location.new(@line, @col)
     end
   end
 
   def push_token(tok : Token)
     @log.debug(@reader.location, "emitting token: #{tok}")
-    @tokens_emitted << tok
     @current_token = tok
+  end
+
+  def lex
+    tokens = [@current_token]
+    while true
+      tokens << (tok = self.next)
+      break if tok.is_a?(Token::EOF)
+    end
+    tokens
   end
 
   def next
@@ -188,8 +186,6 @@ class Lexer
         push_token(Token.error(loc, "unrecognized character: '#{@reader.next}'"))
       end
     end
-    @log.info(@reader.location, "emitted #{@tokens_emitted.size} tokens: #{@tokens_emitted}")
-    @tokens_emitted.clear
     @current_token
   end
 
@@ -559,13 +555,6 @@ class Lexer
       skip_whitespace_and_comments
     end
   end
-
-  # def parse_import(import_loc : Location, path : String) : Ast::Import
-  #   import_alias = parse_import_alias
-  #   import_bindings = parse_import_bindings
-  #   Ast::Import.new(import_loc, path, import_alias, import_bindings)
-  # end
-    
 
   def parse_path : String
     @log.debug_descend(@reader.location, "parse_path") do

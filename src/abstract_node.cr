@@ -1,4 +1,4 @@
-
+# the abstract node is the base class for all nodes in the CST, AST, and IR
 abstract struct IrNode
   abstract def location : Location
   abstract def to_s(io : IO)

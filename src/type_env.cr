@@ -154,15 +154,14 @@ class TypeEnv
           when Ast::Struct, Ast::Enum
             context = TypeContext.new(self, item.type_params)
             log.debug(item.location, "context: #{context}")
-            type = user_types[item.name]
-            type.type_params = context.type_parameters
-            if claimed_traits = item.traits
+            base_type = user_types[item.name]
+            base_type.type_params = context.type_parameters
+            type = Type.adt(base_type, context.type_params_as_args)
+            item.traits.try &.each do |trait|
               trait_claims << TraitClaim.new(
                 item.location, 
                 context.type_parameters, 
-                claimed_traits.map { |t| 
-                  context.eval_trait(t, Type.adt(type, context.type_params_as_args))
-                }
+                context.eval_trait(trait, type)
               )
             end
           when Ast::Trait
@@ -175,13 +174,14 @@ class TypeEnv
             if claimed_traits = item.traits
               context = TypeContext.new(self, item.type_params)
               log.debug(item.location, "context: #{context}")
-              trait_claims << TraitClaim.new(
-                item.location, 
-                context.type_parameters, 
-                claimed_traits.map { |t| 
-                  context.eval_trait(t, context.eval(item.type)) 
-                }
-              )
+              type = context.eval(item.type)
+              claimed_traits.each do |trait|
+                trait_claims << TraitClaim.new(
+                  item.location, 
+                  context.type_parameters, 
+                  context.eval_trait(trait, type) 
+                )
+              end
             end
           end
         end
@@ -243,13 +243,9 @@ class TypeEnv
       trait_claims.each do |extension|
         context = TypeContext.new(self, extension.type_params)
         # ummm, what is this context supposed to do???
-        log.info_descend(extension.location, "Check #{extension.traits} implemented (context=#{context})") do
-          extension.traits.try &.each do |trait|
-            log.debug_descend(extension.location, "Check #{trait} implemented") do
-              unless try_trait_implementation(trait)
-                log.error(extension.location, "E#{__LINE__} #{trait} not implemented")
-              end
-            end
+        log.info_descend(extension.location, "Check #{extension.trait} implemented (context=#{context})") do
+          unless try_trait_implementation(extension.trait)
+            log.error(extension.location, "E#{__LINE__} #{extension.trait} not implemented")
           end
         end
       end
@@ -399,15 +395,13 @@ BUILTINS = [
 struct TraitClaim < IrNode
   getter location : Location
   getter type_params : Slice(TypeParameter)
-  getter traits : Array(Trait)
-  def initialize(@location : Location, @type_params : Slice(TypeParameter), @traits : Array(Trait))
+  getter trait : Trait
+  def initialize(@location : Location, @type_params : Slice(TypeParameter), @trait : Trait)
   end
-  def initialize(@location : Location, @type_params : Slice(TypeParameter), type : Type, traits : Array(Trait))
-    @traits = traits.map do |trait|
-      Trait.new(trait.base, Slice[type] + trait.type_args)
-    end
+  def initialize(@location : Location, @type_params : Slice(TypeParameter), type : Type, trait : Trait)
+    @trait = Trait.new(trait.base, Slice[type] + trait.type_args)
   end
   def to_s(io : IO)
-    io << "trait claim: [#{type_params.join(", ")}] #{traits.join(", ")}" 
+    io << "trait claim: [#{type_params.join(", ")}] #{trait}" 
   end
 end

@@ -310,7 +310,8 @@ end
 
 class TraitBase < TypeInfo
   getter methods : ::Array(Ast::AbstractMethod)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
+  def initialize(@location : Location, @mode : Mode, @name : String, type_params : Slice(TypeParameter)? = nil, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
+    @type_params = type_params || Slice[TypeParameter.new(@location, "Self")]
   end
   def to_s(io : IO)
     io << "trait #{@name}"
@@ -367,7 +368,7 @@ struct Trait
   end
   def initialize(@base, type_arg : Type)
     @type_args = Slice[type_arg]
-    if @base.type_params.size != @type_args.size
+    if @base.type_params.size != 1
       p! @base
       p! @base.type_params
       p! @type_args

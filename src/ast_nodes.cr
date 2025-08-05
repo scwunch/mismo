@@ -560,9 +560,11 @@ module Ast
 
   struct Trait < TypeDeclaration
     property methods : ::Array(AbstractMethod)
-    def initialize(@location : Location, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod, @convention : Convention = nil)
+    def initialize(@location : Location, @name : ::String, type_params : Slice(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod, @convention : Convention = nil)
+      @type_params = type_params || Slice[TypeParameter.new(@location, "Self")]
     end
-    def initialize(@location : Location, @convention : Convention, @name : ::String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod)
+    def initialize(@location : Location, @convention : Convention, @name : ::String, type_params : Slice(TypeParameter)? = nil, @traits : ::Array(Type)? = nil, @methods : ::Array(AbstractMethod) = [] of AbstractMethod)
+      @type_params = type_params || Slice[TypeParameter.new(@location, "Self")]
     end
     def to_s(io : IO)
       io << "trait #{name}"
