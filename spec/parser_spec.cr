@@ -902,7 +902,7 @@ describe Parser do
     end
   end
 
-  describe "parse_def" do
+  describe "#parse_def" do
     it "parses a def block" do
       code = <<-MISMO
         def foo:
@@ -1066,6 +1066,57 @@ describe Parser do
         Slice[Ast::TypeParameter.new(loc, "T")],
         [Ast::Parameter.new(loc, "a", Ast::Type.new(loc, "T"))]
       ))
+    end
+  end
+
+  describe "#parse" do
+    it "parses a bunch of definitions" do
+      program = <<-MISMO
+        struct IntPoint
+          var x Int
+          var y Int
+
+          def +(other IntPoint) -> IntPoint:
+            IntPoint(x + other.x, y + other.y)
+
+        enum Option[T]
+          Some(T)
+          None
+
+        enum Result[T, E]
+          Ok(T)
+          Error(E)
+
+        enum SomeVariants
+          Text(String)
+          Integer(Int)
+          Location(Float, Float)
+          MaybeInt(Option[Int])
+
+        def if_none[T, E](opt Option[T], err E) -> Result[T, E]:
+          -- if opt is
+          --   Some(t): Result.Ok(t)
+          --   None: Result.Error(err)
+
+        trait Stringable
+          def string(self Self) -> String
+
+        struct HasStringable[T Stringable]
+          var item T
+
+          def string(self Self) -> String:
+            "(" + item.string + ")"
+
+        enum TryThis
+          Bawal(HasStringable[Float])
+
+        MISMO
+      
+      items = parser("parse", program, :debug).parse
+      # items.each do |item|
+      #   puts item
+      # end
+      items.size.should eq(10)
     end
   end
 end

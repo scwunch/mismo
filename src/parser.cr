@@ -270,14 +270,19 @@ module TokenNavigation
     until eof?
       tok = peek
       # Check for top-level keywords
-      if tok.is_a?(Token::KeyWord)
-        case tok.data
-        when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
-             KeyWord::Extend, KeyWord::Def, KeyWord::Import
-          @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
-          return
-        end
+      case tok.data
+      when "struct", "enum", "trait", "extend", "def", "import"
+        @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
+        return
       end
+      # if tok.is_a?(Token::KeyWord)
+      #   case tok.data
+      #   when KeyWord::Struct, KeyWord::Enum, KeyWord::Trait, 
+      #        KeyWord::Extend, KeyWord::Def, KeyWord::Import
+      #     @log.debug(tok.location, "Recovery found keyword #{tok.data}, resuming parse.")
+      #     return
+      #   end
+      # end
       next_token # Consume and discard the token
     end
     @log.debug(peek.location, "Recovery reached EOF or skipped too many tokens.")
