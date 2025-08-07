@@ -629,7 +629,8 @@ module Ast
     def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr)? = nil)
     end
     def to_s(io : IO)
-      io << "#{self.class.name}(#{name})"
+      io << "abstract def #{name}#{signature}"
+      io << ": <body(#{body.try &.size})>" if body
     end
     def count_type_params
       signature.type_params.try &.size || 0

@@ -55,6 +55,10 @@ abstract struct Type
     primitive
   end
 
+  struct Nat < Type
+    primitive
+  end
+
   struct Float < Type
     primitive
   end
@@ -78,7 +82,7 @@ abstract struct Type
     def initialize(@id)
       # raise "I found the T1!" if @id == 1
     end
-    def Type.var(id : Int32) ; Var.new(id).as Type end
+    def Type.var(*args) ; Var.new(*args).as Type end
   
     def to_s(io : IO)
       io << "T#{@id}"

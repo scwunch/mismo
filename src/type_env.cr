@@ -42,9 +42,10 @@ class TypeEnv
     register_functions
     eval_type_params_and_trait_claims(items)
 
+    @ready_to_validate_types = true
+
     # third pass: check trait implementation consistency
     check_trait_implementations
-    # NOTE: this step sets @ready_to_validate_types = true
 
     # fourth pass: evaluate all type nodes of fields of structs and enum variants
     fill_out_type_info(items)
@@ -132,7 +133,6 @@ class TypeEnv
             item.type_params.map { |tp| TypeParameter.new(tp.location, tp.name) },
             item.methods
           )
-          p! traits[item.name]
         when Ast::Extend
           # if item.traits
           #   trait_claims << item
@@ -225,21 +225,11 @@ class TypeEnv
   # For each "Type is Trait" ("extend" clauses and traits put directly on a type),
   # check to make sure the trait itself is valid and that the required methods
   # actually exist.
-  # This step sets @ready_to_validate_types = true
   def check_trait_implementations
+    if !ready_to_validate_types
+      log.warning(Location.zero, "W#{__LINE__} TypeEnv not ready to validate types")
+    end
     log.info_descend(Location.zero, "Check trait implementations (#{trait_claims.size})") do
-      # first, assume that all claims are valid, contradictions will be caught later
-      # trait_claims.each do |extension|
-      #   log.debug_descend(extension.location, "Assume #{extension.traits} implemented") do
-      #     extension.traits.try &.each do |trait|
-      #       implementations[trait] = Implements::Calculating
-      #     end
-      #   end
-      # end
-
-      @ready_to_validate_types = true
-
-      # now reevaluate all claims, given the assumption, and check for inconsistencies
       trait_claims.each do |extension|
         context = TypeContext.new(self, extension.type_params)
         # ummm, what is this context supposed to do???
@@ -297,49 +287,55 @@ class TypeEnv
   # evaluate all type nodes for the fields of structs and of enum variants
   # also re-evaluate the type nodes of function parameters and return types
   def fill_out_type_info(items : Array(Ast::TopLevelItem))
-    items.each do |item|
-      context = TypeContext.new(self, item.type_params)
-      log.debug_descend(item.location, "Fill out type info for #{item.name} (context=#{context})") do
-        case item
-        when Ast::Struct
-          struct_base = user_types[item.name].as(StructBase)
-          item.fields.each do |field|
-            field_type = context.eval(field.type)
-            struct_base.fields << Field.new(field.location, field.binding, field.name, field_type)
+    log.info_descend(Location.zero, "Evaluate type nodes for fields and function parameters") do
+      items.each do |item|
+        context = TypeContext.new(self, item.type_params)
+        log.info_descend(item.location, "Fill out type info for #{item} (context=#{context})") do
+          case item
+          when Ast::Struct
+            struct_base = user_types[item.name].as(StructBase)
+            item.fields.each do |field|
+              field_type = context.eval(field.type)
+              struct_base.fields << Field.new(field.location, field.binding, field.name, field_type)
+              upsert(FunctionBase.new(
+                field.location, 
+                field.name, 
+                context.type_parameters, 
+                [Parameter.new(field.location, Mode::Let, "self", Type.struct(struct_base))], 
+                field_type
+              ))
+            end
+            # add constructor
             upsert(FunctionBase.new(
-              field.location, 
-              field.name, 
-              context.type_parameters, 
-              [Parameter.new(field.location, Mode::Let, "self", Type.struct(struct_base))], 
-              field_type
+              item.location, 
+              item.name, 
+              context.type_parameters,
+              struct_base.fields.map do |field|
+                Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
+              end,
+              Type.struct(struct_base)
             ))
-          end
-          # add constructor
-          upsert(FunctionBase.new(
-            item.location, 
-            item.name, 
-            context.type_parameters,
-            struct_base.fields.map do |field|
-              Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
-            end,
-            Type.struct(struct_base)
-          ))
-        when Ast::Enum
-          enum_base = user_types[item.name].as(EnumBase)
-          item.variants.each do |variant|
-            enum_base.variants << 
-              Variant.new(variant.location, variant.name, variant.fields.try &.map { |field_name, field_type| 
-                Field.new(field_type.location, Binding::Var, field_name, context.eval(field_type)) 
-              } || [] of Field)
-          end
-        when Ast::Function
-          # merely validate the types of the parameters that are already there
-          function_base = get_function(item.name, item.location)
-          item.parameters.try &.each do |param|
-            context.eval(param.type)
-          end
-          if ret_type = item.return_type
-            context.eval(ret_type)
+          when Ast::Enum
+            enum_base = user_types[item.name].as(EnumBase)
+            item.variants.each do |variant|
+              enum_base.variants << 
+                Variant.new(variant.location, variant.name, variant.fields.try &.map { |field_name, field_type| 
+                  Field.new(field_type.location, Binding::Var, field_name, context.eval(field_type)) 
+                } || [] of Field)
+            end
+          when Ast::Function
+            # merely validate the types of the parameters that are already there
+            function_base = get_function(item.name, item.location)
+            item.parameters.try &.each do |param|
+              context.eval(param.type)
+            end
+            if ret_type = item.return_type
+              context.eval(ret_type)
+            end
+          when Ast::Trait, Ast::Import
+            # pass
+          else
+            log.error(item.location, "E#{__LINE__} unknown item type: #{item}")
           end
         end
       end
@@ -370,7 +366,7 @@ BUILTINS = [
   FunctionBase.new(Location.zero, 
     "print", 
     Slice[TypeParameter.new(Location.zero, "T")], 
-    [Parameter.new(Location.zero, Mode::Let, "value", Type.var(1))],
+    [Parameter.new(Location.zero, Mode::Let, "value", Type.var(0))],
     Type.nil),
   FunctionBase.new(Location.zero, 
     "+",

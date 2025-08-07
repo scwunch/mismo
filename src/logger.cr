@@ -19,11 +19,12 @@ class Logger
   end
 
   getter file_path : Nil
+  getter source_lines : Array(String)
   @indent : UInt32 = 0
   @out : IO = STDOUT
   property level : Level
 
-  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : (String | Nil) = nil)
+  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil, @source_lines = [] of String)
     @file_path = nil
     # if file_path && !file_path.ends_with?(':')
     #   @file_path = file_path + ':'
@@ -34,6 +35,9 @@ class Logger
     #   print "\033[31m***LOGGER.FILE_PATH CORRUPTED IN INITIALIZER***\033[0m\n"
     #   @file_path = nil
     # end
+  end
+  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil, source : String = "")
+    @source_lines = source.split('\n')
   end
 
   macro def_log(level)
@@ -49,8 +53,24 @@ class Logger
         @out << Level::{{level}}.color
         @out << @file_path if @file_path
         @out << loc
-        @out << ' ' << msg << "\033[0m"
+        @out << ' ' << msg
         @out << '\n'
+        {% if level.id == "Error" %}
+          if 0 < loc.line && loc.line < @source_lines.size
+            @out << ' '
+            @out << " \u{2502}" * @indent
+            @out << @source_lines[loc.line - 1]
+            if loc.column != 0
+              @out << "\n "
+              @out << " \u{2502}" * @indent
+              @out << " " * (loc.column - 1)
+              @out << "^\n"
+            else
+              @out << '\n'
+            end
+          end
+        {% end %}
+        @out << "\033[0m"
       end
     end
 

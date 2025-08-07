@@ -151,7 +151,7 @@ describe TypeEnv do
           def String String
 
         trait Sequence[T] is Iterable[T]
-          def get(index UInt) T
+          def get(index Nat) T
 
         trait Iterable[T]
           def iter Generator[T]
@@ -160,18 +160,21 @@ describe TypeEnv do
           def iter Generator[T]:
             Generator(self)
 
+        struct Generator[T]
+          var state T
+
         extend[T] List[T] is Stringable
           def String String:
             "List"
 
         extend[T] Array[T] is Stringable & Sequence[T]
           def String String: "Array"
-          def get(index UInt) T: nil
+          def get(index Nat) T: nil
 
         extend Array[Int] is Sequence[Int]
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new())
+      type_env = TypeEnv.new(Logger.new(:debug, source: program))
       type_env.register_types_and_collect_items(items)
       type_env.eval_type_params_and_trait_claims(items)
       stringable = type_env.traits["Stringable"]
@@ -200,7 +203,7 @@ describe TypeEnv do
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Trait.new(sequence, Slice[Type.array(Type.var(0).as Type), Type.var(0)])
+          Trait.new(sequence, Slice[Type.array(Type.var(0)), Type.var(0)])
         ),
         TraitClaim.new(
           loc,
@@ -249,6 +252,7 @@ describe TypeEnv do
       impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].ok?.should be_false
     end
   end
+
   describe "#check_trait_implementations" do
     it "verifies basic trait implementations requiring zero or one type parameters, and up to two methods" do
       program = <<-MISMO
@@ -262,14 +266,16 @@ describe TypeEnv do
             "Int"
 
         trait Sequence[T] is Iterable[T]
-          def get(index UInt) T
+          def get(index Nat) T
 
         trait Iterable[T]
           def iter Generator[T]
 
+        struct Generator[T]
+          var state T
 
         extend[T] Array[T] is Sequence[T]
-          def get(index UInt) T:
+          def get(index Nat) T:
             nil
 
           def iter Generator[T]:
@@ -281,10 +287,12 @@ describe TypeEnv do
             "Array"        
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new)
+      type_env = TypeEnv.new(Logger.new(source: program))
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
+      type_env.ready_to_validate_types = true
+      type_env.log.level = :debug
       type_env.check_trait_implementations
       trivial = type_env.traits["Trivial"]
       stringable = type_env.traits["Stringable"]
@@ -318,7 +326,7 @@ describe TypeEnv do
             self == other   
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(:debug))
+      type_env = TypeEnv.new(Logger.new(:debug, source: program))
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -344,6 +352,173 @@ describe TypeEnv do
       type_env.trait_implemented?(Trait.new(marker, Type.string)).should be_false
       type_env.trait_implemented?(Trait.new(equatable, Slice[Type.string, Type.string])).should be_false
       type_env.trait_implemented?(Trait.new(self_equatable, Type.string)).should be_false
+    end
+    pending "detects when traits are implemented by generic traits" do
+      program = <<-MISMO
+        trait Sequence[T]
+          def get(index Nat) T
+
+        extend[T] Array[T] is Sequence[T]
+          def get(index Nat) T:
+            nil
+
+        extend Array[Int] is Sequence[Int]
+        -- detecting this implementation will require a significantly more
+        -- complex algorithm for the method_exists function
+        MISMO
+      items = parser(program).parse
+      type_env = TypeEnv.new(Logger.new(:debug))
+      type_env.register_types_and_collect_items(items)
+      type_env.register_functions
+      type_env.eval_type_params_and_trait_claims(items)
+      type_env.check_trait_implementations
+      sequence = type_env.traits["Sequence"]
+      type_env.implementations[Trait.new(sequence, Type.array(Type.var(0)))]?.should eq(Implements::True)
+    end
+  end
+
+  describe "#fill_out_type_info" do
+    it "fills out type info for structs and enum variants" do
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      program = <<-MISMO
+        struct IntPoint
+           var x Int
+           var y Int
+
+           def +(other IntPoint) -> IntPoint:
+              IntPoint(x + other.x, y + other.y)
+
+        enum Option[T]
+           Some(T)
+           None
+
+        enum Result[T, E]
+           Ok(T)
+           Error(E)
+
+        enum SomeVariants
+           Text(String)
+           Integer(Int)
+           Location(Float, Float)
+           MaybeInt(Option[Int])
+
+        def if_none[T, E](opt Option[T], err E) -> Result[T, E]:
+           if opt is
+              Some(t): Result.Ok(t)
+              None: Result.Error(err)
+
+        trait Stringable
+           def string(self Self) -> String
+
+        struct HasStringable[T Stringable]
+           var item T
+
+           def string -> String:
+              "(" + item.string + ")"
+
+        enum TryThis
+           Bawal(HasStringable[Float])
+
+        MISMO
+      items = parser(program).parse
+      type_env = TypeEnv.new(Logger.new(source: program))
+      type_env.register_types_and_collect_items(items)
+      type_env.register_functions
+      type_env.eval_type_params_and_trait_claims(items)
+      type_env.ready_to_validate_types = true
+      type_env.check_trait_implementations
+      type_env.log.level = :debug
+      type_env.fill_out_type_info(items)
+      point = type_env.user_types["IntPoint"].as StructBase
+      point.fields.should eq([
+        Field.new(loc, Binding::Var, "x", Type.int),
+        Field.new(loc, Binding::Var, "y", Type.int),
+      ])
+    end
+  end
+
+  describe "#add_built_ins" do
+    it "inserts a list of built-in functions" do
+      type_env = TypeEnv.new(Logger.new)
+      type_env.functions.size.should eq(0)
+      type_env.add_built_ins
+      type_env.functions.size.should eq(BUILTINS.size)
+    end
+  end
+
+  describe "#type_check_program" do
+    pending "detects when traits imply other traits, ie sub-trait inference" do
+      program = <<-MISMO
+        trait Floatable
+          def float -> Float
+
+        trait Intable
+          def int -> Int
+
+        trait Numable
+          def int -> Int
+          def float -> Float
+
+        def foo[T Numable](x T):
+          bar(x)  -- getting this to typecheck will require sub-trait inference
+                  -- otherwise the compiler requires explicit sub-trait annotations
+
+        def bar[T Intable](x T):
+          x.int
+        
+        MISMO
+      items = parser(program).parse
+      type_env = TypeEnv.new(Logger.new(:debug))
+      type_env.type_check_program(items)
+      floatable = type_env.traits["Floatable"]
+      intable = type_env.traits["Intable"]
+      numable = type_env.traits["Numable"]
     end
   end
 end

@@ -108,6 +108,8 @@ class TypeContext
           tp.constraints.excludes.map { |trait| temp_ctx.eval_trait(trait, Type.var(i)) }
         )
       end
+      log.debug(ast_type_params[0]?.try &.location || Location.zero, "type parameters: #{@type_parameters}")
+      log.debug(ast_type_params[0]?.try &.location || Location.zero, "type args: #{@type_args}")
     end
     # raise "wrong number of type args (init 2)" if @type_args.size != @type_parameters.size
   end
@@ -242,6 +244,9 @@ class TypeContext
       when "Bool" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.bool
+      when "Nat" 
+        assert_no_type_args(type_node, "Primitive type ")
+        Type.nat
       when "Int" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.int
@@ -407,17 +412,44 @@ class TypeContext
   # end
 
   def type_satisfies_constraints(loc : Location, type : Type, type_param : TypeParameter)
-    log.debug_descend(loc, "TypeEnv#type_satisfies_constraints: #{type} satisfies #{type_param}") do
-      type_param.required_traits.each do |trait|
-        trait = trait.substitute_Self_with(type)
-        unless env.trait_implemented?(trait)
-          log.error(loc, "E#{__LINE__} TypeEnv#type_satisfies_constraints: type #{type} does not satisfy trait #{trait}")
+    log.debug_descend(loc, "#type_satisfies_constraints: #{type} satisfies #{type_param}") do
+      case type
+      when Type::Var
+        corresponding_type_param = type_parameters[type.id]
+        type_param.required_traits.each do |trait|
+          trait = trait.substitute_Self_with(type)
+          unless trait.in? corresponding_type_param.required_traits
+            p! corresponding_type_param.required_traits
+            p! trait
+            # p! type
+            # p! type.traits
+            # p! type.traits[0]
+            # p! trait
+            # p! type.traits[0] == trait
+            # t1 = trait
+            # t2 = type.traits[0]
+            # p! t1.base == t2.base
+            # p! t1.type_args == t2.type_args
+            # p! ta1 = t1.type_args[0]
+            # p! ta2 = t2.type_args[0]
+            # p! ta1 == ta2
+            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy trait #{trait}")
+          end
         end
-      end
-      type_param.excluded_traits.each do |trait|
-        trait = trait.substitute_Self_with(type)
-        if env.trait_implemented?(trait)
-          log.error(loc, "E#{__LINE__} TypeEnv#type_satisfies_constraints: type #{type} satisfies excluded trait #{trait}")
+      when Type::Never
+        nil
+      else
+        type_param.required_traits.each do |trait|
+          trait = trait.substitute_Self_with(type)
+          unless env.trait_implemented?(trait)
+            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy trait #{trait}")
+          end
+        end
+        type_param.excluded_traits.each do |trait|
+          trait = trait.substitute_Self_with(type)
+          if env.trait_implemented?(trait)
+            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} satisfies excluded trait #{trait}")
+          end
         end
       end
     end
@@ -488,6 +520,7 @@ class TypeContext
           return false
         end
       end
+      log.debug(method.location, "#{overloads.size} overloads found.")
       errors = [] of String
       overloads.each do |func|
         return true if function_matches_method?(func, method, errors)
@@ -511,17 +544,17 @@ class TypeContext
   # log errors to the provided array
   def function_matches_method?(func : FunctionBase, method : Ast::AbstractMethod, errors : Array(String)) : Bool
     if func.parameters.size != method.parameters.size
-      errors << "overload at #{func.location}: #{method.name} requires #{method.parameters.size} parameters, but #{func.parameters.size} were provided."
+      errors << "def #{method.name} at #{func.location}: requires #{method.parameters.size} parameters, but #{func.parameters.size} were provided."
       return false
     end
     func.parameters.zip(method.parameters).all? do |param, method_param|
-      if param.type != eval(method_param.type)
-        errors << "overload at #{func.location}: #{method.name} parameter #{method_param.name} has type #{method_param.type}, but #{func.parameters.size} were provided."
+      if param.type != (expected_type = eval(method_param.type))
+        errors << "def #{method.name} at #{func.location}: parameter #{method_param.name} has type #{method_param.type}, but expected #{expected_type}."
         return false
       end
     end
-    if func.return_type != eval(method.return_type)
-      errors << "overload at #{func.location}: #{method.name} has return type #{method.return_type}, but #{func.return_type} was provided."
+    if func.return_type != (expected_type = eval(method.return_type))
+      errors << "def #{method.name} at #{func.location}: has return type #{method.return_type}, but expected #{expected_type}."
       return false
     end
     true
