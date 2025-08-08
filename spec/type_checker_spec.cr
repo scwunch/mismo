@@ -10,10 +10,7 @@ macro not_nil!(prop)
   raise "" unless {{prop}}
 end
 
-def parser(
-    source : String, 
-    level : Logger::Level = Logger::Level::Warning
-    )
+def parser(source : String, level : Logger::Level = Logger::Level::Warning)
   parser(nil, source, level)
 end
 def parser(
@@ -31,17 +28,6 @@ def parser(
   )
   Parser.new(lexer, logger)
 end
-def expression_parser(test_name : String, code : String, level : Logger::Level = Logger::Level::Warning)
-  ExpressionParser.new(parser(test_name, code, level))
-end
-def expression_parser(code : String, level : Logger::Level = Logger::Level::Warning)
-  ExpressionParser.new(
-    parser: parser(code, level),
-    # expression_indent: 2,
-    # line_indent: 2,
-    # stop: StopAt::Normal
-  )
-end
 
 def loc(line, column)
   Location.new(line, column)
@@ -57,10 +43,11 @@ def type_checker(level : Logger::Level = Logger::Level::Warning)
   TypeContext.new(type_env(level))
 end
 def type_check_program(code : String, level : Logger::Level = Logger::Level::Warning)
-  logger = Logger.new
-  type_env = TypeEnv.new(logger)
-  logger.level = level
-  type_env.type_check_program(parser(code, Logger::Level::Warning).parse)
+  parser = Parser.new(code)
+  items = parser.parse
+  parser.log.level = level
+  type_env = TypeEnv.new(parser.log)
+  type_env.type_check_program(items)
   type_env
 end
 
@@ -68,9 +55,14 @@ describe TypeContext do
   describe "#type_check" do
     it "works" do
       type_checker = type_checker()
-      ast : Ast::Expr = expression_parser("nil").parse
+      ast : Ast::Expr = ExpressionParser.new(
+        parser: parser("nil", Logger::Level::Warning),
+        # expression_indent: 2,
+        # line_indent: 2,
+        # stop: StopAt::Normal
+      ).parse
       hir = type_checker.type_check(ast)
-      type_checker.unify(hir.type, Type.nil).should eq(:ok)
+      type_checker.check_type(hir.type, Type.nil, loc).should be_true
       hir.should eq(Hir::Nil.new(loc))
     end
   end
@@ -90,7 +82,6 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y
         MISMO
-      items = parser(program).parse
       type_env = type_check_program(program)
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
@@ -101,6 +92,54 @@ describe TypeEnv do
       param.type.should eq(Type.struct(point))
       check_me_func.parameters.should eq(
         [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
+    end
+
+    it "workssss", focus: true do
+      
+      
+      program = <<-MISMO
+        def main:
+          let t = true
+          let one = 1
+          let pi = 3.14
+          one + one
+          one + pi
+          one + t
+          pi + t
+
+        enum Option[T]
+          Some(T)
+          None
+
+          def map[T2](fn Callable[T, T2]) -> Option[T2]:
+            if self is
+              Some(t): Some(fn(t))
+              None: None
+
+        enum Result[T, E]
+          Ok(T)
+          Error(E)
+
+          def map[T2](fn Callable[T, T2]) -> Result[T2, E]:
+            if self is
+              Ok(t): Ok(fn(t))
+              Error(e): Error(e)
+
+        trait Callable[In, Out]
+
+        
+        
+        struct Point
+          field x Int
+          field y Int
+
+          def check_me Int:
+            var p = Point(1, 2)
+            p.x = 3
+            p.y = 4
+            p.x + p.y        
+        MISMO
+      type_env = type_check_program(program)
     end
   end
 
@@ -174,7 +213,7 @@ describe TypeEnv do
         extend Array[Int] is Sequence[Int]
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(:debug, source: program))
+      type_env = TypeEnv.new(Logger.new(source: program))
       type_env.register_types_and_collect_items(items)
       type_env.eval_type_params_and_trait_claims(items)
       stringable = type_env.traits["Stringable"]
@@ -292,7 +331,7 @@ describe TypeEnv do
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
       type_env.ready_to_validate_types = true
-      type_env.log.level = :debug
+      # type_env.log.level = 
       type_env.check_trait_implementations
       trivial = type_env.traits["Trivial"]
       stringable = type_env.traits["Stringable"]
@@ -326,7 +365,7 @@ describe TypeEnv do
             self == other   
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(:debug, source: program))
+      type_env = TypeEnv.new(Logger.new(source: program))
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -367,7 +406,7 @@ describe TypeEnv do
         -- complex algorithm for the method_exists function
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(:debug))
+      type_env = TypeEnv.new(Logger.new(source: program))
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -473,7 +512,7 @@ describe TypeEnv do
       type_env.eval_type_params_and_trait_claims(items)
       type_env.ready_to_validate_types = true
       type_env.check_trait_implementations
-      type_env.log.level = :debug
+      # type_env.log.level = 
       type_env.fill_out_type_info(items)
       point = type_env.user_types["IntPoint"].as StructBase
       point.fields.should eq([
@@ -514,7 +553,7 @@ describe TypeEnv do
         
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(:debug))
+      type_env = TypeEnv.new(Logger.new(source: program))
       type_env.type_check_program(items)
       floatable = type_env.traits["Floatable"]
       intable = type_env.traits["Intable"]

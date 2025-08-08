@@ -348,6 +348,18 @@ class FunctionBase
   property body : ::Array(Hir) = [] of Hir
   def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil)
   end
+
+  def to_s(io : IO)
+    io << "def "
+    io << name
+    io << "[#{type_params.join(", ")}]" if type_params.any?
+    io << "(#{parameters.join(", ")})"
+    unless return_type == Type.nil
+      io << " -> "
+      io << return_mode << ' ' unless return_mode == Mode::Move
+      io << return_type
+    end
+  end
 end
 
 struct Parameter < IrNode

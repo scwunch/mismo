@@ -1112,7 +1112,7 @@ describe Parser do
 
         MISMO
       
-      items = parser("parse", program, :debug).parse
+      items = parser("parse", program).parse
       # items.each do |item|
       #   puts item
       # end

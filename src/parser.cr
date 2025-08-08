@@ -1459,7 +1459,7 @@ class Parser
   def initialize(@lexer : Lexer, @log : Logger)
   end
   def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
-    @log = Logger.new(log_level)
+    @log = Logger.new(log_level, source: text)
     @lexer = Lexer.new(Lexer::Reader.new(text), @log)
   end
 

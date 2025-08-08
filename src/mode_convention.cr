@@ -19,6 +19,17 @@ enum Mode
     end
   end
 
+  def to_s(io : IO)
+    case self
+    in Move then "move"
+    in InOut then "inout"
+    in Mut then "mut"
+    in Let then "let"
+    in Box then "box"
+    in Ref then "ref"
+    end
+  end
+
   def to_binding : Binding
     case self
     in Move then Binding::Var

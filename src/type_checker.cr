@@ -534,6 +534,22 @@ module TypeChecker
     type_check(ast.value)
   end
 
+  def check_type(actual : Type, expected : Type, loc : Location)
+    case {actual, expected}
+    when {Type::Never, _}, {_, Type::Nil}
+    when {Type::Unknown, _}
+      log.warning(loc, "unknown type #{actual} may or may not be compatible with expected type #{expected}")
+    when {_, Type::Unknown}
+      log.warning(loc, "We don't know what type to expect here (expected type: #{expected}); #{actual} may or may not be compatible.")
+    else
+      if actual != expected
+        log.error(loc, "type mismatch: expected #{expected}, but got #{actual}")
+        return false
+      end
+    end
+    true
+  end
+
   def declare(binding : Binding, dec_type : Hir.class, loc : Location, name : ::String, value : Cell(Ast::Expr)? = nil) : Hir
     if value
       expr = type_check(value.value)
@@ -590,7 +606,7 @@ module TypeChecker
         case (t = object.type)
         when Type::Struct
           if (field = t.get_field?(lhs.method))
-            unify(field.type, rhs.type)
+            check_type(field.type, rhs.type, lhs.location)
             Hir::AssignField.new(lhs.location, object, field, rhs)
           else
             raise TypeError.new(lhs.location, "#{object} has no field #{lhs.method}")
@@ -624,47 +640,48 @@ class TypeContext
     
     # check return type
     unless function.return_type == Type.nil
-      begin
-        ctx.unify(function.body.last.type, function.return_type)
-      rescue failure : TypeError
-        if msg = failure.message
-          ctx.log.error(function.body.last.location, msg)
-        end
-        ctx.log.error(function.body.last.location, "E#{__LINE__} Expected return type: #{function.return_type}; Actual return type: #{function.body.last.type}")
-      end
+      # begin
+        ctx.check_type(function.body.last.type, function.return_type, function.body.last.location)
+      # rescue failure : TypeError
+      #   if msg = failure.message
+      #     ctx.log.error(function.body.last.location, msg)
+      #   end
+      #   ctx.log.error(function.body.last.location, "E#{__LINE__} Expected return type: #{function.return_type}; Actual return type: #{function.body.last.type}")
+      # end
     end
+    function
   end
 
-  def unify(a : Type, b : Type)
-    case {a, b}
-    when {Type::Var, _}
-      bind_var(a, b)
-    when {_, Type::Var}
-      bind_var(b, a)
-    when {Type::Nil, Type::Nil}, 
-      {Type::Bool, Type::Bool}, 
-      {Type::Int, Type::Int}, 
-      {Type::Float, Type::Float},
-      {Type::String, Type::String}
-      # Ok: equal concrete types
-    when {Type::Array, Type::Array}
-      unify(a.element_type.value, b.element_type.value)
-    # when {FunctionType, FunctionType}
-    #   # Recursively unify param and return types
-    #   a_f = a.as(FunctionType)
-    #   b_f = b.as(FunctionType)
-    #   if a_f.param_types.size != b_f.param_types.size
-    #     raise "Function arity mismatch"
-    #   end
-    #   a_f.param_types.zip(b_f.param_types).each do |ap, bp|
-    #     unify(ap, bp)
-    #   end
-    #   unify(a_f.return_type, b_f.return_type)
-    else
-      raise "Type mismatch: #{a} vs #{b}"
-    end
-    :ok
-  end
+  # def unify(a : Type, b : Type)
+    # case {a, b}
+    # when {Type::Var, _}
+    #   bind_var(a, b)
+    # when {_, Type::Var}
+    #   bind_var(b, a)
+    # when {Type::Nil, Type::Nil}, 
+    #   {Type::Bool, Type::Bool}, 
+    #   {Type::Int, Type::Int}, 
+    #   {Type::Float, Type::Float},
+    #   {Type::String, Type::String}
+    #   # Ok: equal concrete types
+    # when {Type::Array, Type::Array}
+    #   unify(a.element_type.value, b.element_type.value)
+    # # when {FunctionType, FunctionType}
+    # #   # Recursively unify param and return types
+    # #   a_f = a.as(FunctionType)
+    # #   b_f = b.as(FunctionType)
+    # #   if a_f.param_types.size != b_f.param_types.size
+    # #     raise "Function arity mismatch"
+    # #   end
+    # #   a_f.param_types.zip(b_f.param_types).each do |ap, bp|
+    # #     unify(ap, bp)
+    # #   end
+    # #   unify(a_f.return_type, b_f.return_type)
+    # else
+    #   raise "Type mismatch: #{a} vs #{b}"
+    # end
+    # :ok
+  # end
 
   def bind_var(var : Type::Var, typ : Type)
     if binding = bindings[var]?
@@ -718,7 +735,7 @@ class TypeScope
       raise TypeError.new(loc, "#{name} not found in scope") unless var
       raise TypeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
       if t = var.type
-        ctx.unify(t, expr.type)
+        ctx.check_type(t, expr.type, loc)
       else
         var.type = expr.type
       end
