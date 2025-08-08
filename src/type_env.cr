@@ -156,7 +156,7 @@ class TypeEnv
             log.debug(item.location, "context: #{context}")
             base_type = user_types[item.name]
             base_type.type_params = context.type_parameters
-            type = Type.adt(base_type, context.type_params_as_args)
+            type = Type.adt(base_type, context.type_args)
             item.traits.try &.each do |trait|
               trait_claims << TraitClaim.new(
                 item.location, 
