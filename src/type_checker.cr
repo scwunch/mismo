@@ -580,7 +580,7 @@ module TypeChecker
     end
 
     if matches.empty?
-      raise TypeError.new(location, "function call does not match any of the overloads:\n#{overloads.join("\n")}")
+      raise TypeError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
     end
     if matches.size > 1
       raise TypeError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")

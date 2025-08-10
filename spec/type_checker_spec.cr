@@ -94,7 +94,7 @@ describe TypeEnv do
         [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
     end
 
-    it "workssss", focus: true do
+    it "workssss" do
       
       
       program = <<-MISMO

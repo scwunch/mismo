@@ -2,6 +2,7 @@ require "./hir_nodes"
 require "./ast_nodes"
 require "./types"
 require "./type_checker"
+require "./builtins"
 
 # This enum is used instead of simple booleans for checking trait implementations
 # There are cases in which checking that a type implements a trait requires its own
@@ -294,7 +295,7 @@ class TypeEnv
           case item
           when Ast::Struct
             struct_base = user_types[item.name].as(StructBase)
-            item.fields.each do |field|
+            item.fields.each_with_index do |field, i|
               field_type = context.eval(field.type)
               struct_base.fields << Field.new(field.location, field.binding, field.name, field_type)
               upsert(FunctionBase.new(
@@ -302,7 +303,10 @@ class TypeEnv
                 field.name, 
                 context.type_parameters, 
                 [Parameter.new(field.location, Mode::Let, "self", Type.struct(struct_base))], 
-                field_type
+                field_type,
+                ->(interpreter : Interpreter) {
+                  interpreter.frame.variables["self"].data.as(Slice(Val))[i]
+                }
               ))
             end
             # add constructor
@@ -313,7 +317,12 @@ class TypeEnv
               struct_base.fields.map do |field|
                 Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
               end,
-              Type.struct(struct_base)
+              Type.struct(struct_base, context.type_args),
+              ->(interpreter : Interpreter) {
+                Val.new(Slice(Val).new(struct_base.fields.size) do |i|
+                  interpreter.frame.variables[struct_base.fields[i].name]
+                end)
+              }
             ))
           when Ast::Enum
             enum_base = user_types[item.name].as(EnumBase)
@@ -361,32 +370,6 @@ class TypeEnv
     end
   end
 end
-
-BUILTINS = [
-  FunctionBase.new(Location.zero, 
-    "print", 
-    Slice[TypeParameter.new(Location.zero, "T")], 
-    [Parameter.new(Location.zero, Mode::Let, "value", Type.var(0))],
-    Type.nil),
-  FunctionBase.new(Location.zero, 
-    "+",
-    Slice(TypeParameter).empty,
-    [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
-     Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
-    Type.int),
-  FunctionBase.new(Location.zero, 
-    "-",
-    Slice(TypeParameter).empty,
-    [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
-     Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
-    Type.int),
-  FunctionBase.new(Location.zero, 
-    "*",
-    Slice(TypeParameter).empty,
-    [Parameter.new(Location.zero, Mode::Let, "left", Type.int),
-     Parameter.new(Location.zero, Mode::Let, "right", Type.int)],
-    Type.int)
-]
 
 struct TraitClaim < IrNode
   getter location : Location

@@ -10,6 +10,13 @@ abstract struct Hir < IrNode
   abstract def type : Type
   abstract def to_s(io : IO)
 
+  # eg `Hir.int(454)` => `Hir::Int.new(454).as Hir`
+  macro def_init
+    def Hir.{{@type.name[5..].downcase}}(*args)
+      {{@type.name[5..]}}.new(*args).as Hir
+    end
+  end
+
   def mutable?
     binding == Binding::Mut || binding == Binding::Var
   end
@@ -18,6 +25,7 @@ abstract struct Hir < IrNode
     property location : Location
     def initialize(@location : Location)
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.nil end
     def to_s(io : IO)
@@ -29,6 +37,7 @@ abstract struct Hir < IrNode
     property location : Location
     def initialize(@location : Location)
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.bool end
     def to_s(io : IO)
@@ -40,6 +49,7 @@ abstract struct Hir < IrNode
     property location : Location
     def initialize(@location : Location)
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.bool end
     def to_s(io : IO)
@@ -52,6 +62,7 @@ abstract struct Hir < IrNode
     property value : Int128
     def initialize(@location : Location, @value : Int128)
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.int end
     def to_s(io : IO)
@@ -64,6 +75,7 @@ abstract struct Hir < IrNode
     property value : Float64
     def initialize(@location : Location, @value : Float64)
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.float end
     def to_s(io : IO)
