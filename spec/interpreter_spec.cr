@@ -6,14 +6,14 @@ def loc
 end
 
 describe Interpreter do
-  describe "#eval", focus: true do
+  describe "#eval" do
     it "works" do
       interpreter = Interpreter.new(Logger.new)
       interpreter.eval(Hir.nil(loc)).should eq(Val.nil)
     end
   end
 
-  describe "#run", focus: true do
+  describe "#run" do
     it "works" do
       program = <<-MISMO
         def main -> Int:
