@@ -95,6 +95,11 @@ macro define_token(name, type)
   def self.{{name.id.downcase}}(location : {Int32, Int32}, data : {{type}})
     {{name}}.new(Location.new(location[0].to_u32, location[1].to_u32), data)
   end 
+
+  # eg Token.number("34")
+  def self.{{name.id.downcase}}(data : {{type}})
+    {{name}}.new(Location.zero, data)
+  end
 end
 
 macro define_token(name)
@@ -109,7 +114,7 @@ macro define_token(name)
   end
 
   # eg Token.comma(Location.new(1, 1))
-  def self.{{name.id.downcase}}(location : Location)
+  def self.{{name.id.downcase}}(location : Location = Location.zero)
     {{name}}.new(location)
   end
 

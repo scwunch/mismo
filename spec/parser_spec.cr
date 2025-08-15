@@ -30,7 +30,7 @@ def loc
   Location.zero
 end
 
-describe Parser do
+describe Parser, focus: true do
   describe "#consume?" do
     it "consumes the current token of the specified type, otherwise nil" do
       parser = parser(": x")
@@ -1132,7 +1132,7 @@ def expression_parser(code : String, level : Logger::Level = Logger::Level::Warn
     # stop: StopAt::Normal
   )
 end
-describe ExpressionParser do
+describe ExpressionParser, focus: true do
   it "parses a simple binary expression" do
     parser = expression_parser("1 + 2")
     parser.parse.should eq(Ast::Binop.new(
@@ -1423,7 +1423,7 @@ describe ExpressionParser do
   end
 end
     
-describe UcsParser, focus: true do
+describe UcsParser do
   describe "#parse" do
     it "parses basic single line conditional" do
       program = <<-MISMO

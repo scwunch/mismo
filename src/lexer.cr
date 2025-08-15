@@ -93,7 +93,8 @@ class Lexer
   end
 
   def lex
-    tokens = [@current_token]
+    # tokens = [@current_token]
+    tokens = [] of Token
     while true
       tokens << (tok = self.next)
       break if tok.is_a?(Token::EOF)

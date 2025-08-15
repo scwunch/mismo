@@ -13,7 +13,6 @@ enum StopAt
   Newline            # Stops at a Newline token
   ExpressionEnd      # Stops more aggressively, e.g. doesn't consume trailing operators
 end
-NOTE: we may have to change this up for parsing UCS nodes.  Having the parser stop at boolean operators   and/or 'and' tokens messes up the logic for operator precedence.  In particular, it essentially lowers   the precedence of these stoppers below all other operators in the context of a UCS node.  This is   inconsistent and potentially confusing.  So what do we do instead?  One possibility is we replace those two variants with a StopAt variant that tells the parser to parse  normally until it hits an indented line, and stops *only* if the last token was a boolean operator  or an 'and'.  Oh, I just realized that this is also gonna require the peek-two-ahead capability!  I mean, if we want  the operator to stay in the queue.  Alternatively, we could also return that operator token to the caller...  but that would require modifying the call sites of Expression#parse.  Another potential fix for this problem is to have a Ast::UcsBranchPlaceholder node that we can insert  into the AST to represent the branch.  Then we can just parse the branch as a normal expression and  insert the placeholder into the AST.    But then at what point do we actually replace the placeholder?  We could do it while parsing the UCS.  Will require some fairly simple recursion.  Or we could leave it until the HIR lowering phase.
 
 enum Expecting
   Term
@@ -22,24 +21,44 @@ end
 
 # methods for peek, next_token, consume, and error-handling
 module TokenNavigation
+  @index = 0_u32
+  @tokens : Array(Token)
+  # Peeks at the current token without consuming
+  # def peek : Token
+  #   @peeked ||= @lexer.next
+  # end
+
   # Peeks at the current token without consuming
   def peek : Token
-    @peeked ||= @lexer.next
+    @tokens[@index]? || Token.eof(Location.zero)
+  end
+
+  def peek2 : Token
+    @tokens[@index + 1]? || peek
   end
 
   # Consumes the current token and returns it. Advances the index.
   # Returns the last token if already at EOF to prevent errors on multiple calls.
   def next_token : Token
-    if tok = @peeked  # tok = @peeked.as(Token)
-      @peeked = nil
-    else
-      tok = @lexer.next
-    end
-    if tok.is_a?(Token::Newline)
-      @current_line_indent = tok.data
-    end
+    tok = @tokens[@index]
+    @index += 1
     tok
+  rescue
+    peek
   end
+
+  # def next_token_in_stream : Token
+  #   if tok = @peeked  # tok = @peeked.as(Token)
+  #     @peeked = nil
+  #   else
+  #     tok = @lexer.next
+  #   end
+  #   if tok.is_a?(Token::Newline)
+  #     @current_line_indent = tok.data
+  #   end
+  #   tok
+  # end
+
 
   # Checks if the parser has reached the end of the token stream.
   def eof? : Bool
@@ -209,7 +228,8 @@ module TokenNavigation
     if (tok = peek).is_a?(Token::Newline)
       if tok.data <= block_indent
         # TODO: this is coupled too tightly to the lexer, might be fragile
-        unless @lexer.reader.peek.in?(']', '}', ')') || @lexer.reader.peek_str?("else ")
+        # unless @lexer.reader.peek.in?(']', '}', ')') || @lexer.reader.peek_str?("else ")
+        unless peek2.class.in?(Token::RBracket, Token::RBrace, Token::RParen) || peek2.data == KeyWord::Else
           if raise_on_outdent
             raise report_error(tok.location, raise_on_outdent)
           else
@@ -217,7 +237,7 @@ module TokenNavigation
             return true
           end
         end
-        log.debug(tok.location, "outdent detected, but followed by #{lexer.reader.peek}")
+        log.debug(tok.location, "outdent detected, but followed by #{peek2}")
       end
       log.debug(tok.location, "skipping newline")
       next_token  # consume newline
@@ -245,7 +265,8 @@ module TokenNavigation
       next_token
       if (newline = peek).is_a?(Token::Newline)
         # TODO: this is coupled too tightly to the lexer, might be fragile
-        if @lexer.reader.peek.in?(']', ')')
+        # if @lexer.reader.peek.in?(']', ')')
+        if peek2.class.in?(Token::RBracket, Token::RParen)
           next_token  # consume newline after trailing comma
           return nil  # trailing comma, end of list
         elsif newline.data <= list_indent
@@ -1163,7 +1184,6 @@ struct ExpressionParser < SubParser
       true
     when Token::Newline
       tok.data <= expression_indent
-      raise "fix me"
     else
       case {stop, tok}
       when {StopAt::BooleanOperator, Token::Operator}
@@ -1172,11 +1192,11 @@ struct ExpressionParser < SubParser
         true
       when {StopAt::ColonOrAnd, Token::Operator}
         tok.data == Operator::And
-      when {StopAt::UcsBranch, Token::Newline}
-        if tok.data > expression_indent
-          terms << Ast::UcsBranchPlaceholder.new(tok.location)
-        end
-        true
+      # when {StopAt::UcsBranch, Token::Newline}
+      #   if tok.data > expression_indent
+      #     terms << Ast::UcsBranchPlaceholder.new(tok.location)
+      #   end
+      #   true
       when {StopAt::Comma, Token::Comma}
         true
       when {StopAt::Newline, Token::Newline}
@@ -1524,7 +1544,8 @@ struct UcsParser < SubParser
     if (tok = peek).is_a?(Token::Newline)
       if tok.data == condition_indent
         # yuck... but I don't know how else to peek ahead *two* tokens without upsetting the lexer
-        if parser.lexer.reader.peek_str?("else:") || parser.lexer.reader.peek_str?("else ")
+        # if parser.lexer.reader.peek_str?("else:") || parser.lexer.reader.peek_str?("else ")
+        if parser.peek2.data == KeyWord::Else
           log.warning(tok.location, "found 'else' on newline")
           next_token             # newline
           else_tok = next_token  # else
@@ -1554,8 +1575,8 @@ struct UcsParser < SubParser
 end
 
 class Parser
-  property lexer : Lexer
-  @peeked : Token? = nil
+  # property lexer : Lexer
+  # @peeked : Token? = nil
   property current_line_indent : UInt32 = 0  # indentation of the first token of the current expression, or if, struct, trait, def, etc
   property log : Logger
   getter declarations = [] of Ast::TopLevelItem # The final list of top-level AST nodes
@@ -1568,11 +1589,14 @@ class Parser
     end
   end
 
-  def initialize(@lexer : Lexer, @log : Logger)
+  def initialize(lexer : Lexer, @log : Logger)
+    @tokens = lexer.lex
+  end
+  def initialize(@tokens, @log)
   end
   def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
     @log = Logger.new(log_level, source: text)
-    @lexer = Lexer.new(Lexer::Reader.new(text), @log)
+    @tokens = Lexer.new(Lexer::Reader.new(text), @log).lex
   end
 
   # == Main Entry Point ==
