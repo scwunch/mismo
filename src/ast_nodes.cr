@@ -152,14 +152,18 @@ module Ast
       io << "[]"
     end
   end
-  # struct Block < IrNode
-  #   property statements : ::Array(IrNode)
-  #   def initialize(@location : Location, @statements : ::Array(IrNode))
-  #   end
-  #   def to_s(io : IO)
-  #     io << "#{statements.join("\n")}"
-  #   end
-  # end
+  struct Block < Expr
+    property location : Location
+    property statements : ::Array(Expr)
+    def initialize(@location : Location, @statements : ::Array(Expr))
+    end
+    def initialize(@statements)
+      @location = @statements[0]?.try &.location || Location.zero
+    end
+    def to_s(io : IO)
+      io << "#{statements.join("\n")}"
+    end
+  end
   struct Binop < Expr
     property left : Cell(Expr)
     property operator : Operator
@@ -349,22 +353,22 @@ module Ast
     end
   end
   
-  struct If < Expr
-    property location : Location
-    property condition : Cell(Expr)
-    property then_branch : Cell(Expr)
-    property else_branch : Cell(Expr)?
-    def initialize(@location : Location, @condition : Cell(Expr), @then_branch : Cell(Expr), @else_branch : Cell(Expr)?)
-    end
-    def initialize(@location : Location, condition : Expr, then_branch : Expr, else_branch : Expr?)
-      @condition = Cell.new(condition.as(Expr))
-      @then_branch = Cell.new(then_branch.as(Expr))
-      @else_branch = Cell.new(else_branch.as(Expr)) if else_branch
-    end
-    def to_s(io : IO)
-      io << "if #{condition}\n#{then_branch}\nelse\n#{else_branch}\nend"
-    end
-  end
+  # struct If < Expr
+  #   property location : Location
+  #   property condition : Cell(Expr)
+  #   property then_branch : Cell(Expr)
+  #   property else_branch : Cell(Expr)?
+  #   def initialize(@location : Location, @condition : Cell(Expr), @then_branch : Cell(Expr), @else_branch : Cell(Expr)?)
+  #   end
+  #   def initialize(@location : Location, condition : Expr, then_branch : Expr, else_branch : Expr?)
+  #     @condition = Cell.new(condition.as(Expr))
+  #     @then_branch = Cell.new(then_branch.as(Expr))
+  #     @else_branch = Cell.new(else_branch.as(Expr)) if else_branch
+  #   end
+  #   def to_s(io : IO)
+  #     io << "if #{condition}\n#{then_branch}\nelse\n#{else_branch}\nend"
+  #   end
+  # end
   struct ForLoop < Expr
     property location : Location
     property variable : Cell(Expr)
@@ -479,6 +483,113 @@ module Ast
     #   io << "#{self.class.name}(#{location})"
     # end
   end
+
+  struct If < Expr
+    property location : Location
+    property conditionals : ::Array(Condition)
+    def initialize(@location : Location, @conditionals : ::Array(Condition))
+    end
+    def to_s(io : IO)
+      io << "if "
+      if conditionals.size == 1
+        io << conditionals[0]
+      else
+        io << "\n  #{conditionals.join("\n  ")}\n"
+      end
+    end
+  end
+
+  # represents at least one complete condition
+  abstract struct Condition < IrNode
+    def self.binary(*args)
+      BinaryCondition.new(*args).as(Condition)
+    end
+    def self.unary(*args)
+      UnaryCondition.new(*args).as(Condition)
+    end
+    def self.else(*args)
+      ElseCondition.new(*args).as(Condition)
+    end
+  end
+  struct BinaryCondition < Condition
+    property location : Location
+    property lhs : Expr
+    property op_split : ::Array(OpBranch)
+    def initialize(@location, @lhs, @op_split = [] of OpBranch)
+    end
+    def to_s(io : IO)
+      io << lhs
+      if op_split.size == 1
+        io << ' ' << op_split[0]
+      else
+        io << "\n    #{op_split.join("\n    ")}"
+      end
+    end
+  end
+  alias UnaryCondition = RTerm
+  struct ElseCondition < Condition
+    property location : Location
+    property consequent : Expr
+    def initialize(@location, @consequent)
+      p! @consequent
+    end
+    def to_s(io : IO)
+      io << "else: #{consequent}"
+    end
+  end
+
+  struct OpBranch < IrNode
+    property location : Location
+    property operator : Operator
+    property term_split : ::Array(RTerm)
+    def initialize(@location, @operator, @term_split = [] of RTerm)
+    end
+    def to_s(io : IO)
+      io << operator
+      if term_split.size == 1
+        io << ' ' << term_split[0]
+      else
+        io << "\n      #{term_split.join("\n      ")}"
+      end
+    end
+  end
+
+  # this struct is used both as the rhs of a binary test, and also as a complete unary test
+  struct RTerm < Condition
+    property location : Location
+    property term : Expr
+    @consequent_or_additional_conditions : Expr | ::Array(Condition)
+    def initialize(@location, @term, @consequent_or_additional_conditions)
+    end
+
+    def consequent
+      @consequent_or_additional_conditions.as?(Expr)
+    end
+
+    def and
+      @consequent_or_additional_conditions.as?(::Array(Condition))
+    end
+    def to_s(io : IO)
+      io << term
+      if a = and
+        if a.size == 1
+          io << " and #{a[0]}"
+        else
+          io << " and {#{a.join(", ")}}"
+        end
+      else
+        io << ": #{consequent}"
+      end
+    end
+  end
+    
+
+
+
+
+
+
+
 
   abstract struct TopLevelItem < IrNode
     property location : Location

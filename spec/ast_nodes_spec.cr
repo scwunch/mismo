@@ -26,7 +26,7 @@ describe Ast::Expr do
       # Ast::DotNode.new("x").should eq(Ast::DotNode.new("x"))
       Ast::Call.new(loc, "x", [Ast::Int.new(loc, 456).as(Ast::Expr)]).should eq(Ast::Call.new(loc, "x", [Ast::Int.new(loc, 456).as(Ast::Expr)]))
       # Ast::MethodCall.new(Ast::Int.new(loc, 123), "foo", [Ast::Int.new(loc, 456).as(Ast::Expr)]).should eq(Ast::MethodCall.new(Ast::Int.new(loc, 123), "foo", [Ast::Int.new(loc, 456).as(Ast::Expr)]))
-      Ast::If.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), Ast::Int.new(loc, 789)).should eq(Ast::If.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), Ast::Int.new(loc, 789)))
+      # Ast::If.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), Ast::Int.new(loc, 789)).should eq(Ast::If.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), Ast::Int.new(loc, 789)))
       Ast::ForLoop.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), [Ast::Int.new(loc, 789).as(Ast::Expr)]).should eq(Ast::ForLoop.new(loc, Ast::Int.new(loc, 123), Ast::Int.new(loc, 456), [Ast::Int.new(loc, 789).as(Ast::Expr)]))
       Ast::WhileLoop.new(loc, Ast::Int.new(loc, 123), [Ast::Int.new(loc, 456).as(Ast::Expr)]).should eq(Ast::WhileLoop.new(loc, Ast::Int.new(loc, 123), [Ast::Int.new(loc, 456).as(Ast::Expr)]))
       Ast::Return.new(loc, Ast::Int.new(loc, 123)).should eq(Ast::Return.new(loc, Ast::Int.new(loc, 123)))

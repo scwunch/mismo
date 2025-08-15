@@ -9,7 +9,7 @@ abstract struct IrNode
       # io << {{ivar.name.stringify}} << "="
       {% if ivar.name.id != "location" %}
         # io << "{{ivar.name.id}}=" << {{ivar.name.id}}.inspect
-        io << {{ivar.name.id}}.inspect
+        io << @{{ivar.name.id}}.inspect
       {% end %}
       {% if i < @type.instance_vars.size - 1 %}
         io << ", "

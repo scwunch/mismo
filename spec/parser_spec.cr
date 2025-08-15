@@ -1423,8 +1423,284 @@ describe ExpressionParser do
   end
 end
     
+describe UcsParser, focus: true do
+  describe "#parse" do
+    it "parses basic single line conditional" do
+      program = <<-MISMO
+        def main:
+          if x > y: r
+        MISMO
+      parser = parser("ucs basic", program)
+      items = parser.parse
+      items.size.should eq(1)
+      main = items[0]
+      main.should be_a(Ast::Function)
+      body = main.as(Ast::Function).body
+      body.size.should eq(1)
+      cond = body[0]
+      cond.should be_a(Ast::If)
+      cond.should eq(Ast::If.new(loc, [
+        Ast::Condition.binary(
+          loc,
+          Ast::Identifier.new(loc, "x"),
+          [
+            Ast::OpBranch.new(
+              loc,
+              Operator::Gt,
+              [
+                Ast::RTerm.new(
+                  loc,
+                  Ast::Identifier.new(loc, "y"),
+                  Ast::Block.new(
+                    loc,
+                    [Ast::Identifier.new(loc, "r").as(Ast::Expr)]
+                  )
+                )
+              ]
+            )
+          ]
+        ).as(Ast::Condition)
+      ]))
+    end
+    it "parses basic branched conditionals" do
+      program = <<-MISMO
+        def main:
+          if x > y: r
+    
+          if x >
+            y: r1
+            z: r2
+
+          if x
+            > y: r1
+            ==
+              z: r2
+              w: r3
+          
+          if 
+            x > y: r
+            x >
+              y: r1
+              z: r2
+            x
+              > y: r1
+              ==
+                z: r2
+                w: r3
+        MISMO
+      parser = parser("ucs branched conditions", program)
+      items = parser.parse
+      items.size.should eq(1)
+      main = items[0]
+      main.should be_a(Ast::Function)
+      body = main.as(Ast::Function).body
+      body.size.should eq(4)
+      body.each { |stmt|
+        stmt.should be_a(Ast::If)
+        if parser.log.level == Logger::Level::Debug
+          puts stmt
+        end
+      }
+    end
+    it "parses branched conditionals with 'else's" do
+      program = <<-MISMO
+        def main:
+          if x > y: 
+            r
+          else: 
+            r2
+            
+          -- these next two should parse identically
+          if x >
+            y: r1
+            z: r2
+            else: 
+              r3
+          
+          if x >
+            y: r1
+            z: r2
+          else: 
+            r3
+
+          -- the next three should all parse identically
+          if x
+            > y: r1
+            ==
+              z: r2
+              w: r3
+          else: r4
+
+          if x
+            > y: r1
+            ==
+              z: r2
+              w: r3
+            else: r4
+
+          if x
+            > y: r1
+            ==
+              z: r2
+              w: r3
+              else: r4
+          -- the last three should all parse identically
+          
+          -- if 
+          --   x > y: r
+          --   x >
+          --     y: r1
+          --     z: r2
+          --   x
+          --     > y: r1
+          --     ==
+          --       z: r2
+          --       w: r3
+        MISMO
+      parser = parser("ucs else conditions", program, :debug)
+      items = parser.parse
+      items.size.should eq(1)
+      main = items[0]
+      main.should be_a(Ast::Function)
+      body = main.as(Ast::Function).body
+      # body.size.should be_gt(4)
+      body.each { |stmt|
+        stmt.should be_a(Ast::If)
+        if parser.log.level == Logger::Level::Debug
+          puts stmt
+        end
+      }
+      body[1].should eq(body[2])
+      body[3].should eq(body[4])
+      body[4].should eq(body[5])
+    end
+    it "parses branched conditionals with unary conditions/tests" do
+      program = <<-MISMO
+        def main:
+          if some_boolean: 
+            result
+          
+          if 
+            x > y: r
+            test: r2
+            x >
+              y: r1
+              z: r2
+            x
+              > y: r1
+              ==
+                z: r2
+                w: r3
+            .another_test:
+              r4
+        MISMO
+      parser = parser("ucs unary conditions", program)
+      items = parser.parse
+      items.size.should eq(1)
+      main = items[0]
+      main.should be_a(Ast::Function)
+      body = main.as(Ast::Function).body
+      # body.size.should be_gt(4)
+      body.each { |stmt|
+        stmt.should be_a(Ast::If)
+        if parser.log.level == Logger::Level::Debug
+          puts stmt
+        end
+      }
+      if1 = body[0]
+      if1.as(Ast::If).conditionals.should eq([
+        Ast::Condition.unary(
+          loc, 
+          Ast::Identifier.new(loc, "some_boolean"), 
+          Ast::Block.new([Ast::Identifier.new(loc, "result").as(Ast::Expr)])
+        )
+      ])
+      if2 = body[1]
+      if2.as(Ast::If).conditionals.size.should eq(5)
+    end
+    it "parses branched conditionals with nested tests via 'and' connector" do
+      program = <<-MISMO
+        def main:
+          if x > y and x > z: r
+    
+          if x >
+            y: r1
+            z: r2
+            w and some_boolean: r3
+            w and
+              y == x: r4
+              y > x: r42
+              x > y: r43
+            w and
+              y == x and z == y: r5
+            w and
+              y == x and z == y and some_boolean: 
+          
+          if 
+            x > y and x > z: r
+            x >
+              y: r1
+              z: r2
+            x
+              > y: r1
+              ==
+                z: r2
+                w: r3
+            true and false: "impossible"
+            true and
+              some_other_test: "maybe"
+              yet_another_test: "could be"
+              y ==
+                0: "true and zero"
+                1: "true and one"
+                
+        
+        MISMO
+      parser = parser("ucs conditions with nested 'and'", program, :debug)
+      items = parser.parse
+      items.size.should eq(1)
+      main = items[0]
+      main.should be_a(Ast::Function)
+      body = main.as(Ast::Function).body
+      # body.size.should be_gt(4)
+      body.each { |stmt|
+        stmt.should be_a(Ast::If)
+        if parser.log.level == Logger::Level::Debug
+          puts stmt
+        end
+      }
+    end
+  end
+end
 
 <<-MISMO
+  def main:
+    if x > y: r
+    
+    if x >
+      y: r1
+      z: r2
+
+    if x
+      > y: r1
+      ==
+        z: r2
+        w: r3
+    
+    if 
+      x > y: r
+      x >
+        y: r1
+        z: r2
+      x
+        > y: r1
+        ==
+          z: r2
+          w: r3
+
+
+
+
   struct Option[T]: String & Size
 
   extend[T: String] T: Format

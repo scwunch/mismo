@@ -8,10 +8,12 @@ enum StopAt
   Normal             # Default: stops at block closers, major separators like Colon, EOF
   BooleanOperator    # Stops if the next token is a boolean comparison operator
   ColonOrAnd         # Stops at Colon or an 'and' keyword/operator
+  UcsBranch          # Stops at an indented line iff the last token was a boolean operator or an 'and'
   Comma              # Stops at Comma (e.g., for arguments in a list)
   Newline            # Stops at a Newline token
   ExpressionEnd      # Stops more aggressively, e.g. doesn't consume trailing operators
 end
+NOTE: we may have to change this up for parsing UCS nodes.  Having the parser stop at boolean operators   and/or 'and' tokens messes up the logic for operator precedence.  In particular, it essentially lowers   the precedence of these stoppers below all other operators in the context of a UCS node.  This is   inconsistent and potentially confusing.  So what do we do instead?  One possibility is we replace those two variants with a StopAt variant that tells the parser to parse  normally until it hits an indented line, and stops *only* if the last token was a boolean operator  or an 'and'.  Oh, I just realized that this is also gonna require the peek-two-ahead capability!  I mean, if we want  the operator to stay in the queue.  Alternatively, we could also return that operator token to the caller...  but that would require modifying the call sites of Expression#parse.  Another potential fix for this problem is to have a Ast::UcsBranchPlaceholder node that we can insert  into the AST to represent the branch.  Then we can just parse the branch as a normal expression and  insert the placeholder into the AST.    But then at what point do we actually replace the placeholder?  We could do it while parsing the UCS.  Will require some fairly simple recursion.  Or we could leave it until the HIR lowering phase.
 
 enum Expecting
   Term
@@ -28,8 +30,7 @@ module TokenNavigation
   # Consumes the current token and returns it. Advances the index.
   # Returns the last token if already at EOF to prevent errors on multiple calls.
   def next_token : Token
-    if tok = @peeked
-      # tok = @peeked.as(Token)
+    if tok = @peeked  # tok = @peeked.as(Token)
       @peeked = nil
     else
       tok = @lexer.next
@@ -191,6 +192,7 @@ module TokenNavigation
   # Consumes a newline only if it begins a new block and returns that indent.
   # Otherwise returns nil.
   def consume_indent?(block_indent : UInt32) : UInt32?
+    log.debug(peek.location, "consume_indent? (block_indent: #{block_indent}) # peek: #{peek}")
     if (tok = peek).is_a?(Token::Newline)
       if tok.data > block_indent
         next_token
@@ -696,7 +698,7 @@ module TopLevelItemParser
       # A statement belongs to the block if it's indented further than block_base_indent.
       statements = [] of Ast::Expr
       until eof?
-        @log.debug(peek.location, "Parsing statement starting with #{peek}")
+        @log.debug(peek.location, "Parsing statement starting with #{peek} (base indent: #{block_base_indent})")
         case tok = peek
         when Token::Newline
           break if tok.data <= block_base_indent
@@ -713,25 +715,25 @@ module TopLevelItemParser
   end
   
   # Parses a sequence of statements until indent decreases or block ends
-  def parse_statements(current_block_indent : UInt32, delimiter : StopAt = StopAt::Normal) : Array(Ast::Expr)
-    @log.debug_descend(peek.location, "parse_statements (indent: #{current_block_indent}, stop: #{delimiter}) - NOT FULLY IMPLEMENTED") do
-      statements = [] of Ast::Expr
-      until eof?
-        @log.debug(peek.location, "Parsing statement starting with #{peek}")
-        case tok = peek
-        when Token::Newline
-          break if tok.data <= current_block_indent
-          next_token
-        when Token::EOF, Token::RBrace, Token::RParen, Token::RBracket
-          break
-        else
-          break if tok.location.column <= current_block_indent
-          statements << parse_expression(peek.location.indent)
-        end
-      end
-      statements
-    end
-  end
+  # def parse_statements(current_block_indent : UInt32, delimiter : StopAt = StopAt::Normal) : Array(Ast::Expr)
+    # @log.debug_descend(peek.location, "parse_statements (indent: #{current_block_indent}, stop: #{delimiter}) - NOT FULLY IMPLEMENTED") do
+    #   statements = [] of Ast::Expr
+    #   until eof?
+    #     @log.debug(peek.location, "Parsing statement starting with #{peek}")
+    #     case tok = peek
+    #     when Token::Newline
+    #       break if tok.data <= current_block_indent
+    #       next_token
+    #     when Token::EOF, Token::RBrace, Token::RParen, Token::RBracket
+    #       break
+    #     else
+    #       break if tok.location.column <= current_block_indent
+    #       statements << parse_expression(peek.location.indent)
+    #     end
+    #   end
+    #   statements
+    # end
+  # end
 
   def parse_type_header : {Convention, String, Slice(Ast::TypeParameter) , Array(Ast::Type)? }
     convention = read_convention?
@@ -1161,6 +1163,7 @@ struct ExpressionParser < SubParser
       true
     when Token::Newline
       tok.data <= expression_indent
+      raise "fix me"
     else
       case {stop, tok}
       when {StopAt::BooleanOperator, Token::Operator}
@@ -1169,6 +1172,11 @@ struct ExpressionParser < SubParser
         true
       when {StopAt::ColonOrAnd, Token::Operator}
         tok.data == Operator::And
+      when {StopAt::UcsBranch, Token::Newline}
+        if tok.data > expression_indent
+          terms << Ast::UcsBranchPlaceholder.new(tok.location)
+        end
+        true
       when {StopAt::Comma, Token::Comma}
         true
       when {StopAt::Newline, Token::Newline}
@@ -1419,13 +1427,13 @@ struct ExpressionParser < SubParser
   end
     
   def parse_if_expression(loc : Location)
-    # UcsParser.new(parser).parse(loc, block_indent)
-    raise report_error(loc, "if expressions not yet implemented")
+    conditionals = UcsParser.new(parser).parse
+    Ast::If.new(loc, conditionals)
   end
   
   def parse_while_expression(loc : Location)
     condition = ExpressionParser.new(parser, expression_indent, StopAt::ColonOrAnd).parse
-    body = parser.parse_colon_and_block(parser.current_line_indent)
+    body = parser.parse_colon_and_block
     Ast::WhileLoop.new(loc, condition, body)
   end
   
@@ -1436,9 +1444,113 @@ struct ExpressionParser < SubParser
       report_error(peek.location, "Expected \"in\" after variable name in for loop; got #{peek}")
     end
     iterator = ExpressionParser.new(parser, expression_indent, StopAt::ColonOrAnd).parse
-    body = parser.parse_colon_and_block(parser.current_line_indent)
+    body = parser.parse_colon_and_block
     Ast::ForLoop.new(loc, Ast::Identifier.new(var_loc, var_name), iterator, body)
   end
+end
+
+struct UcsParser < SubParser
+  def initialize(@parser : Parser)
+  end
+  def parse(condition_indent : UInt32 = parser.current_line_indent) : Array(Ast::Condition)
+    loc = peek.location
+    conditions = [] of Ast::Condition
+    log.debug_descend(loc, "parsing ucs...") do
+      indent = condition_indent
+      @parser.tree_branch(loc, indent) do |indented|
+        # PARSE CONDITIONAL
+        indent = peek.location.indent if indented
+
+        # check for 'else' token
+        if else_tok = consume?(KeyWord::Else)
+          raise report_error(peek.location, "Expected conditional after `if`, `while`, or `and` token.") if conditions.size == 0
+          consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+          conditions << Ast::Condition.else(else_tok.location, consequent)
+          return conditions
+        end
+
+        lhs = parser.parse_expression(indent, StopAt::BooleanOperator)
+        
+        # check for unary condition
+        if peek.is_a? Token::Colon
+          consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+          conditions << Ast::Condition.unary(lhs.location, lhs, consequent)
+          next
+        end
+        
+        # continue with binary condition
+        conditions << Ast::BinaryCondition.new(lhs.location, lhs, ops = [] of Ast::OpBranch)
+
+        @parser.tree_branch(peek.location, indent) do |indented|
+          # PARSE BOOLEAN OPERATOR
+          indent = peek.location.indent if indented
+          if else_tok = consume?(KeyWord::Else)
+            raise report_error(peek.location, "Expected boolean operator after lhs #{lhs}") if ops.size == 0
+            consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+            conditions << Ast::Condition.else(else_tok.location, consequent)
+            return conditions
+          end
+          op_tok = consume!(Token::Operator).as(Token::Operator)
+          ops << Ast::OpBranch.new(op_tok.location, op_tok.data, term_split = [] of Ast::RTerm)
+          
+          @parser.tree_branch(peek.location, indent) do |indented|
+            # PARSE RHS
+            indent = peek.location.indent if indented
+            if else_tok = consume?(KeyWord::Else)
+              raise report_error(peek.location, "Expected right-hand term after operator #{op_tok}") if term_split.size == 0
+              consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+              conditions << Ast::Condition.else(else_tok.location, consequent)
+              return conditions
+            end
+            rhs = parser.parse_expression(indent, StopAt::ColonOrAnd)
+            if peek.is_a? Token::Colon
+              consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+              term_split << Ast::RTerm.new(rhs.location, rhs, consequent)
+            elsif and_tok = consume?(Operator::And)
+              nested = UcsParser.new(parser).parse(indent)
+              term_split << Ast::RTerm.new(and_tok.location, rhs, nested)
+            else
+              raise report_error(peek.location, "Expected colon or 'and' after condition #{rhs}; got #{peek}")
+            end
+          end
+          raise report_error(peek.location, "Expected right-hand term after operator #{op_tok}") if term_split.size == 0
+        end
+        raise report_error(peek.location, "Expected boolean operator after lhs #{lhs}") if ops.size == 0
+      end
+      raise report_error(peek.location, "Expected conditional after `if`, `while`, or `and` token.") if conditions.size == 0
+    end
+
+    # check if token on next line is 'else'
+    if (tok = peek).is_a?(Token::Newline)
+      if tok.data == condition_indent
+        # yuck... but I don't know how else to peek ahead *two* tokens without upsetting the lexer
+        if parser.lexer.reader.peek_str?("else:") || parser.lexer.reader.peek_str?("else ")
+          log.warning(tok.location, "found 'else' on newline")
+          next_token             # newline
+          else_tok = next_token  # else
+          raise "OOPS" unless else_tok.data == KeyWord::Else
+          consequent = Ast::Block.new(parser.parse_colon_and_block)
+          conditions << Ast::Condition.else(else_tok.location, consequent)
+        end
+      end
+    end
+    conditions
+  end
+
+  def parse2(condition_indent : UInt32 = parser.current_line_indent) : Array(Ast::Condition)
+    loc = peek.location
+    conditions = [] of Ast::Condition
+    log.debug_descend(loc, "parsing ucs...") do
+      indent = condition_indent
+      @parser.tree_branch(loc, indent) do |indented|
+        # PARSE CONDITIONAL
+        indent = peek.location.indent if indented
+        expr = parser.parse_expression(indent, StopAt::UcsBranch)
+
+      end
+    end
+  end
+        
 end
 
 class Parser
@@ -1503,6 +1615,19 @@ class Parser
   # `loc` is the location of the beginning of the expression/definition
   def tree_branch(loc : Location, &block)
     block_indent = loc.indent
+    log.debug_descend(loc, "tree_branch (block_indent: #{block_indent})...") do
+      if consume_indent?(block_indent)
+        until eof?
+          res = yield true
+          break res if skip_newline_unless_block_end?(block_indent)
+        end
+      else
+        yield false
+      end
+    end
+  end
+
+  def tree_branch(loc : Location, block_indent : UInt32, &block)
     log.debug_descend(loc, "tree_branch (block_indent: #{block_indent})...") do
       if consume_indent?(block_indent)
         until eof?
