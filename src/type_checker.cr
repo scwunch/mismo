@@ -522,6 +522,9 @@ module TypeChecker
       declare(Binding::Var, Hir::Var, ast.location, ast.name, ast.value)
     when Ast::Let
       declare(Binding::Let, Hir::Let, ast.location, ast.name, ast.value)
+    when Ast::If
+      log.error(ast.location, "unhandled Ast::If")
+      Hir::Nil.new(ast.location)
     else
       raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
     end

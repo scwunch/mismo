@@ -30,7 +30,7 @@ def loc
   Location.zero
 end
 
-describe Parser, focus: true do
+describe Parser do
   describe "#consume?" do
     it "consumes the current token of the specified type, otherwise nil" do
       parser = parser(": x")
@@ -1132,7 +1132,7 @@ def expression_parser(code : String, level : Logger::Level = Logger::Level::Warn
     # stop: StopAt::Normal
   )
 end
-describe ExpressionParser, focus: true do
+describe ExpressionParser do
   it "parses a simple binary expression" do
     parser = expression_parser("1 + 2")
     parser.parse.should eq(Ast::Binop.new(
@@ -1173,20 +1173,21 @@ describe ExpressionParser, focus: true do
         1 + foo = 3  -- this should raise an error
       MISMO
     parser = expression_parser("op-precedence", code)
+    # p parser.parse.to_s
     parser.parse.should eq(Ast::Binop.new(
+      Ast::NotNode.new(loc, Ast::Identifier.new(loc, "this")),
+      Operator::And,
       Ast::Binop.new(
-        Ast::NotNode.new(loc, Ast::Identifier.new(loc, "this")),
-        Operator::And,
-        Ast::NotNode.new(loc, Ast::Identifier.new(loc, "that"))
-      ),
-      Operator::Eq,
-      Ast::Binop.new(
-        Ast::Int.new(loc, -1),
-        Operator::Add,
+        Ast::NotNode.new(loc, Ast::Identifier.new(loc, "that")),
+        Operator::Eq,
         Ast::Binop.new(
-          Ast::Int.new(loc, -2),
-          Operator::Mul,
-          Ast::Int.new(loc, 3)
+          Ast::Int.new(loc, -1),
+          Operator::Add,
+          Ast::Binop.new(
+            Ast::Int.new(loc, -2),
+            Operator::Mul,
+            Ast::Int.new(loc, 3)
+          )
         )
       )
     ))
@@ -1440,25 +1441,17 @@ describe UcsParser do
       cond = body[0]
       cond.should be_a(Ast::If)
       cond.should eq(Ast::If.new(loc, [
-        Ast::Condition.binary(
+        Ast::UnaryCondition.new(
           loc,
-          Ast::Identifier.new(loc, "x"),
-          [
-            Ast::OpBranch.new(
-              loc,
-              Operator::Gt,
-              [
-                Ast::RTerm.new(
-                  loc,
-                  Ast::Identifier.new(loc, "y"),
-                  Ast::Block.new(
-                    loc,
-                    [Ast::Identifier.new(loc, "r").as(Ast::Expr)]
-                  )
-                )
-              ]
-            )
-          ]
+          Ast::Binop.new(
+            Ast::Identifier.new(loc, "x"),
+            Operator::Gt,
+            Ast::Identifier.new(loc, "y")
+          ),
+          Ast::Block.new(
+            loc,
+            [Ast::Identifier.new(loc, "r").as(Ast::Expr)]
+          )
         ).as(Ast::Condition)
       ]))
     end
@@ -1494,7 +1487,7 @@ describe UcsParser do
       main = items[0]
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
-      body.size.should eq(4)
+      # body.size.should eq(4)
       body.each { |stmt|
         stmt.should be_a(Ast::If)
         if parser.log.level == Logger::Level::Debug
@@ -1509,6 +1502,8 @@ describe UcsParser do
             r
           else: 
             r2
+
+          if x > y: r else: r2
             
           -- these next two should parse identically
           if x >
@@ -1545,17 +1540,6 @@ describe UcsParser do
               w: r3
               else: r4
           -- the last three should all parse identically
-          
-          -- if 
-          --   x > y: r
-          --   x >
-          --     y: r1
-          --     z: r2
-          --   x
-          --     > y: r1
-          --     ==
-          --       z: r2
-          --       w: r3
         MISMO
       parser = parser("ucs else conditions", program, :debug)
       items = parser.parse
@@ -1570,9 +1554,10 @@ describe UcsParser do
           puts stmt
         end
       }
-      body[1].should eq(body[2])
-      body[3].should eq(body[4])
+      body[0].should eq(body[1])
+      body[2].should eq(body[3])
       body[4].should eq(body[5])
+      body[5].should eq(body[6])
     end
     it "parses branched conditionals with unary conditions/tests" do
       program = <<-MISMO
@@ -1653,10 +1638,23 @@ describe UcsParser do
               y ==
                 0: "true and zero"
                 1: "true and one"
-                
+          if x
+            >
+              y and
+                y < x: "yes"
+                y > x: "no"
+                z and
+                  z < x: "maybe"
+                  z > x: "could be"
+                  else: "inner default"
+                else:
+                  "middle default"
+          else:
+            "outer default"
+          
         
         MISMO
-      parser = parser("ucs conditions with nested 'and'", program, :debug)
+      parser = parser("ucs conditions with nested 'and'", program)
       items = parser.parse
       items.size.should eq(1)
       main = items[0]

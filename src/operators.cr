@@ -128,7 +128,12 @@ enum Operator
     {Operator::Eq, Operator::Neq, Operator::Lt, Operator::Le, Operator::Gt, Operator::Ge}.includes?(self)
   end
 
-  
+  def ucs_branch_op?  
+    self.in?({
+      Operator::Eq, Operator::Neq, Operator::Lt, Operator::Le, Operator::Gt, Operator::Ge,
+      Operator::Is, Operator::IsNot, Operator::And
+    })
+  end
 
   def precedence_class : PrecedenceClass
     case self
@@ -171,7 +176,7 @@ enum Operator
     in {Prec::Or, Prec::Mul} then Bind::None
     in {Prec::Or, Prec::Pow} then Bind::None
     in {Prec::And, Prec::And} then Bind::Tighter
-    in {Prec::And, Prec::Comparison} then Bind::Tighter
+    in {Prec::And, Prec::Comparison} then Bind::Looser
     in {Prec::And, Prec::Unary} then Bind::Looser
     in {Prec::And, Prec::Or} then Bind::None
     in {Prec::And, Prec::Add} then Bind::None

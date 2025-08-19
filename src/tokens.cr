@@ -165,6 +165,7 @@ abstract struct Token
   define_token KeyWord, ::KeyWord
   # define_token Assign
   define_token Operator, ::Operator
+  define_token Else
   define_token Not
   define_token Comma
   define_token Dot
@@ -182,6 +183,10 @@ abstract struct Token
 
   def Newline.short : ::String
     "\n" + @data * " "
+  end
+
+  def ucs_branch_token?
+    self.is_a?(Operator) && self.data.ucs_branch_op?
   end
 
   alias GroupOpen = LParen | LBracket | LBrace
@@ -206,7 +211,7 @@ enum KeyWord
   Move
   Const
   If
-  Else
+  # Else
   For
   While
   Break
@@ -268,7 +273,7 @@ enum KeyWord
     when "var" then Var
     when "mut" then Mut
     when "if" then If
-    when "else" then Else
+    # when "else" then Else
     when "for" then For
     when "while" then While
     when "break" then Break
@@ -288,7 +293,7 @@ enum KeyWord
     when "ref" then Ref
     when "move" then Move
     when "if" then If
-    when "else" then Else
+    # when "else" then Else
     when "for" then For
     when "while" then While
     when "break" then Break
@@ -318,7 +323,7 @@ enum KeyWord
     in Move then "move"
     in Const then "const"
     in If then "if"
-    in Else then "else"
+    # in Else then "else"
     in For then "for"
     in While then "while"
     in Break then "break"

@@ -284,6 +284,8 @@ class Lexer
         # @log.debug(loc, "pushed type name: #{word}")
       elsif op = Operator.parse?(word)
         push_word_operator(loc, op)
+      elsif word == "else"
+        push_token(Token.else(loc))
       else
         push_token(Token.variable(loc, word))
         # @log.debug(loc, "pushed variable name: #{word}")
