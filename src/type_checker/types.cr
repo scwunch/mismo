@@ -1,6 +1,6 @@
-require "./hir_nodes"
-require "./cell"
-require "./abstract_node"
+require "../type_checker/hir_nodes"
+require "../utils/cell"
+require "../ast/abstract_node"
 
 abstract struct Type
 
@@ -145,6 +145,37 @@ abstract struct Type
     def mode : Mode ; Mode::Let end
     # def substitute_Self_with(type : Type) : Type
     #   Tuple.new(@types.map { |t| t.substitute_Self_with(type) })
+    # end
+  end
+
+  struct Union < Type
+    getter types : Slice(Type)
+    def initialize(@types : Slice(Type))
+    end
+    def initialize(types : ::Array(Type))
+      @types = types.to_unsafe_slice
+    end
+    def Type.union(*args)
+      Union.new(*args).as Type
+    end
+    def Type.union(one_type : Type)
+      Union.new(Slice[one_type]).as Type
+    end
+    def Type.union(types : Iterable(Type))
+      types = types.uniq.to_a
+      case types.size
+      when 0 then Type.never
+      when 1 then types.first.as Type
+      else 
+        Union.new(types.to_unsafe_slice).as Type
+      end
+    end
+    def to_s(io : IO)
+      io << "Union[#{@types.join(", ")}]"
+    end
+    def mode : Mode ; Mode::Let end
+    # def substitute_Self_with(type : Type) : Type
+    #   Union.new(@types.map { |t| t.substitute_Self_with(type) })
     # end
   end
 
@@ -346,6 +377,15 @@ class FunctionBase
   property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
   property body : ::Array(Hir) = [] of Hir
+  def body=(body : ::Array(Hir)) ; @body = body ; end
+  def body=(body : Hir) 
+    case body
+    when Hir::Block
+      @body = body.statements
+    else
+      @body = [body]
+    end
+  end
   def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
   end
 

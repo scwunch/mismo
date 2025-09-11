@@ -1,6 +1,6 @@
 require "./tokens"
 require "./ast_nodes"
-require "./logger" 
+require "../utils/logger" 
 
 
 # Defines the types of tokens that can stop an expression parser

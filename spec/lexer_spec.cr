@@ -1,5 +1,5 @@
 require "./spec_helper"
-require "../src/lexer"
+# require "../src/lexer"
 
 LOG_LEVEL = Logger::Level::Warning
 

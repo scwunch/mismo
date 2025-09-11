@@ -1,9 +1,9 @@
 require "./spec_helper"
-require "../src/type_checker"
-require "../src/type_env"
-require "../src/types"
-require "../src/parser"
-require "../src/lexer"
+require "../src/type_checker/*"
+# require "../src/type_env"
+# require "../src/types"
+require "../src/ast/*"
+# require "../src/lexer"
 
 macro not_nil!(prop)
   {{ prop }}.should_not be_nil
@@ -61,9 +61,51 @@ describe TypeContext do
         # line_indent: 2,
         # stop: StopAt::Normal
       ).parse
-      hir = type_checker.type_check(ast)
+      hir = type_checker.infer(ast)
       type_checker.check_type(hir.type, Type.nil, loc).should be_true
       hir.should eq(Hir::Nil.new(loc))
+    end
+  end
+
+  describe "#type_check_program" do
+    it "works" do
+      program = <<-MISMO
+        struct Point
+          field x Int
+          field y Int
+
+          def check_me Int:
+            var p = Point(1, 2)
+            p.x = 3
+            p.y = 4
+            p.x + p.y
+
+        enum Color
+          Red
+          Green
+          Blue
+
+        def main:
+          let r = Color.Red
+          if r is 
+            Red:
+              print("Red!")
+            Green:
+              print("gren")
+            _: 
+              print("some other color")
+            
+        MISMO
+      type_env = type_check_program(program, :debug)
+      point = type_env.user_types["Point"].as(StructBase)
+      check_me_func = type_env.functions["check_me"][0]
+      check_me_func.return_type.should eq(Type.int)
+      param = check_me_func.parameters[0]
+      param.mode.should eq(Mode::Let)
+      param.name.should eq("self")
+      param.type.should eq(Type.struct(point))
+      check_me_func.parameters.should eq(
+        [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
     end
   end
 end
@@ -418,53 +460,6 @@ describe TypeEnv do
 
   describe "#fill_out_type_info" do
     it "fills out type info for structs and enum variants" do
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
       program = <<-MISMO
         struct IntPoint
            var x Int

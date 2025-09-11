@@ -1,5 +1,5 @@
 require "./spec_helper"
-require "../src/tokens"
+# require "../src/tokens"
 
 describe Token do
 

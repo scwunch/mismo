@@ -44,7 +44,27 @@ describe Interpreter do
           def /(other Nat) Rational:
             Rational(.numerator, .denominator * other)
         MISMO
-      Interpreter.run(program, :debug).should eq(Val.new(25))
+      Interpreter.run(program).should eq(Val.new(25))
+    end
+
+    it "pattern matching" do
+      program = <<-MISMO
+        enum Color
+          Red
+          Green
+          Blue
+
+        def main String:
+          let r = Color.Blue
+          if r is 
+            Green:
+              "gren"
+            Red:
+              "Red!"
+            _: 
+              "some other color"
+        MISMO
+      Interpreter.run(program).should eq(Val.new("some other color"))
     end
   end
 end

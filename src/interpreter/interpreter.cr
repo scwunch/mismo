@@ -1,8 +1,8 @@
-require "./hir_nodes"
-require "./ast_nodes"
-require "./types"
-require "./type_checker"
-require "./type_env"
+require "../type_checker/hir_nodes"
+require "../ast/ast_nodes"
+require "../type_checker/types"
+require "../type_checker/type_checker"
+require "../type_checker/type_env"
 
 class Interpreter
   property types = {} of String => TypeInfo
@@ -78,6 +78,8 @@ class Interpreter
         frame.variables[hir.name] = eval(val)
       end
       Val.nil
+    when Hir::TempVar
+      frame.temps[hir.id]
     when Hir::Tuple
       Val.new(Slice.new(hir.elements.size) do |i|
         eval(hir.elements[i])
@@ -109,6 +111,8 @@ class Interpreter
       end
     when Hir::Native
       hir.thunk.call(self)
+    when Hir::If
+      try_conditionals(hir.tests_and_bindings) || Val.nil
     else
       log.error(hir.location, "unhandled hir type: #{hir.inspect}")
       Val.nil
@@ -117,6 +121,39 @@ class Interpreter
 
   def eval(hir_cell : Cell(Hir)) : Val
     eval(hir_cell.value)
+  end
+
+  def try_conditionals(conditionals : Array(Hir::TestOrBinding)) : Val?
+    conditionals.each do |test_or_binding|
+      case test_or_binding
+      when Hir::Test
+        if eval(test_or_binding.expr).data.as(Bool)
+          case cons = test_or_binding.@consequent_or_additional_conditions
+          in Hir
+            return eval(cons)
+          in Array(Hir::TestOrBinding)
+            if result = try_conditionals(cons)
+              return result
+            end
+          end
+        end
+      when Hir::BindTemp
+        while frame.temps.size <= test_or_binding.id
+          frame.temps << Val.nil
+        end
+        frame.temps[test_or_binding.id] = eval(test_or_binding.value)
+      when Hir::MatchBlock
+        val = eval(test_or_binding.value)
+        discriminant = val.data.as(Slice(Val)).first.data.as(Int32)
+        cons = test_or_binding.jump_table[discriminant]?
+        return eval(cons) if cons
+        cons = test_or_binding.jump_table.last?
+        return eval(cons) if cons
+      when Hir::Else
+        return eval(test_or_binding.consequent)
+      end
+    end
+    nil
   end
 
   # alias Value = UInt32 | Slice(Value)
@@ -202,6 +239,7 @@ class StackFrame
   property function : FunctionBase
   property generics : Slice(Type)
   property variables : Hash(String, Val) = {} of String => Val
+  property temps : Array(Val) = [] of Val
 
   def initialize(@function : FunctionBase, @generics : Slice(Type), @variables : Hash(String, Val))
   end

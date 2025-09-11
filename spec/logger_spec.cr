@@ -1,5 +1,5 @@
 require "./spec_helper"
-require "../src/logger"
+# require "../src/logger"
 
 describe Logger do
   describe "#debug" do

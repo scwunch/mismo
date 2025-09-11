@@ -1,8 +1,8 @@
-require "./hir_nodes"
-require "./ast_nodes"
-require "./types"
-require "./type_checker"
-require "./builtins"
+require "../type_checker/hir_nodes"
+require "../ast/ast_nodes"
+require "../type_checker/types"
+require "../type_checker/type_checker"
+require "../prelude/builtins"
 
 # This enum is used instead of simple booleans for checking trait implementations
 # There are cases in which checking that a type implements a trait requires its own
@@ -327,10 +327,35 @@ class TypeEnv
           when Ast::Enum
             enum_base = user_types[item.name].as(EnumBase)
             item.variants.each do |variant|
+              discriminant = Val.new(enum_base.variants.size)
               enum_base.variants << 
                 Variant.new(variant.location, variant.name, variant.fields.try &.map { |field_name, field_type| 
                   Field.new(field_type.location, Binding::Var, field_name, context.eval(field_type)) 
                 } || [] of Field)
+              upsert(FunctionBase.new(
+                variant.location, 
+                "#{item.name}.#{variant.name}", 
+                context.type_parameters,
+                variant.fields.try &.map do |field_name, field_type|
+                  Parameter.new(field_type.location, Mode::Move, field_name, context.eval(field_type))
+                end || [] of Parameter,
+                Type.enum(enum_base, context.type_args),
+                if fields = variant.fields
+                  ->(interpreter : Interpreter) {
+                    Val.new(Slice(Val).new(fields.size + 1) do |i|
+                      if i == 0
+                        discriminant
+                      else
+                        interpreter.frame.variables[fields[i-1].first]
+                      end
+                    end)
+                  }
+                else
+                  ->(interpreter : Interpreter) {
+                    Val.new(Slice[discriminant])
+                  }
+                end
+              ))
             end
           when Ast::Function
             # merely validate the types of the parameters that are already there

@@ -1,6 +1,6 @@
 require "./type_checker"
-require "./parser"
-require "./lexer"
+# require "./parser"
+# require "./lexer"
 
 def parser(
     source : String, 

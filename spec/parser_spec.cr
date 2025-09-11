@@ -1,6 +1,6 @@
 require "./spec_helper"
-require "../src/parser"
-require "../src/lexer"
+# require "../src/parser"
+# require "../src/lexer"
 
 def parser(
     source : String, 

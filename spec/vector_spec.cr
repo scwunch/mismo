@@ -1,5 +1,5 @@
 require "./spec_helper"
-require "../src/vector"
+require "../src/utils/vector"
 
 describe Vector do
   it "works" do

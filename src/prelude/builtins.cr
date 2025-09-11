@@ -1,5 +1,5 @@
-require "./interpreter"
-require "./types"
+require "../interpreter/interpreter"
+require "../type_checker/types"
 
 def loc
   Location.zero
@@ -10,6 +10,16 @@ BUILTINS = [
     "print", 
     Slice[TypeParameter.new(loc, "T")], 
     [Parameter.new(loc, Mode::Let, "value", Type.var(0))],
+    Type.nil,
+    ->(interpreter : Interpreter) {
+      p interpreter.frame.variables["value"].data
+      Val.nil
+    }
+  ),
+
+  FunctionBase.new(
+    "print",
+    [Parameter.new(loc, Mode::Let, "value", Type.string)],
     Type.nil,
     ->(interpreter : Interpreter) {
       p interpreter.frame.variables["value"].data

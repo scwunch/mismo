@@ -1,5 +1,5 @@
 require "./spec_helper"
-require "../src/ast_nodes"
+# require "../src/ast_nodes"
 
 def loc(line, column)
   Location.new(line, column)

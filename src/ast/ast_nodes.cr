@@ -1,10 +1,13 @@
-require "./mode_convention"
-require "./tokens"
-require "./cell"
-require "./abstract_node"
+require "../ast/mode_convention"
+require "../ast/tokens"
+require "../utils/cell"
+require "../ast/abstract_node"
 
 module Ast
   abstract struct Expr < IrNode
+    def branching? : Bool
+      false
+    end
   end
 
   struct Nil < Expr
@@ -380,6 +383,9 @@ module Ast
       @variable = Cell.new(variable.as(Expr))
       @collection = Cell.new(collection.as(Expr))
     end
+    def branching? : Bool
+      true
+    end
     def to_s(io : IO)
       io << "for #{variable} in #{collection}\n#{body}\nend"
     end
@@ -392,6 +398,9 @@ module Ast
     end
     def initialize(@location : Location, condition : Expr, @body : ::Array(Expr))
       @condition = Cell.new(condition.as(Expr))
+    end
+    def branching? : Bool
+      true
     end
     def to_s(io : IO)
       io << "while #{condition}\n#{body}\nend"
@@ -488,6 +497,9 @@ module Ast
     property location : Location
     property conditionals : ::Array(Condition)
     def initialize(@location : Location, @conditionals : ::Array(Condition))
+    end
+    def branching? : Bool
+      true
     end
     def to_s(io : IO)
       io << "if "

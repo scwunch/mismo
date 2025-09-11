@@ -1,5 +1,5 @@
 require "./tokens"
-require "./logger"
+require "../utils/logger"
 
 class Lexer
   getter reader : Reader
