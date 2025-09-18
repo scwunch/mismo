@@ -102,10 +102,29 @@ class Logger
   def_log Info
   def_log Warning
   def_log Error
+
+  def contains?(str : String)
+    case test_out = @out
+    when TestOut
+      buf = test_out.@buffer
+      String.new(buf.to_unsafe, buf.size).includes?(str)
+    else
+      raise TypeCastError.new("Logger#contains? called on non-TestOut IO")
+    end
+  end
 end
 
-# """
-# │ > 13:3 eval_type_params_and_trait_claims == (context=TypeContext(type_args: T0, scope: #<TypeScope:0x7b3faf34c360>))
-# 🛈 > :  Check trait implementations (1)
-# │ > 12:1 Assume Int implements 
-# """
+class TestOut < IO
+  @buffer : Array(UInt8) = [] of UInt8
+  @out : IO = STDOUT
+  def self.silent : TestOut
+    TestOut.new(IO::Null)
+  end
+  def read(slice : Bytes)
+    @out.read(slice)
+  end
+  def write(slice : Bytes) : Nil
+    @buffer.concat(slice)
+    @out.write(slice)
+  end
+end

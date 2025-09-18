@@ -340,37 +340,6 @@ describe Lexer do
         lexer.next.should eq(token)
       end
     end
-    # it "lexes newlines as commas in ParserContext::List" do
-    #   code = <<-MISMO
-    #     [
-    #       T
-    #       U
-    #     ]
-    #     (
-    #       x Int
-    #       y Float
-    #     )
-    #     MISMO
-    #   lexer = Lexer.new(code, LOG_LEVEL)
-    #   [
-    #     Token.lbracket({1, 1}),
-    #     Token.type({2, 3}, "T"),
-    #     Token.comma({2, 4}),
-    #     Token.type({3, 3}, "U"),
-    #     Token.rbracket({4, 1}),
-    #     Token.comma({4, 2}),  # newline between groups interpreted as comma
-    #                           # because all `next` calls are with ParserContext::List
-    #     Token.lparen({5, 1}),
-    #     Token.variable({6, 3}, "x"),
-    #     Token.type({6, 5}, "Int"),
-    #     Token.comma({6, 8}),
-    #     Token.variable({7, 3}, "y"),
-    #     Token.type({7, 5}, "Float"),
-    #     Token.rparen({8, 1})
-    #   ].each do |token|
-    #     lexer.next.should eq(token)
-    #   end
-    # end
   end
 
   describe "#parse_path" do

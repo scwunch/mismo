@@ -227,29 +227,6 @@ enum KeyWord
     end
   end
 
-  # macro parse?(str, ctx)
-  #   {% if ctx == :block %}
-  #     KeyWord.parse_in_block?({{str}})
-  #   {% elsif ctx == :top_level %}
-  #     KeyWord.parse_top_level?({{str}})
-  #   {% else %}
-  #     {% raise "KeyWord.parse? expects :block or :top_level context" %}
-  #   {% end %}
-  # end
-
-  def self.parse?(str : String, ctx : ParserContext)
-    case ctx
-    in ParserContext::Block, ParserContext::List
-      parse_in_block?(str)
-    in ParserContext::TopLevel
-      parse_top_level?(str)
-    end
-  end
-
-  def self.parse?(arg) : Never
-    raise "KeyWord.parse? expects 2 arguments: String and one of :block or :top_level context.  (Got `KeyWord.parse?(#{arg})`)"
-  end
-
   def self.parse_top_level?(str : String)
     case str
     when "import" then Import

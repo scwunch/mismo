@@ -19,7 +19,7 @@ class Lexer
     getter text : String
     getter idx : UInt32 = 0_u32
     getter line : UInt32 = 1_u32
-    getter col : UInt32 = 1_u32 # Represents column *before* processing char at @idx, 1-based for new lines
+    getter col : UInt32 = 1_u32  # Represents column *before* processing char at @idx, 1-based for new lines
 
     def initialize(@text : String)
     end
@@ -64,16 +64,18 @@ class Lexer
       @idx >= @text.size
     end
 
+    # Efficiently check if the substring matches
     def peek_str?(str_to_match) : Bool
       return false if @idx + str_to_match.bytesize > @text.bytesize
-      # Efficiently check if the substring matches
       @text.unsafe_byte_slice(@idx, str_to_match.bytesize) == str_to_match.unsafe_byte_slice(0)
     end
 
+    # Get sub-string via unsafe_byte_slice
     def peek_str!(count) : String
       @text.unsafe_byte_slice(@idx, count).to_s
     end
 
+    # Get sub-string
     def peek_str(count) : String
       if count < 0
         @text[@idx + count, @idx]
@@ -115,7 +117,6 @@ class Lexer
       when ','
         push_token(Token.comma(loc))
         @reader.next
-        # skip_whitespace_and_comments if context == ParserContext::List
       when ';'
         push_token(Token.semicolon(loc))
         # skip_whitespace_and_comments
@@ -174,14 +175,6 @@ class Lexer
           else
             push_token(Token.newline(loc, 0))
           end
-          # stupidly complex logic to determine whether to emit a newline or EOF
-          # if context == ParserContext::TopLevel || (@current_token.is_a?(Token::Newline) && @current_token.data == 0)
-          #   push_token(Token.eof(loc))
-          # elsif @current_token.is_a?(Token::EOF)
-          #   nil
-          # else
-          #   push_token(Token.newline(loc, 0))
-          # end
         end
       else
         push_token(Token.error(loc, "unrecognized character: '#{@reader.next}'"))
@@ -233,40 +226,6 @@ class Lexer
       end
     end
   end
-
-  # def handle_newline(loc : Location, context : ParserContext)
-  #   # case context
-  #   # in ParserContext::TopLevel
-  #   #   skip_whitespace_and_comments
-  #   #   self.next(context)
-  #   # in ParserContext::Block
-  #   #   push_newline
-  #   # in ParserContext::List
-  #   #   # newline is emitted as comma in List context
-  #   #   # ONLY if it is not a leading or trailing 'comma'
-  #   #   skip_whitespace_and_comments
-  #   #   if @current_token.is_a?(Token::LParen | Token::LBracket | Token::LBrace)
-  #   #     @log.debug(loc, "skipped whitespace after #{@current_token.class}")
-  #   #     return self.next(context)
-  #   #   end
-  #   #   case @reader.peek
-  #   #   when ']'
-  #   #     push_token(Token.rbracket(@reader.location))
-  #   #   when ')'
-  #   #     push_token(Token.rparen(@reader.location))
-  #   #   when '}'
-  #   #     push_token(Token.rbrace(@reader.location))
-  #   #   when ','
-  #   #     push_token(Token.comma(@reader.location))
-  #   #   else
-  #   #     @log.debug(loc, "emitting newline as comma")
-  #   #     push_token(Token.comma(loc))
-  #   #     return
-  #   #   end
-  #   #   @log.debug(loc, "(skipped trailing newline/comma)")
-  #   #   @reader.next
-  #   # end
-  # end
 
   # handle the tokenization of a given word at the given location
   def push_word(loc : Location, word : String)
@@ -508,30 +467,6 @@ class Lexer
     end
   end
 
-  # these three helper functions are all deprecated because the 
-  # logic for reading function names has been moved to the parser
-    # def is_alphanumeric?(char : Char) : Bool
-      # char.alphanumeric? || char == '_'
-    # end
-
-    # def is_operator_char?(char : Char) : Bool
-      # case char
-      # when '~', '!', '@', '#', '$', '%', '^', '&', '*', '+', '-', '/', '?', '<', '>', '|', '='
-      #   true
-      # else
-      #   false
-      # end
-    # end
-
-    # def prev_tok_kind : Token.class
-      # if tok = @current_token
-      #   tok.class
-      # else
-      #   Token::BeginFile
-      # end
-    # end
-
-  #
   # parse_import is called when the reader encounters an "import" keyword
   # at the top level.  It parses the import statement and sends it to the 
   # compiler directly without the need for a separate parser.

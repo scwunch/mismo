@@ -24,10 +24,6 @@ end
 module TokenNavigation
   @index = 0_u32
   @tokens : Array(Token)
-  # Peeks at the current token without consuming
-  # def peek : Token
-  #   @peeked ||= @lexer.next
-  # end
 
   # Peeks at the current token without consuming
   def peek : Token
@@ -41,28 +37,15 @@ module TokenNavigation
   # Consumes the current token and returns it. Advances the index.
   # Returns the last token if already at EOF to prevent errors on multiple calls.
   def next_token : Token
-    tok = @tokens[@index]
-    if tok.is_a?(Token::Newline)
+    case tok = @tokens[@index]?
+    when Nil
+      return Token.eof(Location.zero)
+    when Token::Newline
       @current_line_indent = tok.data
     end
     @index += 1
     tok
-  rescue
-    peek
   end
-
-  # def next_token_in_stream : Token
-  #   if tok = @peeked  # tok = @peeked.as(Token)
-  #     @peeked = nil
-  #   else
-  #     tok = @lexer.next
-  #   end
-  #   if tok.is_a?(Token::Newline)
-  #     @current_line_indent = tok.data
-  #   end
-  #   tok
-  # end
-
 
   # Checks if the parser has reached the end of the token stream.
   def eof? : Bool
@@ -82,11 +65,6 @@ module TokenNavigation
       else 
         nil  # Not a convention keyword
       end
-    # If these are lexed as VariableName tokens but act as conventions:
-    # elsif tok.is_a?(Token::Variable)
-    #   mode = Mode.from_string?(tok.data)  
-    #   next_token if mode
-    #   mode
     else
       nil # No convention keyword found
     end
@@ -231,8 +209,6 @@ module TokenNavigation
   def skip_newline_unless_block_end?(block_indent : UInt32, raise_on_outdent : String? = nil) : Bool
     if (tok = peek).is_a?(Token::Newline)
       if tok.data <= block_indent
-        # TODO: this is coupled too tightly to the lexer, might be fragile
-        # unless @lexer.reader.peek.in?(']', '}', ')') || @lexer.reader.peek_str?("else ")
         unless peek2.class.in?(Token::RBracket, Token::RBrace, Token::RParen, Token::Else)
           if raise_on_outdent
             raise report_error(tok.location, raise_on_outdent)
@@ -268,8 +244,6 @@ module TokenNavigation
     when Token::Comma
       next_token
       if (newline = peek).is_a?(Token::Newline)
-        # TODO: this is coupled too tightly to the lexer, might be fragile
-        # if @lexer.reader.peek.in?(']', ')')
         if peek2.class.in?(Token::RBracket, Token::RParen)
           next_token  # consume newline after trailing comma
           return nil  # trailing comma, end of list
@@ -390,78 +364,6 @@ module TopLevelItemParser
       end
     end
   end
-  #region Function Parsing
-  # --- #region Function Parsing ---
-  # Handles top-level function declarations.
-  # Examples: 
-    # ```
-    # def foo:
-    #   1 + 1 
-    # 
-    # def bar(a Int, b Int):
-    #   a + b
-    # 
-    # def baz[T]
-    #   (a String, b T):
-    #     a + b
-    # 
-    #   (x T):
-    #     x
-    # 
-    # def quz
-    #   [T Stringable](a T) String:
-    #     a.String + " string"
-    # 
-    #   [U Intable]
-    #     (a Int, b U) Int:
-    #       a + b.Int
-    #     (a Float, b U) Int:
-    #       a.Int + b.Int
-    # 
-    #   (a String) String:
-    #     a + "string"
-    # ```
-  # Adds Ast::Function nodes directly to @declarations.
-  # def parse_def_block(loc : Location)
-    # block_indent = loc.indent
-    # type_params = parse_type_parameters?
-    # if consume_indent?(block_indent)
-    #   log.debug_descend(loc, "Parsing multi-function block...") do
-    #     while true
-    #       parse_def_overloads(loc, consume_identifier("function name"), type_params)
-    #       break if skip_newline_unless_block_end?(block_indent)
-    #     end
-    #   end
-    # else
-    #   function_name = consume_identifier("function name")
-    #   log.debug_descend(loc, "Parsing function block for '#{function_name}'") do
-    #     parse_def_overloads(loc, function_name, type_params)
-    #   end
-    # end
-    # nil
-  # end
-
-  # def parse_def_block(def_loc : Location)
-    # top_type_params = parse_type_parameters?
-    # tree_branch(def_loc) do |is_branch|
-    #   name_loc = is_branch ? peek.location : def_loc
-    #   function_name = consume_identifier("function name")
-    #   tree_branch(name_loc) do |is_branch|
-    #     type_params_loc = is_branch ? peek.location : name_loc
-    #     type_params = parse_type_parameters?(top_type_params)
-    #     tree_branch(type_params_loc) do |is_branch|
-    #       sig_loc = is_branch ? peek.location : type_params_loc
-    #       sig = parse_signature(sig_loc, type_params)
-    #       # block = peek.is_a?(Token::Colon) ? parse_colon_and_block(loc.indent) : nil
-    #       block = parse_colon_and_block(sig_loc.indent)
-    #       func = Ast::Function.new(sig_loc, function_name, sig, block)
-    #       log.info(sig_loc, "parsed #{func}")
-    #       @declarations << func
-    #     end
-    #   end
-    # end
-    # nil
-  # end
 
   def parse_def_block(
     def_loc : Location, 
@@ -496,47 +398,6 @@ module TopLevelItemParser
       end
     end
   end
-
-
-  # This is called when the parser has already parsed a `def foo` and is now parsing the overloads
-  # yield type: {Signature, Ast::Block?}
-  # def parse_def_overloads(loc : Location, name : String, inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty, receiver : Ast::Parameter? = nil, trait_method_array : Slice(Ast::AbstractMethod) = Slice(Ast::AbstractMethod).empty)
-    # block_indent = loc.indent
-    # log.debug(loc, "parse_def_overloads: block_indent=#{block_indent}")
-    # loc = peek.location
-    # type_params = parse_type_parameters?(inherited_type_params)
-    # if consume_indent?(block_indent)
-    #   loc = peek.location
-    #   log.debug_descend(loc, "Parsing multiple def overloads for '#{name}'") do
-    #     while true
-    #       parse_def_overloads(loc, name, type_params, receiver, trait_method_array)
-    #       break if skip_newline_unless_block_end?(block_indent)
-    #     end
-    #   end
-    # else
-    #   log.debug_descend(loc, "Parsing a def for '#{name}'") do
-    #     sig = parse_signature(peek.location, type_params, receiver)
-    #     if trait_method_array
-    #       block = peek.is_a?(Token::Colon) ? parse_colon_and_block(block_indent) : nil
-    #       trait_method_array << Ast::AbstractMethod.new(loc, name, sig, block)
-    #     else
-    #       @declarations << Ast::Function.new(loc, name, sig, parse_colon_and_block(block_indent))
-    #     end
-    #     # block = peek.is_a?(Token::Colon) ? parse_colon_and_block(block_indent) : nil
-    #     # if peek.is_a?(Token::Colon)
-    #     #   proc.call(sig, parse_colon_and_block(block_indent))
-    #     # else
-    #     #   proc.call(sig, nil)
-    #     # end
-    #     # consume?(Token::Newline) || report_error(peek.location, "Expected newline after function body")
-    #     # @functions << Ast::Function.new(loc, name, sig, body)
-    #   end
-    # end
-  # end
-
-  # def parse_def_overloads(loc : Location, receiver : Ast::Parameter? = nil)
-    
-  # end
 
   def parse_signature(sig_loc : Location, 
                       inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty,
@@ -1193,12 +1054,6 @@ struct ExpressionParser < SubParser
       tok.data <= expression_indent
     else
       case {stop, tok}
-      # when {StopAt::BooleanOperator, Token::Operator}
-      #   tok.data.compares?
-      # when {StopAt::ColonOrAnd, Token::Colon}
-      #   true
-      # when {StopAt::ColonOrAnd, Token::Operator}
-      #   tok.data == Operator::And
       when {StopAt::UcsBranch, _}
         if (tok.ucs_branch_token? && (newline_tok = peek2).is_a?(Token::Newline)) ||
           (peek2.ucs_branch_token? && (newline_tok = tok).is_a?(Token::Newline))
@@ -1385,12 +1240,13 @@ struct ExpressionParser < SubParser
   end
 
   def handle_type(loc : Location, type : String)
+    type_node = Ast::Type.new(loc, type, parser.parse_type_args?)
     if consume?(Token::Dot)
       log.debug(loc, "static method")
       name = consume_identifier
-      Ast::StaticCall.new(loc, type, function_call(loc, name))
+      Ast::StaticCall.new(loc, type_node, function_call(loc, name))
     else
-      function_call(loc, type)
+      Ast::Constructor.new(loc, type_node, parse_args)
     end
   end
   

@@ -2,33 +2,6 @@ require "./spec_helper"
 # require "../src/parser"
 # require "../src/lexer"
 
-def parser(
-    source : String, 
-    level : Logger::Level = Logger::Level::Warning)
-  parser(nil, source, level)
-end
-def parser(
-    file : (String | Nil),
-    source : String, 
-    level : Logger::Level = Logger::Level::Warning)
-  logger = Logger.new(level, file_path: file)
-  lexer = Lexer.new(
-    Lexer::Reader.new(source), 
-    if level == Logger::Level::Debug
-      Logger.new(Logger::Level::Info)
-    else
-      logger
-    end
-  )
-  Parser.new(lexer, logger)
-end
-
-def loc(line, column)
-  Location.new(line, column)
-end
-def loc 
-  Location.zero
-end
 
 describe Parser do
   describe "#consume?" do
@@ -53,17 +26,6 @@ describe Parser do
       parser.consume?(Token::Newline).should_not be_nil
       parser.eof?.should be_true
     end
-    # it "works the same way, but ignoring newlines when context is ParserContext::TopLevel" do
-    #   parser = parser("\nx\n:=\ndef")
-    #   parser.consume?(KeyWord::Struct).should be_nil
-    #   parser.consume?(Token::Newline).should be_nil  # newlines are not emitted at top level
-    #   parser.consume?("x").should eq(Token.variable({2,1}, "x"))
-    #   parser.consume?("x").should be_nil
-    #   parser.consume?(Operator::Assign).should eq(Token.operator({3, 1}, Operator::Assign))
-    #   parser.consume?(KeyWord::Def).should eq(Token.keyword({4, 1}, KeyWord::Def))
-    #   parser.consume?(Token::Newline).should be_nil
-    #   parser.eof?.should be_true
-    # end
   end
 
   describe "#parse_constraints" do
@@ -1121,17 +1083,6 @@ describe Parser do
   end
 end
 
-def expression_parser(test_name : String, code : String, level : Logger::Level = Logger::Level::Warning)
-  ExpressionParser.new(parser(test_name, code, level))
-end
-def expression_parser(code : String, level : Logger::Level = Logger::Level::Warning)
-  ExpressionParser.new(
-    parser: parser(code, level),
-    # expression_indent: 2,
-    # line_indent: 2,
-    # stop: StopAt::Normal
-  )
-end
 describe ExpressionParser do
   it "parses a simple binary expression" do
     parser = expression_parser("1 + 2")
@@ -1237,6 +1188,9 @@ describe ExpressionParser do
       Operator::Assign,
       Ast::Int.new(loc, 3)
     ))
+    parser.log.contains?(
+      "Relative precedence not defined between + [left] and = [right].  Disambiguate with parentheses."
+    ).should be_true
   end
   it "parses parentheses" do
     parser = expression_parser("(1 + 2) * 3")
@@ -1253,11 +1207,20 @@ describe ExpressionParser do
   it "parses static method calls" do
     expression_parser("Pointer.alloc[T](cap)").parse.should eq(Ast::StaticCall.new(
       loc,
-      "Pointer",
+      Ast::Type.new(loc, "Pointer"),
       Ast::Call.new(
         loc,
         "alloc",
         Slice[Ast::Type.new(loc, "T")],
+        [Ast::Identifier.new(loc, "cap").as(Ast::Expr)]
+      )
+    ))
+    expression_parser("Pointer[T].alloc(cap)").parse.should eq(Ast::StaticCall.new(
+      loc,
+      Ast::Type.new(loc, "Pointer", [Ast::Type.new(loc, "T")]),
+      Ast::Call.new(
+        loc,
+        "alloc",
         [Ast::Identifier.new(loc, "cap").as(Ast::Expr)]
       )
     ))
@@ -1541,7 +1504,7 @@ describe UcsParser do
               else: r4
           -- the last three should all parse identically
         MISMO
-      parser = parser("ucs else conditions", program, :debug)
+      parser = parser("ucs else conditions", program)
       items = parser.parse
       items.size.should eq(1)
       main = items[0]

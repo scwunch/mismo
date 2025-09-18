@@ -342,16 +342,26 @@ module Ast
     end
   end
 
-  struct StaticCall < Expr
+  struct Constructor < Expr
     property location : Location
-    @namespace : ::String
-    property call : Call
-    def namespace; @namespace end
-    def type; @namespace end
-    def initialize(@location : Location, @namespace : ::String, @call : Call)
+    property type : Type
+    property args : Args
+    def initialize(@location : Location, @type : Type, @args : Args)
     end
     def to_s(io : IO)
-      io << "#{namespace}."
+      io << "#{type}"
+      io << "(#{args.join(", ")})"
+    end
+  end
+
+  struct StaticCall < Expr
+    property location : Location
+    property type : Type
+    property call : Call
+    def initialize(@location : Location, @type : Type, @call : Call)
+    end
+    def to_s(io : IO)
+      io << "#{type}."
       call.to_s(io)
     end
   end
@@ -543,7 +553,6 @@ module Ast
     property location : Location
     property consequent : Expr
     def initialize(@location, @consequent)
-      p! @consequent
     end
     def to_s(io : IO)
       io << "else: #{consequent}"

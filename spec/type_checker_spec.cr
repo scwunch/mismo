@@ -5,51 +5,6 @@ require "../src/type_checker/*"
 require "../src/ast/*"
 # require "../src/lexer"
 
-macro not_nil!(prop)
-  {{ prop }}.should_not be_nil
-  raise "" unless {{prop}}
-end
-
-def parser(source : String, level : Logger::Level = Logger::Level::Warning)
-  parser(nil, source, level)
-end
-def parser(
-    file : (String | Nil),
-    source : String, 
-    level : Logger::Level = Logger::Level::Warning)
-  logger = Logger.new(level, file_path: file)
-  lexer = Lexer.new(
-    Lexer::Reader.new(source), 
-    if level == Logger::Level::Debug
-      Logger.new(Logger::Level::Info)
-    else
-      Logger.new(Logger::Level::Warning)
-    end
-  )
-  Parser.new(lexer, logger)
-end
-
-def loc(line, column)
-  Location.new(line, column)
-end
-def loc 
-  Location.zero
-end
-
-def type_env(level : Logger::Level = Logger::Level::Warning)
-  TypeEnv.new(Logger.new(level))
-end
-def type_checker(level : Logger::Level = Logger::Level::Warning)
-  TypeContext.new(type_env(level))
-end
-def type_check_program(code : String, level : Logger::Level = Logger::Level::Warning)
-  parser = Parser.new(code)
-  items = parser.parse
-  parser.log.level = level
-  type_env = TypeEnv.new(parser.log)
-  type_env.type_check_program(items)
-  type_env
-end
 
 describe TypeContext do
   describe "#type_check" do
