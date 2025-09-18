@@ -552,10 +552,12 @@ module TypeChecker
       end
     when Ast::Call
       function_call(ast.location, ast.method, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
+    when Ast::Constructor
+      function_call(ast.location, ast.type.name, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
     when Ast::StaticCall
       function_call(
         ast.location, 
-        "#{ast.namespace}.#{ast.call.method}", 
+        "#{ast.type}.#{ast.call.method}", 
         ast.call.args.try &.map(&->infer(Ast::Expr)) || [] of Hir
       )
     when Ast::Var
@@ -654,6 +656,7 @@ module TypeChecker
       var = scope.let(lhs.location, lhs.name, rhs)
       Hir::Assign.new(lhs.location, var, rhs)
     when Ast::Call
+      # set property
       if (ast = lhs.receiver?) && lhs.count_args == 1
         object = infer(ast)
         if !object.mutable?

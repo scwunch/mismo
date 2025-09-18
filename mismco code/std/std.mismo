@@ -24,6 +24,11 @@ struct Array[T]
   def mut get(index: UInt): mut T
     _buffer.deref_mut(index)
 
+  def slice(start: UInt, end: UInt) -> let Array[T]:
+    Array(._buffer + start, end - start, ._cap - start)
+
+  def slice(start UInt, end UInt) -> self.Array[T]:
+
 struct Array[T]
   var _buffer: Pointer[T]
   var _len: UInt
@@ -33,7 +38,7 @@ struct Array[T]
     len UInt: _len
     cap UInt: _cap
 
-    opt(index: UInt): let Option[let T]
+    opt(index: UInt) -> let Option[let T]
       if index < _len:
         Option.Some(_buffer.deref(index))
       else:
@@ -122,6 +127,45 @@ impl[T] Iterator[ArrayIterator[T], T]
     self.next
 
 
+trait BitwiseCopy is ImplicitCopy
+  """
+  Automatically applied to types that can safely be copied by 
+  simply copying their bits.  Such types are implicitly copied when assigned
+  to variables or passed to functions.
+
+  Only primitive types and types containing only primitive types can implement
+  BitwiseCopy.
+  """
+
+Nil is BitwiseCopy
+Bool is BitwiseCopy
+Int is BitwiseCopy
+Float is BitwiseCopy
+UInt is BitwiseCopy
+Pointer[T] is BitwiseCopy
+
+
+trait ImplicitCopy is Clone
+  """
+  For types that can be trivially cloned/copied.  `box` types and types that contain
+  `box` fields are not allowed to implement ImplicitCopy.  ImplicitCopy also requires
+  that all fields implement ImplicitCopy.
+
+  All copyable fields are copied, and all `ref`s are cloned.
+  """
+  def clone(self) Self: self
+  
+
+
+struct Array[T]
+  def slice(start: UInt, end: UInt) -> Array[T]:
+    Array()
+
+
+
+
+
+
 def need_iterator[I: Iterator[T], T](iter: I) -> T
   iter.next.or_panic("iterator is empty")
 
@@ -193,76 +237,4 @@ send: var/ref
 
 
 
-
--- 100 doors
-fn main:
-  var doors = Array[Bool].new(100)
-  for pass in 1..=100:
-    for door in 1..=100:
-      if door % pass == 0:
-        doors.set(door - 1, not doors.get(door - 1))
-  print(doors)
-    
-
-
-
-
-
-
-
-
-
-
--- Intersecting Number Wheels
-fn main:
-  var wheels = get_input
-    .split('\n')
-    .map(line => Wheel(line))
-  for n in 1..=20:
-    print(wheels.get(0).next(wheels))
-  
-struct Wheel
-  var name: Char
-  var spokes: Array[Spoke]
-  var index: UInt = 0
-
-  constructor(text String):
-    name = text.get(0)
-    var i UInt
-    for i in 2..text.count:
-      if text.get(i).is_whitespace: 
-        break
-
-    spokes = (i..text.count)
-      .map(char => Spoke(char))
-      .to_array
-
-  fn next(wheels: Array[Wheel]) UInt:
-    if spokes.get(
-      index = (index + 1) % spokes.count
-    ) is
-      Spoke.Number(num):
-        num
-      Spoke.Name(name):
-        wheels.get(name).next(wheels)
-      
-
-enum Spoke
-  Number(UInt)
-  Name(Char)
-
-  constructor(char Char): self = 
-    if char.is_digit:
-      Spoke.Number(char.UInt)
-    else:
-      Spoke.Name(char)
-    
-
-extend Array[Wheel]
-  fn get(char Char): Option[Wheel]
-    for wheel in self:
-      if wheel.name == char:
-        return Option.Some(wheel)
-    Option.None
-    
 
