@@ -103,28 +103,59 @@ class Logger
   def_log Warning
   def_log Error
 
-  def contains?(str : String)
+  # def contains?(str : String)
+  #   case test_out = @out
+  #   when TestOut
+  #     buf = test_out.@buffer
+  #     String.new(buf.to_unsafe, buf.size).includes?(str)
+  #   else
+  #     raise TypeCastError.new("Logger#contains? called on non-TestOut IO")
+  #   end
+  # end
+
+  def expect(str)
     case test_out = @out
     when TestOut
-      buf = test_out.@buffer
-      String.new(buf.to_unsafe, buf.size).includes?(str)
+      test_out.expect(str)
     else
-      raise TypeCastError.new("Logger#contains? called on non-TestOut IO")
+      raise TypeCastError.new("Logger#expect called on non-TestOut IO")
+    end
+  end
+
+  def check_expectations_empty
+    case test_out = @out
+    when TestOut
+      test_out.@expecting.should be_empty
+    else
+      raise TypeCastError.new("Logger#check_expectations_empty called on non-TestOut IO")
     end
   end
 end
 
 class TestOut < IO
-  @buffer : Array(UInt8) = [] of UInt8
+  # @buffer : Array(UInt8) = [] of UInt8
+  @expecting : Array(String) = [] of String
   @out : IO = STDOUT
   def self.silent : TestOut
     TestOut.new(IO::Null)
   end
+
+  # add a substring to expect to the end of the queue
+  def expect(str : String)
+    @expecting << str
+  end
+
   def read(slice : Bytes)
     @out.read(slice)
   end
+
+  # if output matches the next expectation in the queue, remove it
+  # otherwise, forward to @out
   def write(slice : Bytes) : Nil
-    @buffer.concat(slice)
-    @out.write(slice)
+    if !@expecting.empty? && String.new(slice.to_unsafe, slice.size).includes?(@expecting.first)
+      @expecting.shift
+    else
+      @out.write(slice)
+    end
   end
 end

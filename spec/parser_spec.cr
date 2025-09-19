@@ -1124,7 +1124,10 @@ describe ExpressionParser do
         1 + foo = 3  -- this should raise an error
       MISMO
     parser = expression_parser("op-precedence", code)
-    # p parser.parse.to_s
+    parser.log.expect(
+      "Relative precedence not defined between + [left] and = [right].  Disambiguate with parentheses."
+    )
+
     parser.parse.should eq(Ast::Binop.new(
       Ast::NotNode.new(loc, Ast::Identifier.new(loc, "this")),
       Operator::And,
@@ -1188,9 +1191,7 @@ describe ExpressionParser do
       Operator::Assign,
       Ast::Int.new(loc, 3)
     ))
-    parser.log.contains?(
-      "Relative precedence not defined between + [left] and = [right].  Disambiguate with parentheses."
-    ).should be_true
+    parser.log.check_expectations_empty
   end
   it "parses parentheses" do
     parser = expression_parser("(1 + 2) * 3")
