@@ -133,7 +133,6 @@ class Logger
 end
 
 class TestOut < IO
-  # @buffer : Array(UInt8) = [] of UInt8
   @expecting : Array(String) = [] of String
   @out : IO = STDOUT
   def self.silent : TestOut
