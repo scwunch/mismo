@@ -6,7 +6,7 @@ require "../src/ast/*"
 # require "../src/lexer"
 
 
-describe TypeContext do
+describe TypeContext, focus: true do
   describe "#type_check" do
     it "works" do
       type_checker = type_checker()
@@ -17,7 +17,7 @@ describe TypeContext do
         # stop: StopAt::Normal
       ).parse
       hir = type_checker.infer(ast)
-      type_checker.check_type(hir.type, Type.nil, loc).should be_true
+      type_checker.check_type(hir.type, Type.nil, loc, ast.location).should be_true
       hir.should eq(Hir::Nil.new(loc))
     end
   end

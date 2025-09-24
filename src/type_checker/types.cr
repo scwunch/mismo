@@ -386,7 +386,7 @@ class FunctionBase
       @body = [body]
     end
   end
-  def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter), @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
+  def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
   end
 
   def to_s(io : IO)
@@ -422,6 +422,11 @@ struct Trait
       raise "wrong number of type args: #{inspect}"
     end
   end
+  # def self.unknown(name : String, type_args : Slice(Type) = Slice(Type).empty)
+  #   Trait
+  #     .new(TraitBase.new(Location.zero, Mode::Let, name))
+  #     .with_type_args(type_args)
+  # end
   def initialize(@base, type_arg : Type)
     @type_args = Slice[type_arg]
     if @base.type_params.size != 1
@@ -445,6 +450,10 @@ struct Trait
     type_args[0] = type
     Trait.new(@base, type_args)
   end
+  # def with_type_args(type_args : Slice(Type)) : Trait
+  #   @type_args = type_args
+  #   self
+  # end
   def inspect(io : IO)
     io << "Trait(#{@base.name}"
     io << "[#{type_args.join(", ")}]" if type_args.any?

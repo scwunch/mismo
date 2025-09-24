@@ -1,23 +1,28 @@
 require "./type_env"
+require "../errors/errors"
 require "../utils/logger"
 
+# basic properties and methods included in TypeContext
 module TypeContextBase
   getter env : TypeEnv
   property type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty
   property type_args : Slice(Type) = Slice(Type).empty
-  property scope = TypeScope.new
+  property scope : TypeScope
   getter generics = {} of String => Type::Var
   getter bindings = {} of Type::Var => Type
   getter unifier = TypeUnifier.new
 
   def initialize(@env)
+    @scope = TypeScope.new(env.log)
   end
   def initialize(@env, @type_parameters)
+    @scope = TypeScope.new(env.log)
     @type_args = Slice(Type).new(@type_parameters.size) do |i|
       type_args[i]? || Type.var(i)
     end
   end
   def initialize(@env, @type_parameters, @type_args)
+    @scope = TypeScope.new(env.log)
     if @type_parameters.size > @type_args.size
       log.warning(Location.zero, "Maybe too few type args passed?  type_parameters: #{@type_parameters}, type_args: #{@type_args}")
       @type_args = Slice(Type).new(@type_parameters.size) do |i|
@@ -35,7 +40,11 @@ module TypeContextBase
     # end
     # raise "wrong number of type args" if @type_args.size != @type_parameters.size
   end
+  # def self.new(env : TypeEnv, ast_type_params : Slice(Ast::TypeParameter)) : TypeContext
+  #   raise "called it"
+  # end
   def initialize(@env, ast_type_params : Slice(Ast::TypeParameter), @type_args = Slice(Type).empty)
+    @scope = TypeScope.new(env.log)
     if ast_type_params.size == 0 && @type_args.size == 0
       @type_parameters = Slice(TypeParameter).empty
       return
@@ -147,12 +156,12 @@ module TypeContextBase
         end
       end
     end
-  rescue err : TypeError
-    if env.eval_depth > 10
-      raise err
-    end
-    log.error(type_node.location, err.message || "TYPE ERROR @ {{__line}}")
-    Type.never
+  # rescue err : TypeError
+  #   if env.eval_depth > 10
+  #     raise err
+  #   end
+  #   log.error(type_node.location, err.message || "TYPE ERROR @ {{__line}}")
+  #   Type.never
   ensure
     env.eval_depth -= 1
   end
@@ -199,20 +208,28 @@ module TypeContextBase
     env.eval_depth -= 1
   end
 
+  def eval_type_args(type_args)
+    Slice(Type).new(type_args.size) do |i|
+      eval(type_args[i])
+    end
+  end
+
   def eval_trait(trait : Ast::Type, self_type : Type) : Trait
     log.debug_descend(trait.location, "eval_trait #{trait} with Self=#{self_type}") do
-      unless trait_base = env.traits[trait.name]?
-        raise TypeError.new(trait.location, "unknown trait: #{trait.name}")
+      if trait_base = env.traits[trait.name]?
+        Trait.new(
+          trait_base, 
+          # begin
+            eval_trait_type_args(trait, self_type, trait_base.type_params)
+          # rescue err : TypeError
+          #   log.error(trait.location, err.message || "<type arg error")
+          #   Slice(Type).empty
+          # end
+        )
+      else
+        abort! MissingNameError.new(trait.location, "unknown trait: #{trait.name}")
+        # Trait.unknown(trait.name, eval_type_args(trait.type_args))
       end
-      Trait.new(
-        trait_base, 
-        begin
-          eval_trait_type_args(trait, self_type, trait_base.type_params)
-        rescue err : TypeError
-          log.error(trait.location, err.message || "<type arg error")
-          Slice(Type).empty
-        end
-      )
     end
   end
 
@@ -253,6 +270,8 @@ module TypeContextBase
   end
 end
 
+# algorithm for deducing trait implementation
+# included by TypeContext
 module ImplementationChecker
   def type_satisfies_constraints(loc : Location, type : Type, type_param : TypeParameter)
     log.debug_descend(loc, "#type_satisfies_constraints: #{type} satisfies #{type_param}") do
@@ -479,6 +498,7 @@ module ImplementationChecker
   # end
 end
 
+# type inference algorithm included by TypeContext
 module TypeChecker
   # runs type checker for the ast node, but allows for inconsistent types on branches
   # this is to allow control-flow nodes (eg if blocks) to be used as statements without 
@@ -514,6 +534,7 @@ module TypeChecker
     end
   end
 
+  # transfrom an ast node to hir, inferring its type
   def infer(ast : Ast::Expr) : Hir
     case ast
     when Ast::Nil
@@ -571,28 +592,32 @@ module TypeChecker
     else
       raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
     end
-  rescue type_error : TypeError
-    log.error(type_error.location, type_error.message)
-    Hir::Nil.new(ast.location)
+  # rescue type_error : TypeError
+  #   log.error(type_error.location, type_error.message)
+  #   Hir::Nil.new(ast.location)
   end
 
+  # :ditto:
   def infer(ast : Cell(Ast::Expr)) : Hir
     infer(ast.value)
   end
 
-  def type_check(ast : Ast::Expr, expected_type : Type) : Hir
-    hir = infer(ast)
-    check_type(hir.type, expected_type, ast.location)
+
+  def type_check(ast : Ast::Expr, expected_type : Type, source : Location) : Hir
+    case hir = infer(ast)
+    when Hir::Block
+      check_type(hir.type, expected_type, hir.statements.last.location, source)
+    else
+      check_type(hir.type, expected_type, ast.location, source)
+    end
     hir
   end
 
-  def type_check(ast : Cell(Ast::Expr), expected_type : Type) : Hir
-    hir = infer(ast.value)
-    check_type(hir.type, expected_type, ast.location)
-    hir
+  def type_check(ast : Cell(Ast::Expr), expected_type : Type, source : Location) : Hir
+    type_check(ast.value, expected_type, source)
   end
 
-  def check_type(actual : Type, expected : Type, loc : Location)
+  def check_type(actual : Type, expected : Type, loc : Location, source : Location)
     case {actual, expected}
     when {Type::Never, _}, {_, Type::Nil}
     when {Type::Unknown, _}
@@ -601,7 +626,7 @@ module TypeChecker
       log.warning(loc, "We don't know what type to expect here (expected type: #{expected}); #{actual} may or may not be compatible.")
     else
       if actual != expected
-        type_error(loc, "type mismatch: expected #{expected}, but got #{actual}")
+        emit_error TypeMismatchError.new(loc, expected, actual, source)
         return false
       end
     end
@@ -627,23 +652,24 @@ module TypeChecker
 
   def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
     log.warning(location, "function call not fully implemented yet")
-    overloads = env.functions[name]?
-    if overloads.nil?
-      raise TypeError.new(location, "function #{name} not found")
+    if overloads = env.functions[name]?
+      matches = overloads.select do |func|
+        func.parameters.size == args.size &&
+        func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
+      end
+      if matches.empty?
+        abort! MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
+      end
+      if matches.size > 1
+        abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
+      end
+      func = matches.first
+    else
+      abort! MissingNameError.new(location, "function #{name} not found")
+      # func = FunctionBase.new(location, name, return_type: Type::Never)
     end
 
-    matches = overloads.select do |func|
-      func.parameters.size == args.size &&
-      func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
-    end
 
-    if matches.empty?
-      raise TypeError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
-    end
-    if matches.size > 1
-      raise TypeError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
-    end
-    func = matches.first
     Hir::Call.new(location, func, args, func.return_type)
   end
 
@@ -660,37 +686,38 @@ module TypeChecker
       if (ast = lhs.receiver?) && lhs.count_args == 1
         object = infer(ast)
         if !object.mutable?
-          raise TypeError.new(lhs.location, "#{object} is not mutable")
+          emit_error IllegalMutationError.new(lhs.location, "#{object} is not mutable")
         end
         case (t = object.type)
         when Type::Struct
           if (field = t.get_field?(lhs.method))
-            check_type(field.type, rhs.type, lhs.location)
+            check_type(field.type, rhs.type, lhs.location, field.location)
             Hir::AssignField.new(lhs.location, object, field, rhs)
           else
-            raise TypeError.new(lhs.location, "#{object} has no field #{lhs.method}")
+            abort! MissingNameError.new(lhs.location, "#{object} has no field #{lhs.method}")
           end
         else
-          raise TypeError.new(lhs.location, "#{object} is not a struct; it's #{t}")
+          abort! MetatypeError.new(lhs.location, "#{object} is not a struct; it's #{t}")
         end
       else
-        raise TypeError.new(lhs.location, "function call #{lhs} is not a valid left-hand side of assignment")
+        abort! IllegalTargetError.new(lhs.location, "function call #{lhs} is not a valid left-hand side of assignment")
       end
     else
-      raise TypeError.new(lhs.location, "#{lhs} is not a valid left-hand side of assignment")
+      abort! IllegalTargetError.new(lhs.location, "#{lhs} is not a valid left-hand side of assignment")
     end
   end
 
   def match(lhs : Hir, rhs : Ast::Expr) : Hir
     unless (type = lhs.type).is_a?(Type::Enum)
-      raise TypeError.new(rhs.location, "#{lhs} is not an enum; it's #{lhs.type}.  Only enums can be matched with the `is` operator.")
+      emit_error MetatypeError.new(rhs.location, "#{lhs} is not an enum; it's #{lhs.type}.  Only enums can be matched with the `is` operator.")
+      return Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
     end
 
     case rhs
     when Ast::Call
       variant_index = type.base.variants.index { |v| v.name == rhs.method }
       if variant_index.nil?
-        log.error(rhs.location, "\"#{rhs.method}\" is not a variant of #{type}")
+        emit_error MetatypeError.new(rhs.location, "\"#{rhs.method}\" is a function call, not a variant of #{type}")
         Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
       else
         if rhs.args.try { |args| args.size > 0 }
@@ -699,7 +726,8 @@ module TypeChecker
         Hir::MatchExpr.new(lhs.location, lhs, variant_index)
       end
     else
-      raise TypeError.new(rhs.location, "#{rhs} is not a valid pattern.  It should be `VariantName` or `VariantName(fields)`")
+      emit_error MetatypeError.new(rhs.location, "#{rhs} is not a valid pattern.  It should be `VariantName` or `VariantName(fields)`")
+      Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
     end
   end
 
@@ -762,10 +790,10 @@ module TypeChecker
             count_variants = 0
             op_branch.term_split.each do |term|
               case pattern = term.term
-              when Ast::Call
-                variant_index = variants.index { |v| v.name == pattern.method }
+              when Ast::Constructor
+                variant_index = variants.index { |v| v.name == pattern.type.name }
                 if variant_index.nil?
-                  log.error(pattern.location, "\"#{pattern.method}\" is not a variant of #{type}")
+                  log.error(pattern.location, "\"#{pattern.type.name}\" is not a variant of #{type}.  Variants are: #{variants.map { |v| v.name }.join(", ")}")
                 else
                   log.warning(pattern.location, "pattern variable binding not supported yet")
                   if cons = term.consequent
@@ -775,6 +803,19 @@ module TypeChecker
                     log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
                   end
                 end
+              when Ast::Call
+                # variant_index = variants.index { |v| v.name == pattern.method }
+                # if variant_index.nil?
+                  log.error(pattern.location, "\"#{pattern.method}\" is a function call; not a variant of #{type}")
+                # else
+                #   log.warning(pattern.location, "pattern variable binding not supported yet")
+                #   if cons = term.consequent
+                #     jump_table[variant_index] = is_expression ? infer(cons) : type_check_statement(cons)
+                #     count_variants += 1
+                #   else
+                #     log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
+                #   end
+                # end
               when Ast::Identifier 
                 if pattern.name == "_"
                   # catch-all
@@ -788,7 +829,7 @@ module TypeChecker
                   log.error(pattern.location, "\"#{pattern}\" is not a variant of #{type}; patterns must be upper-case.")
                 end
               else
-                log.error(pattern.location, "\"#{pattern}\" is not a variant of #{type}")
+                log.error(pattern.location, "Expected variant of #{type}, but got \"#{pattern}\" which is #{pattern.class}.")
               end
             end
             if count_variants < variants.size
@@ -802,7 +843,7 @@ module TypeChecker
             end
             steps << Hir::MatchBlock.new(cond.location, temp, jump_table)
           else
-            raise TypeError.new(cond.location, "Can only pattern match on enums; #{lhs} is a #{type}")
+            emit_error MetatypeError.new(cond.location, "Can only pattern match on enums; #{lhs} is a #{type}")
           end
         else
           # regular comparison operator (eg ==, <, >=, etc)
@@ -819,7 +860,7 @@ module TypeChecker
         end
       end
     in Ast::UnaryCondition
-      term = type_check(cond.term, Type.bool)
+      term = type_check(cond.term, Type.bool, cond.location)
       cons = consequence_statement(cond.@consequent_or_additional_conditions)
       steps << Hir::Test.new(term, cons)
     in Ast::ElseCondition
@@ -850,7 +891,11 @@ module TypeChecker
   def type_error(location : Location, message : String)
     log.error(location, message)
   end
-    
+
+  def emit_error(error : Error)
+    log.error(error.location, error.to_s)
+    error
+  end
 end
 
 # Type inference context
@@ -858,6 +903,12 @@ class TypeContext
   include TypeContextBase
   include ImplementationChecker
   include TypeChecker
+  property scope : TypeScope
+
+  # def initialize(@env : TypeEnv, @type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty, @type_args : Slice(Type) = Slice(Type).empty)
+  #   @scope = TypeScope.new(self)
+  # end
+
   def self.type_check_function(env : TypeEnv, function : FunctionBase, statements : Array(Ast::Expr))
     ctx = TypeContext.new(env, function.type_params)
 
@@ -865,8 +916,15 @@ class TypeContext
     function.parameters.each do |param|
       ctx.scope[param.name] = Variable.new(param.location, param.mode.to_binding, param.name, param.type)
     end
-    function.body = ctx.type_check(Ast::Block.new(statements), function.return_type)
+    function.body = ctx.type_check(Ast::Block.new(statements), function.return_type, function.location)
     function
+  rescue AbortFunctionTypeChecking
+    function
+  end
+
+  def abort!(error)
+    emit_error(error)
+    raise AbortFunctionTypeChecking.new
   end
 
   # def unify(a : Type, b : Type)
@@ -918,9 +976,13 @@ class TypeContext
 end
 
 class TypeScope
+  getter log : Logger
   getter parent : TypeScope?
   getter vars = {} of String => Variable
   getter temps = [] of Variable
+
+  def initialize(@log : Logger)
+  end
 
   # retrieve the variable from the given scope, including parent scope
   # nil if not exists
@@ -930,10 +992,15 @@ class TypeScope
 
   # retrieve the named variable, but raise error if missing, uninitialized, or consumed. 
   def get_var(loc : Location, name : String)
-    var = vars[name]?
-    raise TypeError.new(loc, "#{name} not found in scope") unless var
-    raise TypeError.new(loc, "#{name} is not yet initialized") unless var.initialized?
-    raise TypeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
+    var = vars.fetch(name) do 
+      abort! MissingNameError.new(loc, "#{name} not found in scope")
+      # vars[name] = Variable.new(loc, Binding::Let, name, Type.unknown(name))
+    end
+    unless var.initialized?
+      abort! LifetimeError.new(loc, "#{name} is not yet initialized")
+      # var.type = Type.unknown(name)
+    end
+    emit_error LifetimeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
     var
   end
 
@@ -949,18 +1016,15 @@ class TypeScope
   end
 
   def assign(loc : Location, name : String, expr : Hir, ctx : TypeContext)
-    if var = self[name]
-      raise TypeError.new(loc, "#{name} not found in scope") unless var
-      raise TypeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
-      if t = var.type
-        ctx.check_type(t, expr.type, loc)
-      else
-        var.type = expr.type
-      end
-      var
+    var = self[name]
+    abort! MissingNameError.new(loc, "#{name} not found in scope") unless var
+    abort! LifetimeError.new(loc, "#{name} was already consumed @#{var.consumed}") if var.consumed
+    if t = var.type
+      ctx.check_type(t, expr.type, loc, var.declared)
     else
-      raise TypeError.new(loc, "#{name} not found in scope")
+      var.type = expr.type
     end
+    var
   end
 
   def get_temp(loc : Location, id : Int32)
@@ -982,6 +1046,16 @@ class TypeScope
     io << "vars: [#{vars.join(", ")}]"
     io << ", parent: #{parent}" if parent
     io << ")"
+  end
+
+  def emit_error(error : Error)
+    log.error(error.location, error.to_s)
+    error
+  end
+
+  def abort!(error)
+    emit_error(error)
+    raise AbortFunctionTypeChecking.new
   end
 end
 
@@ -1063,14 +1137,20 @@ class TypeUnifier
   end
 end
 
-class TypeError < Exception
-  property location : Location
-  def initialize(@location : Location, @message : String)
-  end
-  def message : String
-    @message || "<TYPE ERROR>"
-  end
-end
+# class TypeError < Exception
+#   @message : String?
+#   property location : Location
+#   property expected : Type?
+#   property actual : Type?
+#   property type_source : Location?
+#   # def initialize(@location : Location, @message : String)
+#   # end
+#   def initialize(@location : Location, @expected : Type, @actual : Type, @type_source : Location?)
+#   end
+#   def message : String
+#     @message || "Expected #{expected} (from #{type_source}), but got #{actual}."
+#   end
+# end
 
 # struct TypeBranches
 #   # this ephemeral container is used to collect the types of elements or branches 
@@ -1078,3 +1158,6 @@ end
 #   # eg, `if` expressions and array literals
 #   property types = [] of (Type, Location)
 # end
+
+class AbortFunctionTypeChecking < Exception
+end
