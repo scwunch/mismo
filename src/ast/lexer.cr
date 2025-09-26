@@ -16,12 +16,13 @@ class Lexer
   end
 
   class Reader
+    getter file : String = ""
     getter text : String
     getter idx : UInt32 = 0_u32
     getter line : UInt32 = 1_u32
     getter col : UInt32 = 1_u32  # Represents column *before* processing char at @idx, 1-based for new lines
 
-    def initialize(@text : String)
+    def initialize(@text : String, @file : String = "")
     end
 
     def peek : Char
@@ -85,7 +86,7 @@ class Lexer
     end
 
     def location
-      Location.new(@line, @col)
+      Location.new(@file, @line, @col)
     end
   end
 

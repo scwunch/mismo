@@ -9,7 +9,7 @@ require "../src/ast/*"
 describe TypeContext, focus: true do
   describe "#type_check" do
     it "works" do
-      type_checker = type_checker()
+      type_checker = type_checker("TypeContext#type_check — works")
       ast : Ast::Expr = ExpressionParser.new(
         parser: parser("nil", Logger::Level::Warning),
         # expression_indent: 2,
@@ -19,6 +19,7 @@ describe TypeContext, focus: true do
       hir = type_checker.infer(ast)
       type_checker.check_type(hir.type, Type.nil, loc, ast.location).should be_true
       hir.should eq(Hir::Nil.new(loc))
+      type_checker.log.errors.should be_empty
     end
   end
 
@@ -51,7 +52,7 @@ describe TypeContext, focus: true do
               print("some other color")
             
         MISMO
-      type_env = type_check_program(program, :debug)
+      type_env = type_check_program("TypeContext#type_check_program — works", program, :debug)
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -79,7 +80,7 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y
         MISMO
-      type_env = type_check_program(program)
+      type_env = type_check_program("TypeEnv#type_check_program — works", program)
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -136,7 +137,7 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y        
         MISMO
-      type_env = type_check_program(program)
+      type_env = type_check_program("TypeEnv#type_check_program — workssss", program)
     end
   end
 

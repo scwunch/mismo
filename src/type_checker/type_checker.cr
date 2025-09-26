@@ -893,7 +893,7 @@ module TypeChecker
   end
 
   def emit_error(error : Error)
-    log.error(error.location, error.to_s)
+    log.error(error)
     error
   end
 end
@@ -1049,7 +1049,7 @@ class TypeScope
   end
 
   def emit_error(error : Error)
-    log.error(error.location, error.to_s)
+    log.error(error)
     error
   end
 

@@ -15,11 +15,11 @@ def parser(
     source : String, 
     level : Logger::Level = Logger::Level::Warning
   ) : Parser
-  logger = Logger.new(level, file_path: file, out: TestOut.new)
+  logger = Logger.new(level, file_path: file, out: TestOut.new, source: source)
   lexer = Lexer.new(
     Lexer::Reader.new(source), 
     if level == Logger::Level::Debug
-      Logger.new(Logger::Level::Info)
+      Logger.new(Logger::Level::Info, source: source)
     else
       logger
     end
@@ -41,16 +41,16 @@ def loc
   Location.zero
 end
 
-def type_env(level : Logger::Level = Logger::Level::Warning)
-  TypeEnv.new(Logger.new(level))
+def type_env(file : String, level : Logger::Level = Logger::Level::Warning)
+  TypeEnv.new(Logger.new(level, file_path: file, out: TestOut.new))
 end
 
-def type_checker(level : Logger::Level = Logger::Level::Warning)
-  TypeContext.new(type_env(level))
+def type_checker(file : String, level : Logger::Level = Logger::Level::Warning)
+  TypeContext.new(type_env(file, level))
 end
 
-def type_check_program(code : String, level : Logger::Level = Logger::Level::Warning)
-  parser = Parser.new(code)
+def type_check_program(file : String, code : String, level : Logger::Level = Logger::Level::Warning)
+  parser = parser(file, code, Logger::Level::Error)
   items = parser.parse
   parser.log.level = level
   type_env = TypeEnv.new(parser.log)

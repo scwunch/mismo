@@ -1,3 +1,5 @@
+require "../errors/errors"
+
 class Logger
   enum Level
     Debug
@@ -6,13 +8,13 @@ class Logger
     Error
     def color
       case self
-      when Level::Debug
+      in Level::Debug
         "\033[90m > "
-      when Level::Info
+      in Level::Info
         "\033[94m 🛈 "
-      when Level::Warning
+      in Level::Warning
         "\033[33m ⚠️ "
-      when Level::Error
+      in Level::Error
         "\033[31m 🛑"
       end
     end
@@ -23,6 +25,7 @@ class Logger
   @indent : UInt32 = 0
   @out : IO = STDOUT
   property level : Level
+  property errors = [] of Error
 
   def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil, @source_lines = [] of String)
     @file_path = nil
@@ -101,7 +104,18 @@ class Logger
   def_log Debug
   def_log Info
   def_log Warning
+  @[Deprecated("Use `#error(Error)` instead")]
   def_log Error
+
+  def error(err : Error)
+    @errors << err
+    err.print(
+      "\033[90m " + " \u{2502}" * @indent + "\033[31m",
+      @source_lines,
+      @out
+    )
+    @out << "\033[0m"
+  end
 
   # def contains?(str : String)
   #   case test_out = @out
@@ -120,6 +134,18 @@ class Logger
     else
       raise TypeCastError.new("Logger#expect called on non-TestOut IO")
     end
+  end
+
+  def expect(errs : Array(String))
+    while errs.any?
+      if errors.empty?
+        errors.should contain(errs.shift)
+      else
+        errors.first.to_s.should contain(errs.shift)
+        errors.shift
+      end
+    end
+    errors.should be_empty
   end
 
   def check_expectations_empty

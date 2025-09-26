@@ -8,10 +8,11 @@ require "./operators"
 
 struct Location
   include Comparable(Location)
+  getter file : String = ""
   getter line : UInt32
   getter column : UInt32
 
-  def initialize(@line : UInt32, @column : UInt32)
+  def initialize(@file : String, @line : UInt32, @column : UInt32)
   end
   def initialize(line, column)
     @line = line.to_u32
@@ -36,6 +37,9 @@ struct Location
   end
 
   def to_s(io : IO)
+    if @file != ""
+      io << @file << ":"
+    end
     if @column == 0
       if @line == 0
         io << " : "
@@ -58,11 +62,11 @@ struct Location
   end
 
   def -(int)
-    Location.new(@line, @column - int)
+    Location.new(@file, @line, @column - int)
   end
 
   def +(int)
-    Location.new(@line, @column + int)
+    Location.new(@file, @line, @column + int)
   end
 end
 
