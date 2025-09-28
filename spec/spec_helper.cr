@@ -41,12 +41,17 @@ def loc
   Location.zero
 end
 
-def type_env(file : String, level : Logger::Level = Logger::Level::Warning)
-  TypeEnv.new(Logger.new(level, file_path: file, out: TestOut.new))
+def type_env(file : String, program : String, level = Logger::Level::Warning)
+  logger = if level
+    Logger.new(level, file_path: file, source: program)
+  else
+    Logger.new(file_path: file, source: program, out: NullOut.new)
+  end
+  TypeEnv.new(logger)
 end
 
-def type_checker(file : String, level : Logger::Level = Logger::Level::Warning)
-  TypeContext.new(type_env(file, level))
+def type_checker(file : String, program : String, level : Logger::Level = Logger::Level::Warning)
+  TypeContext.new(type_env(file, program, level))
 end
 
 def type_check_program(file : String, code : String, level : Logger::Level = Logger::Level::Warning)

@@ -295,7 +295,7 @@ module ImplementationChecker
             # p! ta1 = t1.type_args[0]
             # p! ta2 = t2.type_args[0]
             # p! ta1 == ta2
-            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy trait #{trait}")
+            emit_error TraitError.new(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy #{trait}")
           end
         end
       when Type::Never
@@ -304,13 +304,13 @@ module ImplementationChecker
         type_param.required_traits.each do |trait|
           trait = trait.substitute_Self_with(type)
           unless env.trait_implemented?(trait)
-            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy trait #{trait}")
+            emit_error TraitError.new(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} does not satisfy #{trait}")
           end
         end
         type_param.excluded_traits.each do |trait|
           trait = trait.substitute_Self_with(type)
           if env.trait_implemented?(trait)
-            log.error(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} satisfies excluded trait #{trait}")
+            emit_error TraitError.new(loc, "E#{__LINE__} #type_satisfies_constraints: type #{type} satisfies excluded #{trait}")
           end
         end
       end
@@ -652,24 +652,20 @@ module TypeChecker
 
   def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
     log.warning(location, "function call not fully implemented yet")
-    if overloads = env.functions[name]?
-      matches = overloads.select do |func|
-        func.parameters.size == args.size &&
-        func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
-      end
-      if matches.empty?
-        abort! MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
-      end
-      if matches.size > 1
-        abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
-      end
-      func = matches.first
-    else
+    unless overloads = env.functions[name]?
       abort! MissingNameError.new(location, "function #{name} not found")
-      # func = FunctionBase.new(location, name, return_type: Type::Never)
     end
-
-
+    matches = overloads.select do |func|
+      func.parameters.size == args.size &&
+      func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
+    end
+    if matches.empty?
+      abort! MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
+    end
+    if matches.size > 1
+      abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
+    end
+    func = matches.first
     Hir::Call.new(location, func, args, func.return_type)
   end
 

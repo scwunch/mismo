@@ -328,16 +328,19 @@ class TypeEnv
             enum_base = user_types[item.name].as(EnumBase)
             item.variants.each do |variant|
               discriminant = Val.new(enum_base.variants.size)
-              enum_base.variants << 
+              variant = 
                 Variant.new(variant.location, variant.name, variant.fields.try &.map { |field_name, field_type| 
                   Field.new(field_type.location, Binding::Var, field_name, context.eval(field_type)) 
                 } || [] of Field)
+              enum_base.variants << variant
+
+              # generate constructor
               upsert(FunctionBase.new(
                 variant.location, 
                 "#{item.name}.#{variant.name}", 
                 context.type_parameters,
-                variant.fields.try &.map do |field_name, field_type|
-                  Parameter.new(field_type.location, Mode::Move, field_name, context.eval(field_type))
+                variant.fields.map do |field|
+                  Parameter.new(field.location, Mode::Move, field.name, field.type)
                 end || [] of Parameter,
                 Type.enum(enum_base, context.type_args),
                 if fields = variant.fields
@@ -346,7 +349,7 @@ class TypeEnv
                       if i == 0
                         discriminant
                       else
-                        interpreter.frame.variables[fields[i-1].first]
+                        interpreter.frame.variables[fields[i-1].name]
                       end
                     end)
                   }

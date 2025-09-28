@@ -156,6 +156,9 @@ abstract struct Hir < IrNode
     def binding : Binding
       function.return_mode.to_binding
     end
+    # def type : Type
+    #   function.return_type.substitute(type_args)
+    # end
     def to_s(io : IO)
       io << "#{function.name}(#{args.join(", ")})"
     end
@@ -245,7 +248,11 @@ abstract struct Hir < IrNode
     def initialize(@location : Location, @statements : ::Array(Hir))
     end
     def binding : Binding ; Binding::Var end
-    def type : Type ; Type.nil end
+    def type : Type
+      statements.last.type
+    rescue
+      Type.nil
+    end
     def to_s(io : IO)
       io << "Block:{#{statements.join(", ")}}"
     end

@@ -6,10 +6,10 @@ require "../src/ast/*"
 # require "../src/lexer"
 
 
-describe TypeContext, focus: true do
+describe TypeContext do
   describe "#type_check" do
     it "works" do
-      type_checker = type_checker("TypeContext#type_check — works")
+      type_checker = type_checker("TypeContext#type_check — works", "nil")
       ast : Ast::Expr = ExpressionParser.new(
         parser: parser("nil", Logger::Level::Warning),
         # expression_indent: 2,
@@ -52,7 +52,7 @@ describe TypeContext, focus: true do
               print("some other color")
             
         MISMO
-      type_env = type_check_program("TypeContext#type_check_program — works", program, :debug)
+      type_env = type_check_program("TypeContext#type_check_program — works", program)
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -80,7 +80,7 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y
         MISMO
-      type_env = type_check_program("TypeEnv#type_check_program — works", program)
+      type_env = type_check_program("TypeEnv#type_check_program — works", program, :info)
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -457,7 +457,8 @@ describe TypeEnv do
 
         MISMO
       items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      # type_env = TypeEnv.new(Logger.new(source: program))
+      type_env = type_env("#fill_out_type_info fills out type info for structs and enum variants", program, nil)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -469,6 +470,9 @@ describe TypeEnv do
       point.fields.should eq([
         Field.new(loc, Binding::Var, "x", Type.int),
         Field.new(loc, Binding::Var, "y", Type.int),
+      ])
+      type_env.log.expect([
+        "type Float does not satisfy trait Stringable[Float]"
       ])
     end
   end

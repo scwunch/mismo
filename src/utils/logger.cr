@@ -104,7 +104,7 @@ class Logger
   def_log Debug
   def_log Info
   def_log Warning
-  @[Deprecated("Use `#error(Error)` instead")]
+  # @[Deprecated("Use `#error(Error)` instead")]
   def_log Error
 
   def error(err : Error)
@@ -155,6 +155,13 @@ class Logger
     else
       raise TypeCastError.new("Logger#check_expectations_empty called on non-TestOut IO")
     end
+  end
+end
+
+class NullOut < IO
+  def read(slice : Bytes)
+  end
+  def write(slice : Bytes) : Nil
   end
 end
 

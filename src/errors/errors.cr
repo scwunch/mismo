@@ -121,3 +121,7 @@ end
 struct LifetimeError < SemanticError
   include ErrorWithMessage
 end
+
+struct TraitError < SemanticError
+  include ErrorWithMessage
+end
