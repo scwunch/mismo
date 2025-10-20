@@ -25,7 +25,10 @@ describe TypeContext do
 
   describe "#type_check_program" do
     it "works" do
-      program = <<-MISMO
+      type_env = type_check_program(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        program: <<-MISMO
         struct Point
           field x Int
           field y Int
@@ -52,7 +55,7 @@ describe TypeContext do
               print("some other color")
             
         MISMO
-      type_env = type_check_program("TypeContext#type_check_program — works", program)
+      )
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -69,7 +72,10 @@ end
 describe TypeEnv do
   describe "#type_check_program" do
     it "works" do
-      program = <<-MISMO
+      type_env = type_check_program(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        program: <<-MISMO
         struct Point
           field x Int
           field y Int
@@ -80,7 +86,7 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y
         MISMO
-      type_env = type_check_program("TypeEnv#type_check_program — works", program, :info)
+      )
       point = type_env.user_types["Point"].as(StructBase)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
@@ -93,9 +99,10 @@ describe TypeEnv do
     end
 
     it "workssss" do
-      
-      
-      program = <<-MISMO
+      type_env = type_check_program(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        program: <<-MISMO
         def main:
           let t = true
           let one = 1
@@ -137,13 +144,16 @@ describe TypeEnv do
             p.y = 4
             p.x + p.y        
         MISMO
-      type_env = type_check_program("TypeEnv#type_check_program — workssss", program)
+      )
     end
   end
 
   describe "#register_types_and_functions" do
     it "works" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: <<-MISMO
         struct Point
           field x Int
           field y Int
@@ -161,7 +171,7 @@ describe TypeEnv do
         def main:
           nil
         MISMO
-      items = parser(program).parse
+      ).parse
       type_env = TypeEnv.new(Logger.new)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
@@ -183,7 +193,10 @@ describe TypeEnv do
         Slice[TypeParameter.new(loc, "Self"), TypeParameter.new(loc, "T")])
     end
     it "registers trait claims properly" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: program = <<-MISMO
         trait Stringable
           def String String
 
@@ -209,15 +222,18 @@ describe TypeEnv do
           def get(index Nat) T: nil
 
         extend Array[Int] is Sequence[Int]
+
+        struct Array[T]
         MISMO
-      items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      type_env = TypeEnv.new(Logger.new)
       type_env.register_types_and_collect_items(items)
       type_env.eval_type_params_and_trait_claims(items)
       stringable = type_env.traits["Stringable"]
       sequence = type_env.traits["Sequence"]
       iterable = type_env.traits["Iterable"]
       list = type_env.user_types["List"].as StructBase
+      array = type_env.user_types["Array"].as StructBase
       [
         TraitClaim.new(
           loc,
@@ -235,17 +251,26 @@ describe TypeEnv do
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Trait.new(stringable, Slice[Type.array(Type.var(0))])
+          # Trait.new(stringable, Slice[Type.array(Type.var(0))])
+          Trait.new(stringable, Slice[Type.struct(array, Slice[Type.var(0)])])
         ),
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Trait.new(sequence, Slice[Type.array(Type.var(0)), Type.var(0)])
+          # Trait.new(sequence, Slice[Type.array(Type.var(0)), Type.var(0)])
+          Trait.new(sequence, Slice[
+            Type.struct(array, Slice[Type.var(0)]),
+            Type.var(0)
+          ])
         ),
         TraitClaim.new(
           loc,
           Slice(TypeParameter).empty,
-          Trait.new(sequence, Slice[Type.array(Type.int), Type.int])
+          # Trait.new(sequence, Slice[Type.array(Type.int), Type.int])
+          Trait.new(sequence, Slice[
+            Type.struct(array, Slice[Type.int]),
+            Type.int
+          ])
         )
       ].each do |claim|
         type_env.trait_claims.should contain(claim)
@@ -267,32 +292,35 @@ describe TypeEnv do
       impls[Trait.new(stringable, Type.int)].should eq(Implements::True)
       impls[Trait.new(stringable, Type.int)].ok?.should be_true
 
-      impls[Trait.new(stringable, Type.array(Type.int))] = Implements::True
-      impls[Trait.new(stringable, Type.array(Type.int))].should eq(Implements::True)
-      impls[Trait.new(stringable, Type.array(Type.int))].ok?.should be_true
+      impls[Trait.new(stringable, Type.pointer(Type.int))] = Implements::True
+      impls[Trait.new(stringable, Type.pointer(Type.int))].should eq(Implements::True)
+      impls[Trait.new(stringable, Type.pointer(Type.int))].ok?.should be_true
 
-      impls[Trait.new(stringable, Type.array(Type.int))] = Implements::False
-      impls[Trait.new(stringable, Type.array(Type.int))].should eq(Implements::False)
-      impls[Trait.new(stringable, Type.array(Type.int))].ok?.should be_false
+      impls[Trait.new(stringable, Type.pointer(Type.int))] = Implements::False
+      impls[Trait.new(stringable, Type.pointer(Type.int))].should eq(Implements::False)
+      impls[Trait.new(stringable, Type.pointer(Type.int))].ok?.should be_false
 
       equatable_base_trait = TraitBase.new(loc, Mode::Let, "Equatable", Slice[TypeParameter.new(loc, "Self"), TypeParameter.new(loc, "T")])
       equatable = ->(type : Type) do
         Trait.new(equatable_base_trait, Slice[type])
       end
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])] = Implements::True
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].should eq(Implements::True)
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].ok?.should be_true
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(1)])]?.should be_nil
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])] = Implements::True
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])].should eq(Implements::True)
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])].ok?.should be_true
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(1)])]?.should be_nil
 
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])] = Implements::False
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].should eq(Implements::False)
-      impls[Trait.new(equatable_base_trait, Slice[Type.array(Type.var(0)), Type.var(0)])].ok?.should be_false
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])] = Implements::False
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])].should eq(Implements::False)
+      impls[Trait.new(equatable_base_trait, Slice[Type.pointer(Type.var(0)), Type.var(0)])].ok?.should be_false
     end
   end
 
   describe "#check_trait_implementations" do
     it "verifies basic trait implementations requiring zero or one type parameters, and up to two methods" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: program = <<-MISMO
         trait Trivial
 
         trait Stringable
@@ -322,9 +350,11 @@ describe TypeEnv do
         extend[T] Array[T] is Stringable
           def String String:
             "Array"        
+
+        struct Array[T]
         MISMO
-      items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      type_env = TypeEnv.new(Logger.new)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -334,10 +364,11 @@ describe TypeEnv do
       trivial = type_env.traits["Trivial"]
       stringable = type_env.traits["Stringable"]
       sequence = type_env.traits["Sequence"]
+      array = type_env.user_types["Array"].as StructBase
       type_env.implementations[Trait.new(trivial, Type.int)]?.should eq(Implements::True)
       type_env.implementations[Trait.new(stringable, Type.int)]?.should eq(Implements::True)
-      type_env.implementations[Trait.new(sequence, Slice[Type.array(Type.var(0)), Type.var(0)])]?.should eq(Implements::True)
-      type_env.implementations[Trait.new(stringable, Type.array(Type.var(0)))]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(sequence, Slice[Type.struct(array, Slice[Type.var(0)]), Type.var(0)])]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(stringable, Type.struct(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
       # type_env.trait_claims.each do |claim|
       #   print claim; print '\n'
       # end
@@ -346,7 +377,10 @@ describe TypeEnv do
       # end
     end
     it "verifies more complex trait implementations" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: program = <<-MISMO
         trait Trivial
 
         trait Marker
@@ -358,12 +392,14 @@ describe TypeEnv do
         trait SelfEquatable
           def ==(other Self) -> Bool
 
+        struct String
+
         extend Int is Equatable[Int] & SelfEquatable & Marker
           def ==(other : Int) -> Bool:
             self == other   
         MISMO
-      items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      type_env = TypeEnv.new(Logger.new)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
@@ -372,6 +408,7 @@ describe TypeEnv do
       marker = type_env.traits["Marker"]
       equatable = type_env.traits["Equatable"]
       self_equatable = type_env.traits["SelfEquatable"]
+      string_type_arg = Type.struct(type_env.user_types["String"].as StructBase)
       type_env.implementations[Trait.new(trivial, Type.int)]?.should be_nil
       type_env.try_trait_implementation(Trait.new(trivial, Type.int)).should be_true
       type_env.implementations[Trait.new(trivial, Type.int)]?.should eq(Implements::True)
@@ -385,13 +422,16 @@ describe TypeEnv do
       type_env.implementations[Trait.new(equatable, Slice[Type.int, Type.int])]?.should eq(Implements::True)
       type_env.implementations[Trait.new(self_equatable, Type.int)]?.should eq(Implements::True)
 
-      type_env.trait_implemented?(Trait.new(trivial, Type.string)).should be_true
-      type_env.trait_implemented?(Trait.new(marker, Type.string)).should be_false
-      type_env.trait_implemented?(Trait.new(equatable, Slice[Type.string, Type.string])).should be_false
-      type_env.trait_implemented?(Trait.new(self_equatable, Type.string)).should be_false
+      type_env.trait_implemented?(Trait.new(trivial, string_type_arg)).should be_true
+      type_env.trait_implemented?(Trait.new(marker, string_type_arg)).should be_false
+      type_env.trait_implemented?(Trait.new(equatable, Slice[string_type_arg, string_type_arg])).should be_false
+      type_env.trait_implemented?(Trait.new(self_equatable, string_type_arg)).should be_false
     end
     pending "detects when traits are implemented by generic traits" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: <<-MISMO
         trait Sequence[T]
           def get(index Nat) T
 
@@ -402,21 +442,27 @@ describe TypeEnv do
         extend Array[Int] is Sequence[Int]
         -- detecting this implementation will require a significantly more
         -- complex algorithm for the method_exists function
+
+        struct Array[T]
         MISMO
-      items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      type_env = TypeEnv.new(Logger.new)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
       type_env.check_trait_implementations
       sequence = type_env.traits["Sequence"]
-      type_env.implementations[Trait.new(sequence, Type.array(Type.var(0)))]?.should eq(Implements::True)
+      array = type_env.user_types["Array"].as StructBase
+      type_env.implementations[Trait.new(sequence, Type.struct(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
     end
   end
 
   describe "#fill_out_type_info" do
     it "fills out type info for structs and enum variants" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: program = <<-MISMO
         struct IntPoint
            var x Int
            var y Int
@@ -456,8 +502,8 @@ describe TypeEnv do
            Bawal(HasStringable[Float])
 
         MISMO
-      items = parser(program).parse
-      # type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      # type_env = TypeEnv.new(Logger.new)
       type_env = type_env("#fill_out_type_info fills out type info for structs and enum variants", program, nil)
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
@@ -477,18 +523,22 @@ describe TypeEnv do
     end
   end
 
-  describe "#add_built_ins" do
-    it "inserts a list of built-in functions" do
-      type_env = TypeEnv.new(Logger.new)
-      type_env.functions.size.should eq(0)
-      type_env.add_built_ins
-      type_env.functions.each.map(&.size).sum
-    end
-  end
+  # NOTE: Built-ins are now included in the prelude
+  # describe "#add_built_ins" do
+  #   it "inserts a list of built-in functions" do
+  #     type_env = TypeEnv.new(Logger.new)
+  #     type_env.functions.size.should eq(0)
+  #     type_env.add_built_ins
+  #     type_env.functions.each.map(&.size).sum
+  #   end
+  # end
 
   describe "#type_check_program" do
     pending "detects when traits imply other traits, ie sub-trait inference" do
-      program = <<-MISMO
+      items = parser(
+        file_path: __FILE__, 
+        line_offset: __LINE__ + 2,
+        source: <<-MISMO
         trait Floatable
           def float -> Float
 
@@ -507,8 +557,8 @@ describe TypeEnv do
           x.int
         
         MISMO
-      items = parser(program).parse
-      type_env = TypeEnv.new(Logger.new(source: program))
+      ).parse
+      type_env = TypeEnv.new(Logger.new)
       type_env.type_check_program(items)
       floatable = type_env.traits["Floatable"]
       intable = type_env.traits["Intable"]

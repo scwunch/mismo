@@ -21,13 +21,13 @@ class Logger
   end
 
   getter file_path : Nil
-  getter source_lines : Array(String)
+  # getter source_lines : Array(String)
   @indent : UInt32 = 0
   @out : IO = STDOUT
   property level : Level
   property errors = [] of Error
 
-  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil, @source_lines = [] of String)
+  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil)
     @file_path = nil
     # if file_path && !file_path.ends_with?(':')
     #   @file_path = file_path + ':'
@@ -39,8 +39,8 @@ class Logger
     #   @file_path = nil
     # end
   end
-  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil, source : String = "")
-    @source_lines = source.split('\n')
+  def initialize(@level : Level = Level::Info, @out : IO = STDOUT, file_path : String? = nil)
+    # @source_lines = source.split('\n')
   end
 
   macro def_log(level)
@@ -55,14 +55,14 @@ class Logger
         @out << " \u{2502}" * @indent
         @out << Level::{{level}}.color
         @out << @file_path if @file_path
-        @out << loc
+        loc.coord(@out)
         @out << ' ' << msg
         @out << '\n'
         {% if level.id == "Error" %}
-          if 0 < loc.line && loc.line < @source_lines.size
+          if 0 < loc.line && loc.line < loc.source.size
             @out << ' '
             @out << " \u{2502}" * @indent
-            @out << @source_lines[loc.line - 1]
+            @out << loc.source[loc.line]
             if loc.column != 0
               @out << "\n "
               @out << " \u{2502}" * @indent
@@ -111,7 +111,7 @@ class Logger
     @errors << err
     err.print(
       "\033[90m " + " \u{2502}" * @indent + "\033[31m",
-      @source_lines,
+      # @source_lines,
       @out
     )
     @out << "\033[0m"
@@ -190,4 +190,16 @@ class TestOut < IO
       @out.write(slice)
     end
   end
+end
+
+# Define a macro to get a path relative to the project root.
+# `__DIR__` is used to find the path of the directory this macro is defined in.
+# This assumes the utility file is at a known, fixed location relative to the project root.
+macro rel_path(path)
+  # Find the project root directory relative to this file.
+  # Adjust `../` count if your utility file is in a different location.
+  project_root = {{ Path.new(__DIR__).join("../").to_s.stringify }}
+
+  # Replace the project root from the provided path.
+  {{ path }}.to_s.gsub({{ project_root.stringify }}, "").lstrip("/")
 end

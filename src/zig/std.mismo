@@ -1,0 +1,20 @@
+def print[T: Stringable](value T):
+    __zig_print(value.String)
+
+def +(left Int, right Int) Int:
+    __zig_add_int(left, right)
+def -(left Int, right Int) Int:
+    __zig_sub_int(left, right)
+def *(left Int, right Int) Int:
+    __zig_mul_int(left, right)
+def /(left Int, right Int) Int:
+    __zig_div_int(left, right)
+    
+def +(left Float, right Float) Float:
+    __zig_add_float(left, right)
+def -(left Float, right Float) Float:
+    __zig_sub_float(left, right)
+def *(left Float, right Float) Float:
+    __zig_mul_float(left, right)
+def /(left Float, right Float) Float:
+    __zig_div_float(left, right)

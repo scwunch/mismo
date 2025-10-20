@@ -4,3 +4,7 @@ shards:
     git: https://github.com/kostya/auto_constructor.git
     version: 0.4
 
+  wasmer:
+    git: https://github.com/naqvis/wasmer-crystal.git
+    version: 0.2.3
+

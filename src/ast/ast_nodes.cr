@@ -722,18 +722,9 @@ module Ast
     end
   end
 
-  struct Function < TopLevelItem
-    property name : ::String
-    property signature : Signature
-    property body : ::Array(Expr)
-    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
-    end
-    def initialize(@name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
-      @location = @signature.location
-    end
-    def to_s(io : IO)
-      io << "def #{name}#{signature}: #{body.join("\n")}"
-    end
+  # common methods for ExternalFunction, Function, and AbstractMethod
+  module HasSignature
+    # property signature : Signature
     def count_type_params
       signature.type_params.try &.size || 0
     end
@@ -754,6 +745,32 @@ module Ast
     end
   end
 
+  struct ExternalFunction < TopLevelItem
+    property name : ::String
+    property signature : Signature
+    def initialize(@location : Location, @name : ::String, @signature : Signature)
+    end
+    def to_s(io : IO)
+      io << "extern def #{name}#{signature}"
+    end
+    include HasSignature
+  end
+
+  struct Function < TopLevelItem
+    property name : ::String
+    property signature : Signature
+    property body : ::Array(Expr)
+    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
+    end
+    def initialize(@name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
+      @location = @signature.location
+    end
+    def to_s(io : IO)
+      io << "def #{name}#{signature}: #{body.join("\n")}"
+    end
+    include HasSignature
+  end
+
   struct AbstractMethod < TopLevelItem
     property name : ::String
     property signature : Signature
@@ -764,24 +781,7 @@ module Ast
       io << "abstract def #{name}#{signature}"
       io << ": <body(#{body.try &.size})>" if body
     end
-    def count_type_params
-      signature.type_params.try &.size || 0
-    end
-    def type_params : Slice(TypeParameter)
-      signature.type_params
-    end
-    def count_params
-      signature.parameters.try &.size || 0
-    end    
-    def parameters
-      signature.parameters
-    end
-    def return_type
-      signature.return_type
-    end
-    def return_convention
-      signature.return_convention
-    end
+    include HasSignature
   end
 
   struct Signature < IrNode

@@ -309,6 +309,7 @@ end
 
 enum TopLevelKey
   Import
+  Extern
   Struct
   Enum
   Function
@@ -323,6 +324,7 @@ enum TopLevelKey
   def self.parse?(str)
     case str
     when "import" then Import
+    when "extern" then Extern
     when "struct" then Struct
     when "enum" then Enum
     when "function" then Function
@@ -357,6 +359,10 @@ module TopLevelItemParser
       when "def"
         parse_def_block(loc)
         nil  # so we don't add some declarations twice
+      when "extern"
+        consume!("def")
+        parse_def_block(loc, external: true)
+        nil
       # when "const"
       #   parse_const(loc)
       else
@@ -369,7 +375,8 @@ module TopLevelItemParser
     def_loc : Location, 
     inherited_type_params : Slice(Ast::TypeParameter) = Slice(Ast::TypeParameter).empty, 
     receiver : Ast::Parameter? = nil, 
-    trait_method_array : Array(Ast::AbstractMethod)? = nil
+    trait_method_array : Array(Ast::AbstractMethod)? = nil,
+    external = false
   )
     inherited_type_params = parse_type_parameters? if inherited_type_params.empty?
     tree_branch(def_loc) do |is_branch|
@@ -387,6 +394,11 @@ module TopLevelItemParser
             log.info(sig_loc, "parsed #{method}")
             trait_method_array << method
             method
+          elsif external
+            sig = Ast::ExternalFunction.new(sig_loc, function_name, sig)
+            log.info(sig_loc, "parsed #{sig}")
+            @declarations << sig
+            sig
           else
             block = parse_colon_and_block(sig_loc.indent)
             func = Ast::Function.new(sig_loc, function_name, sig, block)
@@ -1459,9 +1471,9 @@ class Parser
   end
   def initialize(@tokens, @log)
   end
-  def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
-    @log = Logger.new(log_level, source: text)
-    @tokens = Lexer.new(Lexer::Reader.new(text), @log).lex
+  def initialize(text : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
+    @log = Logger.new(log_level)
+    @tokens = Lexer.new(Lexer::Reader.new(text, file_path, line_offset), @log).lex
   end
 
   # == Main Entry Point ==

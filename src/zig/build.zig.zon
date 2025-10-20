@@ -1,0 +1,15 @@
+.{
+    .name = .mismo,
+    .version = "0.1.0",
+    .fingerprint = 0xba474342e776b342,
+    .dependencies = .{
+        .gc = .{
+            .url = "git+https://github.com/johan0A/gc.zig#2dbf13da594324cb32e13c7e79a1ecd4c2f906b3",
+            .hash = "gc-0.1.0-kQ7npy0aAAAxBHEdeK_6Tn6cQVYt6H40OX10YhJPQ8nC",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+    },
+}

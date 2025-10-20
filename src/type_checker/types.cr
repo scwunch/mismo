@@ -6,7 +6,18 @@ abstract struct Type
 
   abstract def to_s(io : IO)
   abstract def mode : Mode
-  def primitive? : Bool; false end
+  def primitive? : ::Bool; false end
+  def copy_type? : ::Bool; false end
+  def generic? : ::Bool
+    type_args?.try &.any?
+  end
+  def type_args? : ::Slice(Type)?
+    if self.responds_to?(:type_args)
+      self.type_args
+    else
+      nil
+    end
+  end
 
   def inspect(io : IO)
     io << {{@type.name.stringify}} << '('
@@ -30,7 +41,8 @@ abstract struct Type
       io << "{{@type.name[6..]}}"
     end
     def mode : Mode ; Mode::Move end
-    def primitive? : Bool; true end
+    def primitive? : ::Bool; true end
+    def copy_type? : ::Bool; true end
     def ==(other : Type)
       self.class == other.class
     end
@@ -51,6 +63,10 @@ abstract struct Type
     primitive
   end
 
+  struct Byte < Type
+    primitive
+  end
+
   struct Int < Type
     primitive
   end
@@ -63,10 +79,13 @@ abstract struct Type
     primitive
   end
 
-  struct String < Type
-    primitive
-    def mode : Mode ; Mode::Ref end
-  end
+  # struct String < Type
+  #   def Type.string ; String.new.as Type end
+  #   def to_s(io : IO)
+  #     io << "String"
+  #   end
+  #   def mode : Mode ; Mode::Ref end
+  # end
   
   # struct Self < Type
   #   primitive
@@ -96,10 +115,10 @@ abstract struct Type
 
   struct Unknown < Type
     getter name : ::String
-    getter type_args : Slice(Type)
-    def initialize(@name : ::String, @type_args : Slice(Type) = Slice(Type).empty)
+    getter type_args : ::Slice(Type)
+    def initialize(@name : ::String, @type_args : ::Slice(Type) = ::Slice(Type).empty)
     end
-    def Type.unknown(name, type_args = Slice(Type).empty)
+    def Type.unknown(name, type_args = ::Slice(Type).empty)
       Unknown.new(name, type_args).as Type
     end
     def to_s(io : IO)
@@ -111,34 +130,57 @@ abstract struct Type
     # end
   end
 
-  struct Array < Type
+  module BoxyType
     getter element_type : Cell(Type)
     def initialize(@element_type : Cell(Type))
     end
     def initialize(element_type : Type)
       @element_type = Cell.new(element_type.as(Type))
     end
-    def Type.array(type) ; Array.new(type.as(Type)).as(Type) end
-    def to_s(io : IO)
-      io << "Array[#{@element_type}]"
-    end
-    def to_s
-      "Array[#{@element_type}]"
+    def type_args : ::Slice(Type)
+      ::Slice[element_type.value]
     end
     def mode : Mode ; Mode::Let end
-    # def substitute_Self_with(type : Type) : Type
-    #   Array.new(@element_type.value.substitute_Self_with(type))
-    # end
+    def to_s(io : IO)
+      io << "#{ {{ @type.name.stringify }} }[#{@element_type}]"
+    end
+  end
+
+  # struct Array < Type
+  #   include BoxyType
+  #   def Type.array(type) ; Array.new(type.as(Type)).as(Type) end
+  # end
+
+  struct Pointer < Type
+    include BoxyType
+    def mode : Mode ; Mode::Move end
+    def primitive? : ::Bool; true end
+    def copy_type? : ::Bool; true end
+    def Type.pointer(type) ; Pointer.new(type.as(Type)).as(Type) end
+  end
+
+  struct Slice < Type
+    include BoxyType
+    def Type.slice(type) ; Slice.new(type.as(Type)).as(Type) end
+    def mode : Mode ; Mode::Move end
+    def primitive? : ::Bool; true end
+    def copy_type? : ::Bool; true end
   end
 
   struct Tuple < Type
-    getter types : Slice(Type)
-    def initialize(@types : Slice(Type))
+    getter types : ::Slice(Type)
+    def initialize(@types : ::Slice(Type))
     end
     def initialize(types : ::Array(Type))
       @types = types.to_unsafe_slice
     end
     def Type.tuple(*args) ; Tuple.new(*args).as Type end
+    def copy_type? : Bool
+      types.all? &.copy_type?
+    end
+    def type_args : ::Slice(Type)
+      types
+    end
     def to_s(io : IO)
       io << "Tuple[#{@types.join(", ")}]"
     end
@@ -149,11 +191,14 @@ abstract struct Type
   end
 
   struct Union < Type
-    getter types : Slice(Type)
-    def initialize(@types : Slice(Type))
+    getter types : ::Slice(Type)
+    def initialize(@types : ::Slice(Type))
     end
     def initialize(types : ::Array(Type))
       @types = types.to_unsafe_slice
+    end
+    def type_args : ::Slice(Type)
+      types
     end
     def Type.union(*args)
       Union.new(*args).as Type
@@ -179,15 +224,15 @@ abstract struct Type
     # end
   end
 
-  def Type.adt(base : StructBase, type_args : Slice(Type) = Slice(Type).empty)
+  def Type.adt(base : StructBase, type_args : ::Slice(Type) = ::Slice(Type).empty)
     Struct.new(base, type_args).as Type
   end
 
-  def Type.adt(base : EnumBase, type_args : Slice(Type) = Slice(Type).empty)
+  def Type.adt(base : EnumBase, type_args : ::Slice(Type) = ::Slice(Type).empty)
     Enum.new(base, type_args).as Type
   end
 
-  def Type.adt(base : TypeInfo, type_args : Slice(Type) = Slice(Type).empty)
+  def Type.adt(base : TypeInfo, type_args : ::Slice(Type) = ::Slice(Type).empty)
     case base
     when StructBase then Struct.new(base, type_args)
     when EnumBase then Enum.new(base, type_args)
@@ -198,8 +243,8 @@ abstract struct Type
 
   struct Struct < Type
     getter base : StructBase
-    getter type_args : Slice(Type)
-    def initialize(@base : StructBase, @type_args : Slice(Type) = Slice(Type).empty)
+    getter type_args : ::Slice(Type)
+    def initialize(@base : StructBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
     end
     def Type.struct(*args) ; Struct.new(*args).as Type end
     def to_s(io : IO)
@@ -226,8 +271,8 @@ abstract struct Type
 
   struct Enum < Type
     getter base : EnumBase
-    getter type_args : Slice(Type)
-    def initialize(@base : EnumBase, @type_args : Slice(Type) = Slice(Type).empty)
+    getter type_args : ::Slice(Type)
+    def initialize(@base : EnumBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
     end
     def Type.enum(*args) ; Enum.new(*args).as Type end
     def to_s(io : IO)
@@ -241,7 +286,7 @@ abstract struct Type
   end
 
   struct Function < Type
-    getter args : Slice(Type)
+    getter args : ::Slice(Type)
     getter return_type : Cell(Type)
     def initialize(@args, @return_type)
     end
@@ -265,9 +310,9 @@ end
 struct TypeParameter < IrNode
   getter location : Location
   getter name : String
-  getter required_traits : Slice(Trait)
-  getter excluded_traits : Slice(Trait)
-  def initialize(@location : Location, @name : String, @required_traits = Slice(Trait).empty, @excluded_traits = Slice(Trait).empty)
+  getter required_traits : ::Slice(Trait)
+  getter excluded_traits : ::Slice(Trait)
+  def initialize(@location : Location, @name : String, @required_traits = ::Slice(Trait).empty, @excluded_traits = ::Slice(Trait).empty)
   end
   def to_s(io : IO)
     io << name
@@ -284,14 +329,14 @@ abstract class TypeInfo
   getter location : Location
   getter mode : Mode
   getter name : String
-  property type_params : Slice(TypeParameter)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty)
+  property type_params : ::Slice(TypeParameter)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty)
   end
 end
 
 class StructBase < TypeInfo
   getter fields : ::Array(Field)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @fields : ::Array(Field) = [] of Field)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @fields : ::Array(Field) = [] of Field)
   end
   def to_s(io : IO)
     io << "struct #{@name}"
@@ -306,7 +351,7 @@ end
 
 class EnumBase < TypeInfo
   getter variants : ::Array(Variant)
-  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @variants : ::Array(Variant) = [] of Variant)
+  def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @variants : ::Array(Variant) = [] of Variant)
   end
   def to_s(io : IO)
     io << "enum #{@name}"
@@ -345,7 +390,7 @@ end
 
 class TraitBase < TypeInfo
   getter methods : ::Array(Ast::AbstractMethod)
-  def initialize(@location : Location, @mode : Mode, @name : String, type_params : Slice(TypeParameter)? = nil, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
+  def initialize(@location : Location, @mode : Mode, @name : String, type_params : ::Slice(TypeParameter)? = nil, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
     @type_params = type_params || Slice[TypeParameter.new(@location, "Self")]
   end
   def to_s(io : IO)
@@ -362,21 +407,22 @@ end
 # struct Method
 #   getter location : Location
 #   getter name : String
-#   getter type_params : Slice(TypeParameter)
+#   getter type_params : ::Slice(TypeParameter)
 #   getter args : ::Array(Parameter)
 #   getter return_type : Type
-#   def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter), @args : ::Array(Parameter), @return_type : Type)
+#   def initialize(@location : Location, @name : String, @type_params : ::Slice(TypeParameter), @args : ::Array(Parameter), @return_type : Type)
 #   end
 # end
 
 class FunctionBase
   getter location : Location
   getter name : String
-  property type_params : Slice(TypeParameter)
+  property type_params : ::Slice(TypeParameter)
   property parameters : ::Array(Parameter) = [] of Parameter
   property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
   property body : ::Array(Hir) = [] of Hir
+  @external_implementation : Bool = false
   def body=(body : ::Array(Hir)) ; @body = body ; end
   def body=(body : Hir) 
     case body
@@ -386,7 +432,7 @@ class FunctionBase
       @body = [body]
     end
   end
-  def initialize(@location : Location, @name : String, @type_params : Slice(TypeParameter) = Slice(TypeParameter).empty, @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
+  def initialize(@location : Location, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
   end
 
   def to_s(io : IO)
@@ -399,6 +445,11 @@ class FunctionBase
       io << return_mode << ' ' unless return_mode == Mode::Move
       io << return_type
     end
+  end
+
+  def extern? ; @external_implementation end
+  def set_as_extern
+    @external_implementation = true
   end
 end
 
@@ -416,13 +467,13 @@ end
 
 struct Trait
   getter base : TraitBase
-  getter type_args : Slice(Type)
-  def initialize(@base : TraitBase, @type_args : Slice(Type) = Slice(Type).empty)
+  getter type_args : ::Slice(Type)
+  def initialize(@base : TraitBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
     if @base.type_params.size != @type_args.size
       raise "wrong number of type args: #{inspect}"
     end
   end
-  # def self.unknown(name : String, type_args : Slice(Type) = Slice(Type).empty)
+  # def self.unknown(name : String, type_args : ::Slice(Type) = ::Slice(Type).empty)
   #   Trait
   #     .new(TraitBase.new(Location.zero, Mode::Let, name))
   #     .with_type_args(type_args)
@@ -450,7 +501,7 @@ struct Trait
     type_args[0] = type
     Trait.new(@base, type_args)
   end
-  # def with_type_args(type_args : Slice(Type)) : Trait
+  # def with_type_args(type_args : ::Slice(Type)) : Trait
   #   @type_args = type_args
   #   self
   # end

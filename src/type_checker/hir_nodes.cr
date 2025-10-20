@@ -18,7 +18,7 @@ abstract struct Hir < IrNode
   end
 
   def mutable?
-    binding == Binding::Mut || binding == Binding::Var
+    binding == Binding::Mut || binding == Binding::Var || binding == Binding::Box
   end
 
   struct Nil < Hir
@@ -84,12 +84,19 @@ abstract struct Hir < IrNode
   end
 
   struct String < Hir
+    @@base : StructBase?
+    def self.set_base(base : StructBase)
+      @@base = base
+    end
     property location : Location
     property value : ::String
     def initialize(@location : Location, @value : ::String)
     end
+    def_init
     def binding : Binding ; Binding::Var end
-    def type : Type ; Type.string end
+    def type : Type
+      Type.struct(@@base || raise "String has no base")
+    end
     def to_s(io : IO)
       io << "\"#{value}\""
     end
@@ -102,6 +109,7 @@ abstract struct Hir < IrNode
     property type : Type
     def initialize(@location : Location, @name : ::String, @binding : Binding, @type : Type)
     end
+    def_init
     def to_s(io : IO)
       io << name
     end
@@ -114,19 +122,27 @@ abstract struct Hir < IrNode
     property type : Type
     def initialize(@location : Location, @id : Int32, @binding : Binding, @type : Type)
     end
+    def_init
     def to_s(io : IO)
       io << "temp_#{id}"
     end
   end
 
   struct Array < Hir
+    @@base : StructBase?
+    def self.set_base(base : StructBase)
+      @@base = base
+    end
     property location : Location
     property element_type : Type
     property elements : ::Array(Hir)
     def initialize(@location : Location, @element_type : Type, @elements : ::Array(Hir))
     end
+    def_init
     def binding : Binding ; Binding::Var end
-    def type : Type ; Type.array(element_type) end
+    def type : Type 
+      Type.struct(@@base || raise("Array has no base"), Slice[element_type])
+    end
     def to_s(io : IO)
       io << "[#{elements.join(", ")}]"
     end
@@ -137,6 +153,7 @@ abstract struct Hir < IrNode
     property elements : ::Array(Hir)
     def initialize(@location : Location, @elements : ::Array(Hir))
     end
+    def_init
     def binding : Binding ; Binding::Var end
     def type : Type ; Type.tuple(@elements.map &.type) end
     def to_s(io : IO)
@@ -148,11 +165,14 @@ abstract struct Hir < IrNode
 
   struct Call < Hir
     property location : Location
+    property overload_index : Int32
     property function : FunctionBase
+    property type_args : ::Array(Type)
     property args : ::Array(Hir)
     getter type : Type
-    def initialize(@location : Location, @function : FunctionBase, @args : ::Array(Hir), @type : Type)
+    def initialize(@location : Location, @overload_index : Int32, @function : FunctionBase, @type_args : ::Array(Type), @args : ::Array(Hir), @type : Type)
     end
+    def_init
     def binding : Binding
       function.return_mode.to_binding
     end
@@ -160,7 +180,28 @@ abstract struct Hir < IrNode
     #   function.return_type.substitute(type_args)
     # end
     def to_s(io : IO)
-      io << "#{function.name}(#{args.join(", ")})"
+      io << function.name
+      if type_args.any?
+        io << "[#{type_args.join(", ")}]"
+      end
+      io << "(#{args.join(", ")})"
+    end
+  end
+
+  # As of now, this node is only used for automatically generated constructor functions.  
+  # There is no Mismo syntax to create it.
+  # Though I'm strongly considering making it `TypeName(args)` (which would then no longer be a function call)
+  struct Constructor < Hir
+    property location : Location
+    property struct_ : Type::Struct
+    property args : ::Array(Hir)
+    def initialize(@location : Location, @struct_ : Type::Struct, @args : ::Array(Hir))
+    end
+    def_init
+    def binding : Binding ; Binding::Var end
+    def type : Type ; struct_ end
+    def to_s(io : IO)
+      io << "#{struct_}(#{args.join(", ")})"
     end
   end
 
@@ -195,6 +236,7 @@ abstract struct Hir < IrNode
       @object = Cell.new(object.as(Hir))
       @value = Cell.new(value.as(Hir))
     end
+    def_init
     def binding : Binding
       field.binding
     end
@@ -203,6 +245,27 @@ abstract struct Hir < IrNode
     end
     def to_s(io : IO)
       io << "#{object}.#{field.name} = #{value.value}"
+    end
+  end
+
+  struct AccessField < Hir
+    property location : Location
+    property object : Cell(Hir)
+    property field : ::Field
+    def initialize(@location : Location, @object : Cell(Hir), @field : ::Field)
+    end
+    def initialize(@location : Location, object : Hir, @field : ::Field)
+      @object = Cell.new(object.as(Hir))
+    end
+    def_init
+    def binding : Binding
+      field.binding
+    end
+    def type : Type 
+      field.type
+    end
+    def to_s(io : IO)
+      io << "#{object}.#{field.name}"
     end
   end
 
@@ -500,6 +563,21 @@ abstract struct Hir < IrNode
     end
     def to_s(io : IO)
       io << "else: #{consequent}"
+    end
+  end
+
+  struct Return < Hir
+    property location : Location
+    property value : Cell(Hir)
+    def initialize(@location, @value)
+    end
+    def initialize(@location, value : Hir)
+      @value = Cell.new(value.as(Hir))
+    end
+    def binding : Binding ; Binding::Var end
+    def type : Type ; value.value.type end
+    def to_s(io : IO)
+      io << "return #{value.value}"
     end
   end
 end

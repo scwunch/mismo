@@ -1,0 +1,80 @@
+extern def __zig_print(value: String)
+extern def __zig_add_int(left Int, right Int) Int
+extern def __zig_sub_int(left Int, right Int) Int
+extern def __zig_mul_int(left Int, right Int) Int
+extern def __zig_div_int(left Int, right Int) Int
+extern def __zig_add_float(left Float, right Float) Float
+extern def __zig_sub_float(left Float, right Float) Float
+extern def __zig_mul_float(left Float, right Float) Float
+extern def __zig_div_float(left Float, right Float) Float
+
+extern def __zig_nat2int(nat: Nat) Int
+extern def __zig_nat2float(nat: Nat) Float
+extern def __zig_nat2string(nat: Nat) Nat
+extern def __zig_int2nat(int: Int) Nat
+extern def __zig_int2float(int: Int) Float
+extern def __zig_int2string(int: Int) String
+extern def __zig_float2int(float: Float) Int
+extern def __zig_float2string(float: Float) String
+extern def __zig_string2int(string: String) Int
+extern def __zig_string2float(string: String) Float
+
+extern def __zig_alloc[T](size: Nat) Pointer[T]
+extern def __zig_free[T](slice: Slice[T])
+extern def __zig_slice_size[T](slice: Slice[T]) Nat
+extern def __zig_slice2ptr[T](slice: Slice[T]) Pointer[T]
+extern def __zig_ptr2slice[T](ptr: Pointer[T], size: Nat) Slice[T]
+
+extend Pointer[T]
+    -- static alloc Pointer[T]:
+    --     __zig_alloc(1)
+
+    -- static alloc(size: Nat) Pointer[T]:
+    --     __zig_alloc(size)
+
+    def free(size: Nat):
+        __zig_free(self.slice(size))
+
+    def slice(size: Nat) Slice[T]:
+        __zig_ptr2slice(self, size)
+
+extend Slice[T]
+    -- static alloc(size: Nat) Slice[T]:
+    --     __zig_alloc(size)
+
+    def free:
+        .__zig_free
+
+    def size Nat:
+        .__zig_slice_size
+
+def print(str: String):
+    __zig_print(str)
+
+struct String
+    var bytes: Array[Byte]
+
+    def drop: 
+        .bytes.drop
+
+struct Array[T]
+    var buffer: Slice[T]
+    var size: Nat
+
+    def drop: 
+        .buffer.free
+
+trait Stringable
+    def string String
+
+trait Intable
+    def int Int
+
+trait Floatable
+    def float Float
+
+extend Int is Stringable
+    def string String: .__zig_int2string
+
+extend Int is Floatable
+    def float Float: .__zig_int2float

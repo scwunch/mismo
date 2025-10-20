@@ -44,7 +44,7 @@ describe Interpreter do
           def /(other Nat) Rational:
             Rational(.numerator, .denominator * other)
         MISMO
-      Interpreter.run(program).should eq(Val.new(25))
+      Interpreter.run(program, file_path: __FILE__, line_offset: __LINE__).should eq(Val.new(25))
     end
 
     it "pattern matching" do
@@ -64,7 +64,7 @@ describe Interpreter do
             _: 
               "some other color"
         MISMO
-      Interpreter.run(program).should eq(Val.new("some other color"))
+      Interpreter.run(program, file_path: __FILE__, line_offset: __LINE__).should eq(Val.new("some other color"))
     end
   end
 end

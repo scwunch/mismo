@@ -214,7 +214,9 @@ describe Parser do
           nil))
     end
     it "newlines act as delimiters in type parameters and parameters" do
-      code = <<-MISMO
+      parser("newline-type-params", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
           [
             T
             U
@@ -224,7 +226,7 @@ describe Parser do
             y Float
           )
         MISMO
-      parser("newline-type-params", code)
+      )
       .parse_signature(loc)
       .should eq(Ast::Signature.new(
         loc, 
@@ -663,7 +665,9 @@ describe Parser do
       ))
     end
     it "parses an enum with methods and stuff" do
-      code = <<-MISMO
+      parser = parser("enum-Color", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         enum Color
           Red
           Green
@@ -681,7 +685,7 @@ describe Parser do
             -- else
             --   raise "Invalid color: ${str}"
         MISMO
-      parser = parser("enum-Color", code)
+      )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
       parser.next_token.should eq(Token.variable({1, 1}, "enum"))
       e = parser.parse_enum(loc)
@@ -715,7 +719,9 @@ describe Parser do
       ))
     end
     it "parses an enum with type parameters and methods" do
-      code = <<-MISMO
+      parser = parser("enum-Result", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         enum Result[T, E]
           Ok(T)
           Error(E)
@@ -726,7 +732,7 @@ describe Parser do
         trait Equatable[T]
           def ==(other : T) -> Bool
         MISMO
-      parser = parser(code)
+      )
       parser.next_token.should eq(Token.variable({1, 1}, "enum"))
       e = parser.parse_enum(loc)
       e.should eq(Ast::Enum.new(
@@ -754,12 +760,14 @@ describe Parser do
   describe "#parse_trait" do
     self_param = Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Self"))
     it "parses a trait" do
-      code = <<-MISMO
+      parser = parser("trait-IO", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         trait IO
           def read String
           def write(str String)
         MISMO
-      parser = parser(code)
+      )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
       parser.next_token.should eq(Token.variable({1, 1}, "trait"))
       t = parser.parse_trait(loc)
@@ -783,7 +791,9 @@ describe Parser do
       ))
     end
     it "parses a trait with convention and type parameters and super traits" do
-      code = <<-MISMO
+      parser = parser("trait-Mutable", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         trait mut Mutable[X] is Dangerous & Fun
           def mutate_me(pls Please)
           
@@ -793,7 +803,7 @@ describe Parser do
           def get(index Int) -> mut Something:
             default + implementation              
         MISMO
-      parser = parser(code)
+      )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
       parser.next_token.should eq(Token.variable({1, 1}, "trait"))
       t = parser.parse_trait(loc)
@@ -835,12 +845,14 @@ describe Parser do
 
   describe "#parse_extend" do
     it "parses an extend" do
-      code = <<-MISMO
+      parser = parser("extend-Format", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         extend[T: String] T is Format
           def format String: 
             self.string
         MISMO
-      parser = parser(code)
+      )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Extend))
       parser.next_token.should eq(Token.variable({1, 1}, "extend"))
       e = parser.parse_extend(loc)
@@ -866,7 +878,9 @@ describe Parser do
 
   describe "#parse_def" do
     it "parses a def block" do
-      code = <<-MISMO
+      parser = parser("def-block", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def foo:
             1 + 1 
           
@@ -893,7 +907,7 @@ describe Parser do
           (a String) String:
             a + "string"
         MISMO
-      parser = parser(code)
+      )
       parser.parse
       # parser.declarations.size.should eq(8)
       parser.declarations.each do |dec| 
@@ -960,7 +974,9 @@ describe Parser do
       ))
     end
     it "parses multiple unrelated functions in one def block, with optional additional type parameters" do
-      code = <<-MISMO
+      parser = parser("def-block-2", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def[T, U] 
           foo(a T, b U) T:
             a + b
@@ -978,7 +994,7 @@ describe Parser do
             (a T):
               a
         MISMO
-      parser = parser(code)
+      )
       parser.parse
       parser.declarations.size.should eq(6)
       parser.declarations.each do |dec| 
@@ -1033,7 +1049,9 @@ describe Parser do
 
   describe "#parse" do
     it "parses a bunch of definitions" do
-      program = <<-MISMO
+      parser = parser("bunch-of-defs", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         struct IntPoint
           var x Int
           var y Int
@@ -1073,8 +1091,8 @@ describe Parser do
           Bawal(HasStringable[Float])
 
         MISMO
-      
-      items = parser("parse", program).parse
+      )
+      items = parser.parse
       # items.each do |item|
       #   puts item
       # end
@@ -1117,13 +1135,15 @@ describe ExpressionParser do
     ))
   end
   it "respects operator precedence" do
-    code = <<-MISMO
+    parser = expression_parser("op-precedence", 
+      line_offset: __LINE__ + 2, 
+      code: <<-MISMO
         not this and not that == -1 + - 2 * 3
         foo = bar = baz
         1 + foo, bar = 1, 2, 3
         1 + foo = 3  -- this should raise an error
       MISMO
-    parser = expression_parser("op-precedence", code)
+    )
     parser.log.expect(
       "Relative precedence not defined between + [left] and = [right].  Disambiguate with parentheses."
     )
@@ -1391,11 +1411,13 @@ end
 describe UcsParser do
   describe "#parse" do
     it "parses basic single line conditional" do
-      program = <<-MISMO
+      parser = parser("ucs basic", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def main:
           if x > y: r
         MISMO
-      parser = parser("ucs basic", program)
+      )
       items = parser.parse
       items.size.should eq(1)
       main = items[0]
@@ -1420,7 +1442,9 @@ describe UcsParser do
       ]))
     end
     it "parses basic branched conditionals" do
-      program = <<-MISMO
+      parser = parser("ucs branched conditions", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def main:
           if x > y: r
     
@@ -1445,7 +1469,7 @@ describe UcsParser do
                 z: r2
                 w: r3
         MISMO
-      parser = parser("ucs branched conditions", program)
+      )
       items = parser.parse
       items.size.should eq(1)
       main = items[0]
@@ -1460,7 +1484,9 @@ describe UcsParser do
       }
     end
     it "parses branched conditionals with 'else's" do
-      program = <<-MISMO
+      parser = parser("ucs else conditions", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def main:
           if x > y: 
             r
@@ -1505,7 +1531,7 @@ describe UcsParser do
               else: r4
           -- the last three should all parse identically
         MISMO
-      parser = parser("ucs else conditions", program)
+      )
       items = parser.parse
       items.size.should eq(1)
       main = items[0]
@@ -1524,7 +1550,9 @@ describe UcsParser do
       body[5].should eq(body[6])
     end
     it "parses branched conditionals with unary conditions/tests" do
-      program = <<-MISMO
+      parser = parser("ucs unary conditions", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def main:
           if some_boolean: 
             result
@@ -1543,7 +1571,7 @@ describe UcsParser do
             .another_test:
               r4
         MISMO
-      parser = parser("ucs unary conditions", program)
+      )
       items = parser.parse
       items.size.should eq(1)
       main = items[0]
@@ -1568,7 +1596,9 @@ describe UcsParser do
       if2.as(Ast::If).conditionals.size.should eq(5)
     end
     it "parses branched conditionals with nested tests via 'and' connector" do
-      program = <<-MISMO
+      parser = parser("ucs nested 'and' conditions", 
+        line_offset: __LINE__ + 2, 
+        source: <<-MISMO
         def main:
           if x > y and x > z: r
     
@@ -1618,7 +1648,7 @@ describe UcsParser do
           
         
         MISMO
-      parser = parser("ucs conditions with nested 'and'", program)
+      )
       items = parser.parse
       items.size.should eq(1)
       main = items[0]

@@ -1,0 +1,72 @@
+-- 100 doors
+fn main:
+  var doors = Array[Bool].new(100)
+  for pass in 1..=100:
+    for door in 1..=100:
+      if door % pass == 0:
+        doors.set(door - 1, not doors.get(door - 1))
+  print(doors)
+    
+
+
+
+
+
+
+
+
+
+
+-- Intersecting Number Wheels
+fn main:
+  var wheels = get_input
+    .split('\n')
+    .map(line => Wheel(line))
+  for n in 1..=20:
+    print(wheels.get(0).next(wheels))
+  
+struct Wheel
+  var name: Char
+  var spokes: Array[Spoke]
+  var index: UInt = 0
+
+  constructor(text String):
+    name = text.get(0)
+    var i UInt
+    for i in 2..text.count:
+      if text.get(i).is_whitespace: 
+        break
+
+    spokes = (i..text.count)
+      .map(char => Spoke(char))
+      .to_array
+
+  fn next(wheels: Array[Wheel]) UInt:
+    if spokes.get(
+      index = (index + 1) % spokes.count
+    ) is
+      Spoke.Number(num):
+        num
+      Spoke.Name(name):
+        wheels.get(name).next(wheels)
+      
+
+enum Spoke
+  Number(UInt)
+  Name(Char)
+
+  constructor(char Char): self = 
+    if char.is_digit:
+      Spoke.Number(char.UInt)
+    else:
+      Spoke.Name(char)
+    
+
+extend Array[Wheel]
+  fn get(char Char): Option[Wheel]
+    for wheel in self:
+      if wheel.name == char:
+        return Option.Some(wheel)
+    Option.None
+    
+

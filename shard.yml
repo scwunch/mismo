@@ -15,3 +15,5 @@ license: MIT
 dependencies:
   auto_constructor:
     github: kostya/auto_constructor
+  wasmer:
+    github: naqvis/wasmer-crystal

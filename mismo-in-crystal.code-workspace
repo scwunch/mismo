@@ -1,10 +1,12 @@
 {
 	"folders": [
 		{
+			"name": "mismo",
 			"path": "."
 		},
 		{
-			"path": "../../../../usr/share/crystal/src"
+			"name": "src",
+			"path": "../../../../../usr/share/crystal/src"
 		}
 	],
 	"settings": {}

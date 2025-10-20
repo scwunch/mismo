@@ -1,6 +1,10 @@
 require "./tokens"
 require "../utils/logger"
 
+macro locator()
+  "#{__FILE__}(#{__LINE__})"
+end
+
 class Lexer
   getter reader : Reader
   getter current_token : Token = Token::BeginFile.new(Location.zero)
@@ -9,20 +13,32 @@ class Lexer
   def initialize(@reader : Reader, @log : Logger)
     skip_whitespace_and_comments
   end
-  def initialize(text : String, log_level : Logger::Level = Logger::Level::Warning)
-    @reader = Reader.new(text)
+  def initialize(text : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
+    @reader = Reader.new(text, file_path, line_offset)
     @log = Logger.new(log_level)
     skip_whitespace_and_comments
   end
 
+  
   class Reader
-    getter file : String = ""
+    getter source : Source
     getter text : String
     getter idx : UInt32 = 0_u32
     getter line : UInt32 = 1_u32
     getter col : UInt32 = 1_u32  # Represents column *before* processing char at @idx, 1-based for new lines
 
-    def initialize(@text : String, @file : String = "")
+    def initialize(@text : String, file_name : String)
+      source_lines = @text.split("\n")
+      file_name = file_name.sub("/home/ryan/programming-projects/crystal/mismo", "")
+      source_lines.insert(0, file_name)
+      @source = Source.new(source_lines)
+    end
+    # This is used for tests where the "source code" is located partway through a file
+    def initialize(@text : String, file_name : String, line_offset)
+      source_lines = @text.split("\n")
+      source_lines.insert(0, file_name)
+      @source = Source.new(source_lines)
+      @line = line_offset.to_u32
     end
 
     def peek : Char
@@ -86,7 +102,7 @@ class Lexer
     end
 
     def location
-      Location.new(@file, @line, @col)
+      Location.new(@source, @line, @col)
     end
   end
 

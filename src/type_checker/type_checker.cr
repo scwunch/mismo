@@ -120,6 +120,9 @@ module TypeContextBase
       when "Bool" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.bool
+      when "Byte"
+        assert_no_type_args(type_node, "Primitive type")
+        Type.byte
       when "Nat" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.nat
@@ -129,12 +132,18 @@ module TypeContextBase
       when "Float" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.float
-      when "String" 
-        assert_no_type_args(type_node)
-        Type.string
-      when "Array"
+      # when "String" 
+      #   assert_no_type_args(type_node)
+      #   Type.string
+      when "Pointer"
         type_args = eval_type_args(type_node, Slice[TypeParameter.new(Location.zero, "T")])
-        Type.array(type_args[0]? || Type.never)
+        Type.pointer(type_args[0]? || Type.never)
+      when "Slice"
+        type_args = eval_type_args(type_node, Slice[TypeParameter.new(Location.zero, "T")])
+        Type.slice(type_args[0]? || Type.never)
+      # when "Array"
+      #   type_args = eval_type_args(type_node, Slice[TypeParameter.new(Location.zero, "T")])
+      #   Type.array(type_args[0]? || Type.never)
       when "Tuple"
         Type.tuple(type_node.type_args.map { |t| eval(t) })
       # when "Function" then Type.function(*type_node.types.map { |t| eval(t) })
@@ -589,6 +598,8 @@ module TypeChecker
       Hir::If.new(ast.location, ucs_expression(ast.conditionals))
     when Ast::Block
       infer_block(ast)
+    when Ast::Return
+      Hir::Return.new(ast.location, infer(ast.value))
     else
       raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
     end
@@ -604,13 +615,15 @@ module TypeChecker
 
 
   def type_check(ast : Ast::Expr, expected_type : Type, source : Location) : Hir
-    case hir = infer(ast)
-    when Hir::Block
-      check_type(hir.type, expected_type, hir.statements.last.location, source)
-    else
-      check_type(hir.type, expected_type, ast.location, source)
+    log.debug_descend(ast.location, "#type_check(#{ast}, #{expected_type}, #{source})") do
+      case hir = infer(ast)
+      when Hir::Block
+        check_type(hir.type, expected_type, hir.statements.last.location, source)
+      else
+        check_type(hir.type, expected_type, ast.location, source)
+      end
+      hir
     end
-    hir
   end
 
   def type_check(ast : Cell(Ast::Expr), expected_type : Type, source : Location) : Hir
@@ -651,22 +664,160 @@ module TypeChecker
   end
 
   def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
-    log.warning(location, "function call not fully implemented yet")
     unless overloads = env.functions[name]?
       abort! MissingNameError.new(location, "function #{name} not found")
     end
-    matches = overloads.select do |func|
-      func.parameters.size == args.size &&
-      func.parameters.zip(args).all? { |param, arg| param.type == arg.type }
+    # matches = overloads.select do |func|
+    #   type_args = [] of Type
+    #   func.parameters.size == args.size &&
+    #   func.parameters.zip(args).all? { |param, arg| 
+    #     case t = param.type
+    #     when Type::Var
+    #       type_args[t.id] = arg.type
+    #       type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
+    #     else
+    #       param.type == arg.type
+    #     end || if overloads.size == 1
+
+    #     else
+    #       false
+    #     end
+    #   }
+    # end
+    matches = [] of Hir::Call
+    errors = [] of Error
+    overloads.each_with_index do |func, i|
+      case res = function_call(location, i, func, args)
+      when Hir::Call
+        matches << res
+      when Error
+        errors << res
+      end
     end
     if matches.empty?
+      if overloads.size == 1 && errors.size == 1
+        abort! errors.first
+      end
+      errors.each { |e| emit_error e }
       abort! MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
     end
     if matches.size > 1
       abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
     end
-    func = matches.first
-    Hir::Call.new(location, func, args, func.return_type)
+    matches.first
+    # func = matches.first
+    # Hir::Call.new(location, func, args, func.return_type)
+  end
+
+  def function_call(location, overload_index, func : FunctionBase, args : ::Array(Hir)) : Hir::Call | Error
+    log.debug_descend(location, "TypeChecker#function_call(#{func}, #{args})") do
+      if func.parameters.size != args.size
+        return ArgumentMismatchError.new(location, "#{func.name} expected #{func.parameters.size} arguments, but got #{args.size}")
+      end
+      # type_args = func.type_params.size.times.each_with_object([] of Type) { |i, arr| arr << Type.var(i) }
+      type_args = Array(Type?).new(func.type_params.size, nil)
+      func.parameters.zip(args).each do |param, arg| 
+        if error = unify(arg.location, param.type, arg.type, type_args, param.location)
+          return error
+        end
+      end
+      type_args = type_args.map {|t| t || return AmbiguousFunctionCallError.new(location, "Not all type arguments were matched.")}
+      Hir::Call.new(location, overload_index, func, type_args, args, func.return_type)
+    end
+  end
+
+  # This function should return an error if the types are not compatible.
+  # Types are considered compatible if they are equal, or if one is a variable
+  # and the other satisfies the variable's constraints.
+  # and collect type arguments along the way...
+  def unify(loc : Location, pattern : Type, arg : Type, type_args : Array(Type?), annotation_loc : Location) : Error?
+    log.debug_descend(loc, "TypeChecker#unify(#{pattern}, #{arg})") do
+      if pattern.is_a? Type::Var
+        if bound_type_arg = type_args[pattern.id]
+          unless arg == bound_type_arg
+            log.error(loc, "Cannot bind type variable #{pattern} to #{arg}; it is already bound to #{bound_type_arg}")
+            return TypeMismatchError.new(loc, actual: arg, expected: bound_type_arg, annotation: annotation_loc)
+          end
+        else
+          log.warning(loc, "TODO: type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id]) ... or call it in TypeChecker#function_call")
+          # unless type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
+          #   log.warning(arg.location, "Oh shoot, type #{arg.type} does not satisfy constraint #{func.type_params[t.id]}")
+          #   raise "BREAKPOINT!"
+          #   return TypeSatisfiesConstraintsError.new(loc, arg, func.type_params[t.id], annotation_loc)
+          # end
+        end
+        type_args[pattern.id] = arg
+      elsif (pattern_args = pattern.type_args?) && (arg_args = arg.type_args?)
+        if arg.class != pattern.class
+          log.debug(loc, "arg.class (#{arg.class}) != pattern.class (#{pattern.class})")
+          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        end
+        if arg.is_a?(Type::Struct | Type::Enum) && 
+            pattern.is_a?(Type::Struct | Type::Enum)
+          unless arg.base == pattern.base
+            log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
+            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          end
+        end
+        unless arg_args = arg.type_args?
+          log.debug(loc, "arg_args is nil")
+          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        end
+        if arg.class != pattern.class ||
+           (arg.is_a?(Type::Struct | Type::Enum) && 
+            pattern.is_a?(Type::Struct | Type::Enum) &&
+            arg.base != pattern.base)
+            raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
+          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        end
+        arg_args.zip(pattern_args).each do |arg_type, param_type|
+          if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
+            return err
+          end
+        end
+      else
+        log.debug(loc, "pattern (#{pattern}) is concrete and non-generic")
+        unless arg == pattern
+          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        end
+      end
+      log.debug(loc, "unify(#{pattern}, #{arg}) => nil")
+      nil
+    end
+    # case pattern
+    # when .primitive?
+    #   unless arg == pattern
+    #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+    #   end
+    # when Type::Var
+    #   if bound_type_arg = type_args[pattern.id]
+    #     unless arg == bound_type_arg
+    #       log.error(loc, "Cannot bind type variable #{pattern} to #{arg}; it is already bound to #{bound_type_arg}")
+    #       return TypeMismatchError.new(loc, actual: arg, expected: bound_type_arg, annotation: annotation_loc)
+    #     end
+    #   else
+    #     log.warning(loc, "TODO: type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id]) ... or call it in TypeChecker#function_call")
+    #     # unless type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
+    #     #   log.warning(arg.location, "Oh shoot, type #{arg.type} does not satisfy constraint #{func.type_params[t.id]}")
+    #     #   raise "BREAKPOINT!"
+    #     #   return TypeSatisfiesConstraintsError.new(loc, arg, func.type_params[t.id], annotation_loc)
+    #     # end
+    #   end
+    #   type_args[pattern.id] = arg
+    # when Type::Struct, Type::Enum
+    #   # type constructor like Array(T)
+    #   unless arg.is_a?(Type::Struct | Type::Enum) && arg.base == pattern.base
+    #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+    #   end
+    #   arg.type_args.zip(pattern.type_args).each do |arg_type, param_type|
+    #     if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
+    #       return err
+    #     end
+    #   end
+    # else
+    #   raise "cannot unify #{arg} with #{pattern}"
+    # end
+    # nil
   end
 
   def assign(lhs : Ast::Expr, rhs : Hir) : Hir
@@ -882,6 +1033,7 @@ module TypeChecker
     in Ast::ElseCondition
       
     end
+    raise "TODO"
   end
 
   def type_error(location : Location, message : String)

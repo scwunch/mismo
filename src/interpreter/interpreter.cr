@@ -17,8 +17,8 @@ class Interpreter
   end
   def initialize(@types = {} of String => TypeInfo, @functions = {} of String => Array(FunctionBase), @log = Logger.new)
   end
-  def initialize(program : String, level : Logger::Level = Logger::Level::Warning)
-    parser = Parser.new(program)
+  def initialize(program : String, file_path : String, line_offset, level : Logger::Level = Logger::Level::Warning)
+    parser = Parser.new(program, file_path, line_offset)
     items = parser.parse
     parser.log.level = level
     type_env = TypeEnv.new(parser.log)
@@ -28,8 +28,8 @@ class Interpreter
     @log = parser.log
   end
 
-  def self.run(program : String, log_level : Logger::Level = Logger::Level::Warning)
-    interpreter = Interpreter.new(program, log_level)
+  def self.run(program : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
+    interpreter = Interpreter.new(program, file_path, line_offset, log_level)
     interpreter.run
   end
 
@@ -109,8 +109,8 @@ class Interpreter
       log.debug_descend(hir.location, "call #{hir.function.name} with args #{args}") do
         call(hir.function, args)
       end
-    when Hir::Native
-      hir.thunk.call(self)
+    # when Hir::Native
+    #   hir.thunk.call(self)
     when Hir::If
       try_conditionals(hir.tests_and_bindings) || Val.nil
     else
@@ -250,18 +250,18 @@ class StackFrame
   end
 end
 
-struct Hir::Native < Hir
-  property location : Location
-  property thunk : Proc(Interpreter, Val)
-  property type : Type
-  def initialize(@location : Location, @thunk : Proc(Interpreter, Val), @type : Type)
-  end
-  def initialize(@type, @thunk)
-    @location = Location.zero
-  end
-  def_init
-  def binding : Binding ; Binding::Var end
-  def to_s(io : IO)
-    io << "native(#{thunk})"
-  end
-end
+# struct Hir::Native < Hir
+#   property location : Location
+#   property thunk : Proc(Interpreter, Val)
+#   property type : Type
+#   def initialize(@location : Location, @thunk : Proc(Interpreter, Val), @type : Type)
+#   end
+#   def initialize(@type, @thunk)
+#     @location = Location.zero
+#   end
+#   def_init
+#   def binding : Binding ; Binding::Var end
+#   def to_s(io : IO)
+#     io << "native(#{thunk})"
+#   end
+# end

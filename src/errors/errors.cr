@@ -3,10 +3,13 @@ abstract struct Error
   property location : Location
   def initialize(@location : Location)
   end
+  def source
+    location.source
+  end
   def to_s(io : IO)
     io << self.class << "@" << location
   end
-  abstract def print(prefix : String, source_lines : Array(String), io : IO = STDOUT)
+  abstract def print(prefix : String, io : IO = STDOUT)
 end
 
 module ErrorWithMessage
@@ -20,18 +23,18 @@ module ErrorWithMessage
     io << ": " << message
   end
 
-  def print(prefix : String, source_lines : Array(String), io : IO = STDOUT)
+  def print(prefix : String, io : IO = STDOUT)
     io << prefix
-    io << self.class << "@" << location << ": " << message
+    io << self.class << " from " << location << ": " << message
     io << '\n'
-    if 0 < location.line && location.line < source_lines.size
+    if 0 < location.line && location.line < source.size
       io << ' '
       io << prefix
-      io << source_lines[location.line - 1]
+      io << source[location.line]
       if location.column != 0
         io << "\n "
         io << prefix
-        io << " " * (location.column - 1)
+        io << " " * location.indent
         io << "^\n"
       else
         io << '\n'
@@ -58,6 +61,9 @@ end
 struct AmbiguousFunctionCallError < SemanticError
   include ErrorWithMessage
 end
+struct ArgumentMismatchError < SemanticError
+  include ErrorWithMessage
+end
 
 
 abstract struct TypeError < SemanticError
@@ -74,26 +80,70 @@ struct TypeMismatchError < TypeError
     io << ": expected " << expected << ", got " << actual << " (from " << @annotation << ")"
   end
 
-  def print(prefix : String, source_lines : Array(String), io : IO = STDOUT)
+  def print(prefix : String, io : IO = STDOUT)
     io << prefix
-    io << self.class << "@" << location << ": expected " << expected << ", got " << actual
+    io << self.class << " from " << location << ": expected " << expected << ", got " << actual
     io << '\n'
-    if 0 < location.line && location.line < source_lines.size
+    if 0 < location.line && location.line < source.size
       io << ' '
       io << prefix
-      io << source_lines[location.line - 1]
+      io << source[location.line]
       if location.column != 0
         io << "\n "
         io << prefix
-        io << " " * (location.column - 1)
+        io << " " * location.indent
         io << "^\n"
       else
         io << '\n'
       end
     end
-    if 0 < @annotation.line && @annotation.line < source_lines.size
-      io << prefix << "Expected " << expected << " because of this line:\n"
-      io << source_lines[@annotation.line - 1]
+    io << prefix << "Expected " << expected << " because of line " << @annotation << ":\n"
+    if 0 < @annotation.line && @annotation.line < source.size
+      io << source[@annotation.line]
+      if @annotation.column != 0
+        io << "\n "
+        io << prefix
+        io << " " * @annotation.indent
+        io << "^\n"
+      else
+        io << '\n'
+      end
+    else
+      io << "HEEY!  Where did my source_lines go?"
+    end
+  end
+end
+
+struct TypeSatisfiesConstraintsError < TypeError
+  property type : Type
+  property constraints : TypeParameter
+  @annotation : Location
+  def initialize(@location : Location, @type : Type, @constraints : TypeParameter, @annotation : Location)
+  end
+  def to_s(io : IO)
+    super(io)
+    io << ": " << type << " does not satisfy constraints " << constraints << " (from " << @annotation << ")"
+  end
+  def print(prefix : String, io : IO = STDOUT)
+    io << prefix
+    io << self.class << " " << location << " expected " << constraints << ", got " << type
+    io << '\n'
+    if 0 < location.line && location.line < source.size
+      io << ' '
+      io << prefix
+      io << source[location.line]
+      if location.column != 0
+        io << "\n "
+        io << prefix
+        io << " " * location.indent
+        io << "^\n"
+      else
+        io << '\n'
+      end
+    end
+    if 0 < @annotation.line && @annotation.line < source.size
+      io << prefix << "Constraints " << constraints << " from this line:\n"
+      io << source[@annotation.line]
       if @annotation.column != 0
         io << "\n "
         io << prefix

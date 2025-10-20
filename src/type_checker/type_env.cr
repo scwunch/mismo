@@ -2,7 +2,7 @@ require "../type_checker/hir_nodes"
 require "../ast/ast_nodes"
 require "../type_checker/types"
 require "../type_checker/type_checker"
-require "../prelude/builtins"
+# require "../prelude/builtins"
 
 # This enum is used instead of simple booleans for checking trait implementations
 # There are cases in which checking that a type implements a trait requires its own
@@ -24,6 +24,7 @@ class TypeEnv
   property implementations : ::Hash(Trait, Implements) = {} of Trait => Implements
   property trait_claims = [] of TraitClaim
   property ast_functions = {} of String => Array(Ast::Function)
+  property external_functions = [] of Ast::ExternalFunction
   property functions = {} of String => Array(FunctionBase)
   property ready_to_validate_types = false
   property eval_depth = 0
@@ -31,15 +32,17 @@ class TypeEnv
   def initialize(@log)
   end
 
-
   def type_check_program(items : Array(Ast::TopLevelItem))
     
     # first pass
     register_types_and_collect_items(items)
 
+    set_string_and_array_bases
+
     # second pass: evaluate (without validating) all top-level type nodes; this
     # includes function signatures, collecting trait claims, and all type parameters.
     # This info will be used to check trait implementations
+    register_external_functions
     register_functions
     eval_type_params_and_trait_claims(items)
 
@@ -51,7 +54,8 @@ class TypeEnv
     # fourth pass: evaluate all type nodes of fields of structs and enum variants
     fill_out_type_info(items)
 
-    add_built_ins
+    # add_built_ins
+    # NOTE: Built-ins are now included in the prelude
 
     # fifth pass: type check functions
     ast_functions.each do |name, ast_funcs| 
@@ -86,6 +90,8 @@ class TypeEnv
           else
             ast_functions[item.name] = [item]
           end
+        when Ast::ExternalFunction
+          external_functions << item
         when Ast::Struct
           log.info(item.location, "register struct #{item.name}")
           if item.name.in?(user_types)
@@ -145,13 +151,32 @@ class TypeEnv
     end
   end
 
+  def set_string_and_array_bases
+    case string_base = user_types["String"]?
+    when StructBase
+      Hir::String.set_base(string_base)
+    when EnumBase
+      log.warning(Location.zero, "E#{__LINE__} String is an enum, not a struct")
+    else
+      log.warning(Location.zero, "E#{__LINE__} String is not defined")
+    end
+    case array_base = user_types["Array"]?
+    when StructBase
+      Hir::Array.set_base(array_base)
+    when EnumBase
+      log.warning(Location.zero, "E#{__LINE__} Array is an enum, not a struct")
+    else
+      log.warning(Location.zero, "E#{__LINE__} Array is not defined")
+    end
+  end
+
   def eval_type_params_and_trait_claims(items : Array(Ast::TopLevelItem))
     log.info_descend(Location.zero, "evaluate type params and trait claims") do
       items.each do |item|
-        # raise "BREAK" if item.name == "Equatable"
         log.debug_descend(item.location, "eval_type_params_and_trait_claims #{item}") do
           case item
           when Ast::Function
+            # type parameters already evaluated in `#register_functions`
           when Ast::Struct, Ast::Enum
             context = TypeContext.new(self, item.type_params)
             log.debug(item.location, "context: #{context}")
@@ -190,36 +215,81 @@ class TypeEnv
     end
   end
 
+  def register_external_functions
+    log.info_descend(Location.zero, "Register #{external_functions.size} external functions") do
+      external_functions.each do |func|
+        log.debug_descend(func.location, "register #{func.name}#{func.signature}") do
+          if functions.includes?(func.name)
+            log.error(func.location, "E#{__LINE__} duplicate externally implemented function: #{func.name}; overwriting.")
+          end
+          register_function(
+            func, 
+            functions[func.name] = [] of FunctionBase
+          )
+            .set_as_extern
+        end
+      end
+    end
+  end
+
   # Iterate ast_functions (a tree structure created in the previous step)
   # and register each function in the type environment.  Parameter types 
   # and return types are evaluated, but trait bounds are not checked yet.
   def register_functions
     log.info_descend(Location.zero, "Register all functions (#{ast_functions.size})") do
       ast_functions.each do |name, overloads|
+        if functions.includes?(name)
+          log.warning(overloads.first.location, "E#{__LINE__} overwriting externally implemented function: #{name}")
+        end
         func_bases = functions[name] = [] of FunctionBase
         overloads.each do |ast_func|
-          context = TypeContext.new(self, ast_func.type_params)
-          log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
-            function = FunctionBase.new(
-              location: ast_func.location, 
-              name: ast_func.name, 
-              type_params: context.type_parameters,
-              parameters: ast_func.parameters.try &.map do |param|
-                  type = context.eval(param.type)
-                  mode = param.convention || type.mode
-                  Parameter.new(param.location, mode, param.name, type)
-                end || [] of Parameter,
-              return_type: if ret_type = ast_func.return_type
-                  context.eval(ret_type)
-                else
-                  Type.nil
-                end
-            )
-            log.debug(ast_func.location, "Function registered: #{function}")
-            func_bases << function
-          end
+          register_function(ast_func, func_bases)
+          # context = TypeContext.new(self, ast_func.type_params)
+          # log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
+          #   function = FunctionBase.new(
+          #     location: ast_func.location, 
+          #     name: ast_func.name, 
+          #     type_params: context.type_parameters,
+          #     parameters: ast_func.parameters.try &.map do |param|
+          #         type = context.eval(param.type)
+          #         mode = param.convention || type.mode
+          #         Parameter.new(param.location, mode, param.name, type)
+          #       end || [] of Parameter,
+          #     return_type: if ret_type = ast_func.return_type
+          #         context.eval(ret_type)
+          #       else
+          #         Type.nil
+          #       end
+          #   )
+          #   log.debug(ast_func.location, "Function registered: #{function}")
+          #   func_bases << function
+          # end
         end
       end
+    end
+  end
+
+  def register_function(ast_func : Ast::Function | Ast::ExternalFunction, func_bases : Array(FunctionBase))
+    context = TypeContext.new(self, ast_func.type_params)
+    log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
+      function = FunctionBase.new(
+        location: ast_func.location, 
+        name: ast_func.name, 
+        type_params: context.type_parameters,
+        parameters: ast_func.parameters.try &.map do |param|
+            type = context.eval(param.type)
+            mode = param.convention || type.mode
+            Parameter.new(param.location, mode, param.name, type)
+          end || [] of Parameter,
+        return_type: if ret_type = ast_func.return_type
+            context.eval(ret_type)
+          else
+            Type.nil
+          end
+      )
+      log.debug(ast_func.location, "Function registered: #{function}")
+      func_bases << function
+      function
     end
   end
 
@@ -295,18 +365,28 @@ class TypeEnv
           case item
           when Ast::Struct
             struct_base = user_types[item.name].as(StructBase)
+            this = Type::Struct.new(struct_base, context.type_args)
             item.fields.each_with_index do |field, i|
               field_type = context.eval(field.type)
-              struct_base.fields << Field.new(field.location, field.binding, field.name, field_type)
+              field = Field.new(field.location, field.binding, field.name, field_type)
+              struct_base.fields << field
+              # add field-access wrapper function
               upsert(FunctionBase.new(
                 field.location, 
                 field.name, 
                 context.type_parameters, 
-                [Parameter.new(field.location, Mode::Let, "self", Type.struct(struct_base))], 
+                [Parameter.new(field.location, Mode::Let, "self", this)], 
                 field_type,
-                ->(interpreter : Interpreter) {
-                  interpreter.frame.variables["self"].data.as(Slice(Val))[i]
-                }
+                body: [
+                  Hir.accessfield(
+                    field.location, 
+                    Cell.new(Hir.identifier(field.location, "self", Binding::Let, this)), 
+                    field
+                  )
+                ]
+                # ->(interpreter : Interpreter) {
+                #   interpreter.frame.variables["self"].data.as(Slice(Val))[i]
+                # }
               ))
             end
             # add constructor
@@ -314,15 +394,24 @@ class TypeEnv
               item.location, 
               item.name, 
               context.type_parameters,
-              struct_base.fields.map do |field|
+              parameters: struct_base.fields.map do |field|
                 Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
               end,
-              Type.struct(struct_base, context.type_args),
-              ->(interpreter : Interpreter) {
-                Val.new(Slice(Val).new(struct_base.fields.size) do |i|
-                  interpreter.frame.variables[struct_base.fields[i].name]
-                end)
-              }
+              return_type: Type.struct(struct_base, context.type_args),
+              body: [
+                Hir.constructor(
+                  item.location,
+                  this,
+                  struct_base.fields.map do |field|
+                    Hir.identifier(field.location, field.name, field.binding, field.type)
+                  end
+                )
+              ]
+              # ->(interpreter : Interpreter) {
+              #   Val.new(Slice(Val).new(struct_base.fields.size) do |i|
+              #     interpreter.frame.variables[struct_base.fields[i].name]
+              #   end)
+              # }
             ))
           when Ast::Enum
             enum_base = user_types[item.name].as(EnumBase)
@@ -344,23 +433,25 @@ class TypeEnv
                 end || [] of Parameter,
                 Type.enum(enum_base, context.type_args),
                 if fields = variant.fields
-                  ->(interpreter : Interpreter) {
-                    Val.new(Slice(Val).new(fields.size + 1) do |i|
-                      if i == 0
-                        discriminant
-                      else
-                        interpreter.frame.variables[fields[i-1].name]
-                      end
-                    end)
-                  }
+                  raise "I guess you should make a constructor here..."
+                  # ->(interpreter : Interpreter) {
+                  #   Val.new(Slice(Val).new(fields.size + 1) do |i|
+                  #     if i == 0
+                  #       discriminant
+                  #     else
+                  #       interpreter.frame.variables[fields[i-1].name]
+                  #     end
+                  #   end)
+                  # }
                 else
-                  ->(interpreter : Interpreter) {
-                    Val.new(Slice[discriminant])
-                  }
+                  raise "I guess you should make a constructor here..."
+                  # ->(interpreter : Interpreter) {
+                  #   Val.new(Slice[discriminant])
+                  # }
                 end
               ))
             end
-          when Ast::Function
+          when Ast::Function, Ast::ExternalFunction
             # merely validate the types of the parameters that are already there
             function_base = get_function(item.name, item.location)
             item.parameters.try &.each do |param|
@@ -369,7 +460,7 @@ class TypeEnv
             if ret_type = item.return_type
               context.eval(ret_type)
             end
-          when Ast::Trait, Ast::Import
+          when Ast::Trait, Ast::Import, Ast::Extend
             # pass
           else
             log.error(item.location, "E#{__LINE__} unknown item type: #{item}")
@@ -384,11 +475,12 @@ class TypeEnv
       raise "TypeEnv#get_function: unknown function: #{name} @ #{loc}"
   end
 
-  def add_built_ins
-    BUILTINS.each do |func|
-      upsert(func)
-    end
-  end
+  # NOTE: Built-ins are now included in the prelude
+  # def add_built_ins
+  #   BUILTINS.each do |func|
+  #     upsert(func)
+  #   end
+  # end
 
   def upsert(func : FunctionBase)
     if overloads = functions[func.name]?

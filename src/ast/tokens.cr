@@ -5,14 +5,59 @@
 #  
 require "./operators"
 
+struct Source
+  @source_lines : Array(String)
+  def initialize(@source_lines : Array(String))
+  end
+
+  def self.from_path(file_path : String)
+    Source.new(File.read(file_path).split("\n"))
+  end
+
+  def self.empty
+    Source.new(Array(String).new)
+  end
+
+  def self.empty_with_path(file_path : String)
+    Source.new([file_path])
+  end
+
+  def file_path
+    @source_lines.first? || ""
+  end
+
+  def file_path?
+    @source_lines.first?
+  end
+
+  def size
+    if @source_lines.empty?
+      0
+    else
+      @source_lines.size - 1
+    end
+  end
+
+  def [](line)
+    @source_lines[line]
+  end
+
+  def []?(line)
+    @source_lines[line]?
+  end
+
+  def empty?
+    @source_lines.size <= 1
+  end
+end
 
 struct Location
   include Comparable(Location)
-  getter file : String = ""
+  getter source : Source = Source.empty
   getter line : UInt32
   getter column : UInt32
 
-  def initialize(@file : String, @line : UInt32, @column : UInt32)
+  def initialize(@source : Source, @line : UInt32, @column : UInt32)
   end
   def initialize(line, column)
     @line = line.to_u32
@@ -22,12 +67,12 @@ struct Location
     @line = tuple[0].to_u32
     @column = tuple[1].to_u32
   end
-  def self.new(loc : Location)
-    loc
-  end
+  # def self.new(loc : Location)
+  #   loc
+  # end
 
-  def self.zero
-    Location.new(0, 0)
+  def self.zero(source = Source.empty)
+    Location.new(source, 0, 0)
   end
 
   def indent
@@ -37,9 +82,12 @@ struct Location
   end
 
   def to_s(io : IO)
-    if @file != ""
-      io << @file << ":"
+    if p = @source.file_path?
+      io << p << ":"
     end
+    coord(io)
+  end
+  def coord(io : IO)
     if @column == 0
       if @line == 0
         io << " : "
@@ -62,11 +110,11 @@ struct Location
   end
 
   def -(int)
-    Location.new(@file, @line, @column - int)
+    Location.new(@source, @line, @column - int)
   end
 
   def +(int)
-    Location.new(@file, @line, @column + int)
+    Location.new(@source, @line, @column + int)
   end
 end
 
@@ -199,6 +247,7 @@ end
 
 enum KeyWord
   Import
+  Extern
   Struct
   Enum
   Extend
@@ -234,6 +283,7 @@ enum KeyWord
   def self.parse_top_level?(str : String)
     case str
     when "import" then Import
+    when "extern" then Extern
     when "struct" then Struct
     when "enum" then Enum
     when "extend" then Extend
@@ -288,6 +338,7 @@ enum KeyWord
   def to_s
     case self
     in Import then "import"
+    in Extern then "extern"
     in Struct then "struct"
     in Enum then "enum"
     in Extend then "extend"
