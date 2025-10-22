@@ -18,7 +18,7 @@ module Mismo
 end
 
 describe "Integration Testing" do
-  it "should compile and run", focus: true do
+  it "should compile and run" do #, focus: true do
     result = Mismo.run(
       file_path: __FILE__,
       line_offset: __LINE__ + 2, 

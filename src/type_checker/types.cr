@@ -18,6 +18,13 @@ abstract struct Type
       nil
     end
   end
+  def base_or_class
+    if self.responds_to?(:base)
+      self.base
+    else
+      self.class
+    end
+  end
 
   def inspect(io : IO)
     io << {{@type.name.stringify}} << '('
@@ -224,66 +231,100 @@ abstract struct Type
     # end
   end
 
-  def Type.adt(base : StructBase, type_args : ::Slice(Type) = ::Slice(Type).empty)
-    Struct.new(base, type_args).as Type
-  end
+  # def Type.adt(base : StructDef, type_args : ::Slice(Type) = ::Slice(Type).empty)
+  #   Struct.new(base, type_args).as Type
+  # end
 
-  def Type.adt(base : EnumBase, type_args : ::Slice(Type) = ::Slice(Type).empty)
-    Enum.new(base, type_args).as Type
-  end
+  # def Type.adt(base : EnumDef, type_args : ::Slice(Type) = ::Slice(Type).empty)
+  #   Enum.new(base, type_args).as Type
+  # end
 
-  def Type.adt(base : TypeInfo, type_args : ::Slice(Type) = ::Slice(Type).empty)
-    case base
-    when StructBase then Struct.new(base, type_args)
-    when EnumBase then Enum.new(base, type_args)
-    else
-      raise "Type.adt: unknown type info: #{base}"
-    end.as Type
-  end
+  # def Type.adt(base : TypeDefinition, type_args : ::Slice(Type) = ::Slice(Type).empty)
+  #   case base
+  #   when StructDef then Struct.new(base, type_args)
+  #   when EnumDef then Enum.new(base, type_args)
+  #   else
+  #     raise "Type.adt: unknown type info: #{base}"
+  #   end.as Type
+  # end
 
-  struct Struct < Type
-    getter base : StructBase
+  struct Adt < Type
+    getter base : TypeDefinition
     getter type_args : ::Slice(Type)
-    def initialize(@base : StructBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
+    def initialize(@base : TypeDefinition, @type_args : ::Slice(Type))
     end
-    def Type.struct(*args) ; Struct.new(*args).as Type end
+    def Type.adt(base : TypeDefinition, type_args : ::Slice(Type) = ::Slice(Type).empty)
+      Adt.new(base, type_args).as Type
+    end
+    def is_enum?
+      base.is_a?(EnumDef)
+    end
+    def is_struct?
+      base.is_a?(StructDef)
+    end
     def to_s(io : IO)
-      io << "struct #{@base.name}"
+      io << base.name
       io << "[#{@type_args.join(", ")}]" if @type_args.any?
-    end
-    def inspect(io : IO)
-      io << "Type::Struct("
-      base.inspect(io)
-      io << "[#{@type_args.join(", ")}]" if @type_args.any?
-      io << ")"
     end
     def mode : Mode ; base.mode end
-    # def substitute_Self_with(type : Type) : Type
-    #   Struct.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
-    # end
     def get_field?(field_name : ::String) : Field?
-      base.fields.each do |field|
+      b = base
+      unless b.is_a?(StructDef)
+        raise "Adt#get_field?: not implemented yet for enums (#{self})"
+      end
+      b.fields.each do |field|
         return field if field.name == field_name
       end
       nil
     end
-  end
-
-  struct Enum < Type
-    getter base : EnumBase
-    getter type_args : ::Slice(Type)
-    def initialize(@base : EnumBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
-    end
-    def Type.enum(*args) ; Enum.new(*args).as Type end
-    def to_s(io : IO)
-      io << "enum #{@base.name}"
-      io << "[#{@type_args.join(", ")}]" if @type_args.any?
-    end
-    def mode : Mode ; base.mode end
     # def substitute_Self_with(type : Type) : Type
-    #   Enum.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+    #   Adt.new(@type_args.map { |ta| ta.substitute_Self_with(type) })
     # end
   end
+
+  # struct Struct < Type
+  #   getter base : StructDef
+  #   getter type_args : ::Slice(Type)
+  #   def initialize(@base : StructDef, @type_args : ::Slice(Type) = ::Slice(Type).empty)
+  #   end
+  #   def Type.struct(*args) ; Struct.new(*args).as Type end
+  #   def to_s(io : IO)
+  #     io << "struct #{@base.name}"
+  #     io << "[#{@type_args.join(", ")}]" if @type_args.any?
+  #   end
+  #   def inspect(io : IO)
+  #     io << "Type::Struct("
+  #     base.inspect(io)
+  #     io << "[#{@type_args.join(", ")}]" if @type_args.any?
+  #     io << ")"
+  #   end
+  #   def mode : Mode ; base.mode end
+  #   # def substitute_Self_with(type : Type) : Type
+  #   #   Struct.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+  #   # end
+  #   def get_field?(field_name : ::String) : Field?
+  #     base.fields.each do |field|
+  #       return field if field.name == field_name
+  #     end
+  #     nil
+  #   end
+  # end
+
+  # struct Enum < Type
+  #   getter base : EnumDef
+  #   getter type_args : ::Slice(Type)
+  #   def initialize(@base : EnumDef, @type_args : ::Slice(Type) = ::Slice(Type).empty)
+  #   end
+  #   def Type.enum(*args) ; Enum.new(*args).as Type end
+  #   def to_s(io : IO)
+  #     io << "enum #{@base.name}"
+  #     io << "[#{@type_args.join(", ")}]" if @type_args.any?
+  #   end
+  #   def mode : Mode ; base.mode end
+  #   # def substitute_Self_with(type : Type) : Type
+  #   #   Enum.new(@base, @type_args.map { |ta| ta.substitute_Self_with(type) })
+  #   # end
+  # end
 
   struct Function < Type
     getter args : ::Slice(Type)
@@ -304,6 +345,14 @@ abstract struct Type
   end
 end
 
+# This module is included by TypeDefinition, TratiDef, and FunctionDef
+module LocNameTypeParams
+  getter location : Location
+  getter name : String
+  property type_params : ::Slice(TypeParameter)
+  def initialize(@location : Location, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty)
+  end
+end
 
 # --- Type Information ---
 
@@ -325,16 +374,14 @@ struct TypeParameter < IrNode
   end
 end
 
-abstract class TypeInfo
-  getter location : Location
+abstract class TypeDefinition
+  include LocNameTypeParams
   getter mode : Mode
-  getter name : String
-  property type_params : ::Slice(TypeParameter)
   def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty)
   end
 end
 
-class StructBase < TypeInfo
+class StructDef < TypeDefinition
   getter fields : ::Array(Field)
   def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @fields : ::Array(Field) = [] of Field)
   end
@@ -349,7 +396,7 @@ class StructBase < TypeInfo
   end
 end
 
-class EnumBase < TypeInfo
+class EnumDef < TypeDefinition
   getter variants : ::Array(Variant)
   def initialize(@location : Location, @mode : Mode, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @variants : ::Array(Variant) = [] of Variant)
   end
@@ -388,7 +435,9 @@ struct Variant < IrNode
   end
 end
 
-class TraitBase < TypeInfo
+class TraitDef
+  include LocNameTypeParams
+  getter mode : Mode
   getter methods : ::Array(Ast::AbstractMethod)
   def initialize(@location : Location, @mode : Mode, @name : String, type_params : ::Slice(TypeParameter)? = nil, @methods : ::Array(Ast::AbstractMethod) = [] of Ast::AbstractMethod)
     @type_params = type_params || Slice[TypeParameter.new(@location, "Self")]
@@ -414,10 +463,8 @@ end
 #   end
 # end
 
-class FunctionBase
-  getter location : Location
-  getter name : String
-  property type_params : ::Slice(TypeParameter)
+class FunctionDef
+  include LocNameTypeParams
   property parameters : ::Array(Parameter) = [] of Parameter
   property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
@@ -466,16 +513,16 @@ struct Parameter < IrNode
 end
 
 struct Trait
-  getter base : TraitBase
+  getter base : TraitDef
   getter type_args : ::Slice(Type)
-  def initialize(@base : TraitBase, @type_args : ::Slice(Type) = ::Slice(Type).empty)
+  def initialize(@base : TraitDef, @type_args : ::Slice(Type) = ::Slice(Type).empty)
     if @base.type_params.size != @type_args.size
       raise "wrong number of type args: #{inspect}"
     end
   end
   # def self.unknown(name : String, type_args : ::Slice(Type) = ::Slice(Type).empty)
   #   Trait
-  #     .new(TraitBase.new(Location.zero, Mode::Let, name))
+  #     .new(TratiDef.new(Location.zero, Mode::Let, name))
   #     .with_type_args(type_args)
   # end
   def initialize(@base, type_arg : Type)

@@ -6,7 +6,7 @@ def loc
 end
 
 BUILTINS = [
-  FunctionBase.new(
+  FunctionDef.new(
     "print", 
     Slice[TypeParameter.new(loc, "T")], 
     [Parameter.new(loc, Mode::Let, "value", Type.var(0))],
@@ -17,7 +17,7 @@ BUILTINS = [
     }
   ),
 
-  FunctionBase.new(
+  FunctionDef.new(
     "print",
     [Parameter.new(loc, Mode::Let, "value", Type.string)],
     Type.nil,
@@ -28,7 +28,7 @@ BUILTINS = [
   ),
   
   # Type.int
-  FunctionBase.new(
+  FunctionDef.new(
     "+",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -40,7 +40,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "-",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -52,7 +52,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "*",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -64,7 +64,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "/",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -78,7 +78,7 @@ BUILTINS = [
   ),
 
   # Type.nat
-  FunctionBase.new(
+  FunctionDef.new(
     "+",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -90,7 +90,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "-",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -102,7 +102,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "*",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -114,7 +114,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "/",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -128,7 +128,7 @@ BUILTINS = [
   ),
 
   # Type.int, Type.nat and vice versa
-  FunctionBase.new(
+  FunctionDef.new(
     "+",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -140,7 +140,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "-",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -152,7 +152,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "*",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -164,7 +164,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "/",
     [Parameter.new(loc, Mode::Let, "left", Type.int),
      Parameter.new(loc, Mode::Let, "right", Type.nat)],
@@ -176,7 +176,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "+",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -188,7 +188,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "-",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -200,7 +200,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "*",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -212,7 +212,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "/",
     [Parameter.new(loc, Mode::Let, "left", Type.nat),
      Parameter.new(loc, Mode::Let, "right", Type.int)],
@@ -226,7 +226,7 @@ BUILTINS = [
   ),
 
   # Type.float
-  FunctionBase.new(
+  FunctionDef.new(
     "+",
     [Parameter.new(loc, Mode::Let, "left", Type.float),
      Parameter.new(loc, Mode::Let, "right", Type.float)],
@@ -238,7 +238,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "-",
     [Parameter.new(loc, Mode::Let, "left", Type.float),
      Parameter.new(loc, Mode::Let, "right", Type.float)],
@@ -250,7 +250,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "*",
     [Parameter.new(loc, Mode::Let, "left", Type.float),
      Parameter.new(loc, Mode::Let, "right", Type.float)],
@@ -262,7 +262,7 @@ BUILTINS = [
       )
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "/",
     [Parameter.new(loc, Mode::Let, "left", Type.float),
      Parameter.new(loc, Mode::Let, "right", Type.float)],
@@ -276,7 +276,7 @@ BUILTINS = [
   ),
 
   # numeric conversion functions
-  FunctionBase.new(
+  FunctionDef.new(
     "float",
     [Parameter.new(loc, Mode::Let, "i", Type.int)],
     Type.float,
@@ -284,7 +284,7 @@ BUILTINS = [
       Val.new(interpreter.frame.variables["i"].data.as(Int).to_f64)
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "float",
     [Parameter.new(loc, Mode::Let, "n", Type.nat)],
     Type.float,
@@ -292,7 +292,7 @@ BUILTINS = [
       Val.new(interpreter.frame.variables["n"].data.as(UInt64).to_f64)
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "round",
     [Parameter.new(loc, Mode::Let, "x", Type.float)],
     Type.int,
@@ -300,7 +300,7 @@ BUILTINS = [
       Val.new(interpreter.frame.variables["x"].data.as(Float).round.to_i)
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "abs",
     [Parameter.new(loc, Mode::Let, "x", Type.float)],
     Type.float,
@@ -308,7 +308,7 @@ BUILTINS = [
       Val.new(interpreter.frame.variables["x"].data.as(Float).abs)
     }
   ),
-  FunctionBase.new(
+  FunctionDef.new(
     "abs",
     [Parameter.new(loc, Mode::Let, "x", Type.int)],
     Type.nat,
@@ -318,13 +318,13 @@ BUILTINS = [
   ),
 ]
 
-def FunctionBase.new(
+def FunctionDef.new(
   name : String, 
   type_params : Slice(TypeParameter), 
   parameters : Array(Parameter),
   return_type : Type,
   thunk : Proc(Interpreter, Val))
-  FunctionBase.new(
+  FunctionDef.new(
     Location.zero, 
     name,
     type_params, 
@@ -334,12 +334,12 @@ def FunctionBase.new(
   )
 end
 
-def FunctionBase.new(
+def FunctionDef.new(
   name : String,  
   parameters : Array(Parameter),
   return_type : Type,
   thunk : Proc(Interpreter, Val))
-  FunctionBase.new(
+  FunctionDef.new(
     Location.zero, 
     name,
     Slice(TypeParameter).empty, 
@@ -349,14 +349,14 @@ def FunctionBase.new(
   )
 end
 
-def FunctionBase.new(
+def FunctionDef.new(
   loc : Location,
   name : String, 
   type_params : Slice(TypeParameter), 
   parameters : Array(Parameter),
   return_type : Type,
   thunk : Proc(Interpreter, Val))
-  FunctionBase.new(
+  FunctionDef.new(
     loc, 
     name,
     type_params, 
@@ -366,13 +366,13 @@ def FunctionBase.new(
   )
 end
 
-def FunctionBase.new(
+def FunctionDef.new(
   loc : Location,
   name : String,  
   parameters : Array(Parameter),
   return_type : Type,
   thunk : Proc(Interpreter, Val))
-  FunctionBase.new(
+  FunctionDef.new(
     loc, 
     name,
     Slice(TypeParameter).empty, 

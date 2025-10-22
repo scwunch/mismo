@@ -4,12 +4,12 @@ require "../utils/validate_zig_identifier"
 class CodeGenerator
   property io : IO
   property indent : UInt32 = 0
-  property current_function : FunctionBase = FunctionBase.new(Location.zero, "<none>")
+  property current_function : FunctionDef = FunctionDef.new(Location.zero, "<none>")
   def initialize(@io : IO)
   end
 
   def generate_program(env : TypeEnv)
-    env.user_types.each do |name, type|
+    env.type_defs.each do |name, type|
       emit(type)
     end
     newline
@@ -68,29 +68,29 @@ class CodeGenerator
     end
   end
 
-  def emit(type_def : TypeInfo)
+  def emit(type_def : TypeDefinition)
     case type_def
-    when StructBase
+    when StructDef
       if type_def.type_params.any?
         emit_generic_type_def(type_def)
       else
         emit_struct_def(type_def)
       end
-    when EnumBase
+    when EnumDef
       raise "TODO: emit enum"
     else
       raise "unhandled type def: #{type_def}"
     end
   end
 
-  def emit_struct_def(type_def : StructBase)
+  def emit_struct_def(type_def : StructDef)
     io << "pub const "
     type_name(type_def.name)
     io << " = "
     emit_anonymous_struct_def(type_def)
   end
 
-  def emit_anonymous_struct_def(type_def : StructBase)
+  def emit_anonymous_struct_def(type_def : StructDef)
     io << "struct"
     start_block
     type_def.fields.each do |field|
@@ -105,7 +105,7 @@ class CodeGenerator
     newline
   end
 
-  def emit_generic_type_def(type_def : StructBase)
+  def emit_generic_type_def(type_def : StructDef)
     # generic types are implemented as comptime functions in Zig
     # they are instantiated as needed
     io << "pub fn "
@@ -122,7 +122,7 @@ class CodeGenerator
     newline
   end
 
-  def emit(function : FunctionBase, index : Int)
+  def emit(function : FunctionDef, index : Int)
     if function.name == "drop"
       p! function.body.first? || raise "OH NO!  Drop has no body!"
     end
@@ -217,7 +217,7 @@ class CodeGenerator
       io << ")"
     when Type::Union
       raise "not implemented"
-    when Type::Struct, Type::Enum
+    when Type::Adt
       emit_struct_or_enum(type)
     when Type::Function
       io << "fn(#{type.args.join(", ")}) "
@@ -359,14 +359,27 @@ class CodeGenerator
     if cons.args.empty?
       io << "{}"
     else
-      ty = cons.struct_.base
-      cons.args.each_with_index do |arg, i|
-        io << (i==0 ? "{ ." : ", .")
-        ident(ty.fields[i].name)
-        io << " = "
-        emit(arg)
+      case ty = cons.type.base
+      when StructDef
+        cons.args.each_with_index do |arg, i|
+          io << (i==0 ? "{ ." : ", .")
+          ident(ty.fields[i].name)
+          io << " = "
+          emit(arg)
+        end
+        io << " }"
+      when EnumDef
+        raise "Enum constructor not implemented"
+        cons.args.each_with_index do |arg, i|
+          io << (i==0 ? "{ ." : ", .")
+          ident(ty.variants[i].name)
+          io << " = "
+          emit(arg)
+        end
+        io << " }"
+      else
+        raise "unhandled type: #{ty}"
       end
-      io << " }"
     end
   end
 end

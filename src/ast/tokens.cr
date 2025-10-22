@@ -15,7 +15,7 @@ struct Source
   end
 
   def self.empty
-    Source.new(Array(String).new)
+    Source.new([""])
   end
 
   def self.empty_with_path(file_path : String)
@@ -27,7 +27,9 @@ struct Source
   end
 
   def file_path?
-    @source_lines.first?
+    p = file_path
+    return nil if p.size == 0
+    p
   end
 
   def size
@@ -36,6 +38,10 @@ struct Source
     else
       @source_lines.size - 1
     end
+  end
+
+  def <<(line)
+    @source_lines << line
   end
 
   def [](line)
@@ -83,7 +89,7 @@ struct Location
 
   def to_s(io : IO)
     if p = @source.file_path?
-      io << p << ":"
+      io << p << ':'
     end
     coord(io)
   end
@@ -148,6 +154,11 @@ macro define_token(name, type)
     {{name}}.new(Location.new(location[0].to_u32, location[1].to_u32), data)
   end 
 
+  # eg Token.number("src/test.mismo", {1, 1}, "34")
+  def self.{{name.id.downcase}}(file_name : ::String, location : {Int32, Int32}, data : {{type}})
+    {{name}}.new(Location.new(Source.empty_with_path(file_name), location[0].to_u32, location[1].to_u32), data)
+  end
+
   # eg Token.number("34")
   def self.{{name.id.downcase}}(data : {{type}})
     {{name}}.new(Location.zero, data)
@@ -173,6 +184,11 @@ macro define_token(name)
   # eg Token.comma({1, 1})
   def self.{{name.id.downcase}}(location : {Int32, Int32})
     {{name}}.new(Location.new(location[0].to_u32, location[1].to_u32))
+  end
+
+  # eg Token.comma("src/test.mismo", {1, 1})
+  def self.{{name.id.downcase}}(file_name : ::String, location : {Int32, Int32})
+    {{name}}.new(Location.new(Source.empty_with_path(file_name), location[0].to_u32, location[1].to_u32))
   end
 end
 

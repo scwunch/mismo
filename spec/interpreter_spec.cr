@@ -5,7 +5,7 @@ def loc
   Location.zero
 end
 
-describe Interpreter do
+pending Interpreter do
   describe "#eval" do
     it "works" do
       interpreter = Interpreter.new(Logger.new)

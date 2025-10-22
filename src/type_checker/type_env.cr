@@ -19,13 +19,13 @@ end
 
 class TypeEnv
   property log : Logger
-  property user_types = {} of String => TypeInfo
-  property traits = {} of String => TraitBase
+  property type_defs = {} of String => TypeDefinition
+  property traits = {} of String => TraitDef
   property implementations : ::Hash(Trait, Implements) = {} of Trait => Implements
   property trait_claims = [] of TraitClaim
   property ast_functions = {} of String => Array(Ast::Function)
   property external_functions = [] of Ast::ExternalFunction
-  property functions = {} of String => Array(FunctionBase)
+  property functions = {} of String => Array(FunctionDef)
   property ready_to_validate_types = false
   property eval_depth = 0
 
@@ -94,10 +94,10 @@ class TypeEnv
           external_functions << item
         when Ast::Struct
           log.info(item.location, "register struct #{item.name}")
-          if item.name.in?(user_types)
+          if item.name.in?(type_defs)
             log.error(item.location, "E#{__LINE__} type #{item.name} already defined")
           end
-          user_types[item.name] = StructBase.new(
+          type_defs[item.name] = StructDef.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
@@ -108,10 +108,10 @@ class TypeEnv
           # end
         when Ast::Enum
           log.info(item.location, "register enum #{item.name}")
-          if item.name.in?(user_types)
+          if item.name.in?(type_defs)
             log.error(item.location, "E#{__LINE__} type #{item.name} already defined")
           end
-          user_types[item.name] = EnumBase.new(
+          type_defs[item.name] = EnumDef.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
@@ -133,7 +133,7 @@ class TypeEnv
           #   end
           # end
           # p! type_params
-          traits[item.name] = TraitBase.new(
+          traits[item.name] = TraitDef.new(
             item.location, 
             item.convention || Mode::Let, 
             item.name,
@@ -152,18 +152,18 @@ class TypeEnv
   end
 
   def set_string_and_array_bases
-    case string_base = user_types["String"]?
-    when StructBase
+    case string_base = type_defs["String"]?
+    when StructDef
       Hir::String.set_base(string_base)
-    when EnumBase
+    when EnumDef
       log.warning(Location.zero, "E#{__LINE__} String is an enum, not a struct")
     else
       log.warning(Location.zero, "E#{__LINE__} String is not defined")
     end
-    case array_base = user_types["Array"]?
-    when StructBase
+    case array_base = type_defs["Array"]?
+    when StructDef
       Hir::Array.set_base(array_base)
-    when EnumBase
+    when EnumDef
       log.warning(Location.zero, "E#{__LINE__} Array is an enum, not a struct")
     else
       log.warning(Location.zero, "E#{__LINE__} Array is not defined")
@@ -180,7 +180,7 @@ class TypeEnv
           when Ast::Struct, Ast::Enum
             context = TypeContext.new(self, item.type_params)
             log.debug(item.location, "context: #{context}")
-            base_type = user_types[item.name]
+            base_type = type_defs[item.name]
             base_type.type_params = context.type_parameters
             type = Type.adt(base_type, context.type_args)
             item.traits.try &.each do |trait|
@@ -194,7 +194,7 @@ class TypeEnv
             # context = TypeContext.new(self, Slice[Ast::TypeParameter.new(item.location, "Self")] + item.type_params)
             context = TypeContext.new(self, item.type_params)
             log.debug(item.location, "context: #{context}")
-            trait = traits[item.name].as(TraitBase)
+            trait = traits[item.name].as(TraitDef)
             trait.type_params = context.type_parameters
           when Ast::Extend
             if claimed_traits = item.traits
@@ -224,7 +224,7 @@ class TypeEnv
           end
           register_function(
             func, 
-            functions[func.name] = [] of FunctionBase
+            functions[func.name] = [] of FunctionDef
           )
             .set_as_extern
         end
@@ -241,12 +241,12 @@ class TypeEnv
         if functions.includes?(name)
           log.warning(overloads.first.location, "E#{__LINE__} overwriting externally implemented function: #{name}")
         end
-        func_bases = functions[name] = [] of FunctionBase
+        func_bases = functions[name] = [] of FunctionDef
         overloads.each do |ast_func|
           register_function(ast_func, func_bases)
           # context = TypeContext.new(self, ast_func.type_params)
           # log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
-          #   function = FunctionBase.new(
+          #   function = FunctionDef.new(
           #     location: ast_func.location, 
           #     name: ast_func.name, 
           #     type_params: context.type_parameters,
@@ -269,10 +269,10 @@ class TypeEnv
     end
   end
 
-  def register_function(ast_func : Ast::Function | Ast::ExternalFunction, func_bases : Array(FunctionBase))
+  def register_function(ast_func : Ast::Function | Ast::ExternalFunction, func_bases : Array(FunctionDef))
     context = TypeContext.new(self, ast_func.type_params)
     log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
-      function = FunctionBase.new(
+      function = FunctionDef.new(
         location: ast_func.location, 
         name: ast_func.name, 
         type_params: context.type_parameters,
@@ -298,7 +298,7 @@ class TypeEnv
   # actually exist.
   def check_trait_implementations
     if !ready_to_validate_types
-      log.warning(Location.zero, "W#{__LINE__} TypeEnv not ready to validate types")
+      log.warning(Location.zero, "#{__FILE__}:#{__LINE__} TypeEnv#check_trait_implementations called, but TypeEnv is not ready to validate types")
     end
     log.info_descend(Location.zero, "Check trait implementations (#{trait_claims.size})") do
       trait_claims.each do |extension|
@@ -364,14 +364,16 @@ class TypeEnv
         log.info_descend(item.location, "Fill out type info for #{item} (context=#{context})") do
           case item
           when Ast::Struct
-            struct_base = user_types[item.name].as(StructBase)
-            this = Type::Struct.new(struct_base, context.type_args)
+            struct_base = type_defs[item.name].as(StructDef)
+            this = Type::Adt.new(struct_base, context.type_args)
             item.fields.each_with_index do |field, i|
+              # evaluate field
               field_type = context.eval(field.type)
               field = Field.new(field.location, field.binding, field.name, field_type)
               struct_base.fields << field
+
               # add field-access wrapper function
-              upsert(FunctionBase.new(
+              upsert(FunctionDef.new(
                 field.location, 
                 field.name, 
                 context.type_parameters, 
@@ -389,15 +391,15 @@ class TypeEnv
                 # }
               ))
             end
-            # add constructor
-            upsert(FunctionBase.new(
+            # generate constructor
+            upsert(FunctionDef.new(
               item.location, 
               item.name, 
               context.type_parameters,
               parameters: struct_base.fields.map do |field|
                 Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
               end,
-              return_type: Type.struct(struct_base, context.type_args),
+              return_type: Type.adt(struct_base, context.type_args),
               body: [
                 Hir.constructor(
                   item.location,
@@ -414,9 +416,10 @@ class TypeEnv
               # }
             ))
           when Ast::Enum
-            enum_base = user_types[item.name].as(EnumBase)
+            enum_base = type_defs[item.name].as(EnumDef)
             item.variants.each do |variant|
-              discriminant = Val.new(enum_base.variants.size)
+              # evaluate variant
+              # discriminant = Val.new(enum_base.variants.size)
               variant = 
                 Variant.new(variant.location, variant.name, variant.fields.try &.map { |field_name, field_type| 
                   Field.new(field_type.location, Binding::Var, field_name, context.eval(field_type)) 
@@ -424,32 +427,42 @@ class TypeEnv
               enum_base.variants << variant
 
               # generate constructor
-              upsert(FunctionBase.new(
-                variant.location, 
-                "#{item.name}.#{variant.name}", 
-                context.type_parameters,
-                variant.fields.map do |field|
+              constructor_args = [Hir.int(variant.location, enum_base.variants.size.to_i128)]
+              variant.fields.each do |field|
+                constructor_args << Hir.identifier(field.location, field.name, field.binding, field.type)
+              end
+              constructor_hir = Hir.constructor(
+                variant.location,
+                Type::Adt.new(enum_base, context.type_args),
+                constructor_args
+              )
+              upsert(FunctionDef.new(
+                location: variant.location, 
+                name: "#{item.name}.#{variant.name}", 
+                type_params: context.type_parameters,
+                parameters: variant.fields.map do |field|
                   Parameter.new(field.location, Mode::Move, field.name, field.type)
                 end || [] of Parameter,
-                Type.enum(enum_base, context.type_args),
-                if fields = variant.fields
-                  raise "I guess you should make a constructor here..."
-                  # ->(interpreter : Interpreter) {
-                  #   Val.new(Slice(Val).new(fields.size + 1) do |i|
-                  #     if i == 0
-                  #       discriminant
-                  #     else
-                  #       interpreter.frame.variables[fields[i-1].name]
-                  #     end
-                  #   end)
-                  # }
-                else
-                  raise "I guess you should make a constructor here..."
-                  # ->(interpreter : Interpreter) {
-                  #   Val.new(Slice[discriminant])
-                  # }
-                end
+                return_type: Type.adt(enum_base, context.type_args),
+                body: [constructor_hir]
               ))
+                # if fields = variant.fields
+                #   raise "I guess you should make a constructor here..."
+                #   # ->(interpreter : Interpreter) {
+                #   #   Val.new(Slice(Val).new(fields.size + 1) do |i|
+                #   #     if i == 0
+                #   #       discriminant
+                #   #     else
+                #   #       interpreter.frame.variables[fields[i-1].name]
+                #   #     end
+                #   #   end)
+                #   # }
+                # else
+                #   raise "I guess you should make a constructor here..."
+                #   # ->(interpreter : Interpreter) {
+                #   #   Val.new(Slice[discriminant])
+                #   # }
+                # end
             end
           when Ast::Function, Ast::ExternalFunction
             # merely validate the types of the parameters that are already there
@@ -482,7 +495,7 @@ class TypeEnv
   #   end
   # end
 
-  def upsert(func : FunctionBase)
+  def upsert(func : FunctionDef)
     if overloads = functions[func.name]?
       overloads << func
     else

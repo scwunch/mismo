@@ -12,6 +12,20 @@ abstract struct Error
   abstract def print(prefix : String, io : IO = STDOUT)
 end
 
+module CanError(Ex)
+  abstract def log : Logger
+
+  def emit_error(error : Error)
+    log.error(error)
+    error
+  end
+
+  def abort!(error)
+    emit_error(error)
+    raise Ex.new
+  end
+end
+
 module ErrorWithMessage
   property message : String
   

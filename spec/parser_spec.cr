@@ -687,7 +687,7 @@ describe Parser do
         MISMO
       )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Enum))
-      parser.next_token.should eq(Token.variable({1, 1}, "enum"))
+      parser.next_token.should eq(Token.variable("enum-Color", {671, 1}, "enum"))
       e = parser.parse_enum(loc)
       e.should eq(Ast::Enum.new(
         loc, 
@@ -733,7 +733,7 @@ describe Parser do
           def ==(other : T) -> Bool
         MISMO
       )
-      parser.next_token.should eq(Token.variable({1, 1}, "enum"))
+      parser.next_token.should eq(Token.variable("enum-Result", {725, 1}, "enum"))
       e = parser.parse_enum(loc)
       e.should eq(Ast::Enum.new(
         loc, 
@@ -769,7 +769,7 @@ describe Parser do
         MISMO
       )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
-      parser.next_token.should eq(Token.variable({1, 1}, "trait"))
+      parser.next_token.should eq(Token.variable("trait-IO", {766, 1}, "trait"))
       t = parser.parse_trait(loc)
       read_method = Ast::AbstractMethod.new(loc, "read", Ast::Signature.new(
         loc, 
@@ -805,7 +805,7 @@ describe Parser do
         MISMO
       )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Trait))
-      parser.next_token.should eq(Token.variable({1, 1}, "trait"))
+      parser.next_token.should eq(Token.variable("trait-Mutable", {797, 1}, "trait"))
       t = parser.parse_trait(loc)
       t.convention.should eq(Mode::Mut)
       t.name.should eq("Mutable")
@@ -854,7 +854,7 @@ describe Parser do
         MISMO
       )
       # parser.next_token.should eq(Token.keyword({1, 1}, KeyWord::Extend))
-      parser.next_token.should eq(Token.variable({1, 1}, "extend"))
+      parser.next_token.should eq(Token.variable("extend-Format", {851, 1}, "extend"))
       e = parser.parse_extend(loc)
       e.should eq(Ast::Extend.new(
         loc, 
@@ -1134,7 +1134,7 @@ describe ExpressionParser do
       Ast::Int.new(loc, 4)
     ))
   end
-  it "respects operator precedence" do
+  it "respects operator precedence"do
     parser = expression_parser("op-precedence", 
       line_offset: __LINE__ + 2, 
       code: <<-MISMO
@@ -1213,6 +1213,7 @@ describe ExpressionParser do
     ))
     parser.log.check_expectations_empty
   end
+
   it "parses parentheses" do
     parser = expression_parser("(1 + 2) * 3")
     parser.parse.should eq(Ast::Binop.new(

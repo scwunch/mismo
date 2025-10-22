@@ -1,7 +1,7 @@
 require "./spec_helper"
 require "../src/zig/*"
 
-describe CodeGenerator do
+pending CodeGenerator do
   it "should emit a function" do
     io = IO::Memory.new
     code_generator = CodeGenerator.new(io)

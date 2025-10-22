@@ -22,82 +22,149 @@ class Lexer
   
   class Reader
     getter source : Source
-    getter text : String
-    getter idx : UInt32 = 0_u32
-    getter line : UInt32 = 1_u32
-    getter col : UInt32 = 1_u32  # Represents column *before* processing char at @idx, 1-based for new lines
+    # getter text : String  
+    getter input : IO  #::Memory | IO::Buffered
+    # getter idx : UInt32 = 0_u32
+    property current_line : String
+    getter line : UInt32
+    getter col : UInt32 = 1_u32 # Represents column *before* processing char at @idx, 1-based for new lines
 
-    def initialize(@text : String, file_name : String)
-      source_lines = @text.split("\n")
-      file_name = file_name.sub("/home/ryan/programming-projects/crystal/mismo", "")
-      source_lines.insert(0, file_name)
-      @source = Source.new(source_lines)
-    end
-    # This is used for tests where the "source code" is located partway through a file
-    def initialize(@text : String, file_name : String, line_offset)
-      source_lines = @text.split("\n")
-      source_lines.insert(0, file_name)
-      @source = Source.new(source_lines)
+    def initialize(@input : IO, file_name : String?=nil, line_offset = 1)
+      # source_lines = @text.split("\n")
+      if file_name
+        file_name = file_name.sub("/home/ryan/programming-projects/crystal/mismo/", "")
+        @source = Source.empty_with_path(file_name)
+      else
+        @source = Source.empty
+      end
+      # source_lines.insert(0, file_name)
+      # @text = IO::Memory.new(text)
       @line = line_offset.to_u32
+      @current_line = input.gets(chomp: false) || ""
+      @source << @current_line
+    end
+    def initialize(text : String, file_name : String?=nil, line_offset = 1)
+      initialize(IO::Memory.new(text), file_name, line_offset)
     end
 
     def peek : Char
-      if @idx < @text.size
-        @text[@idx]
-      else
-        '\0'
-      end
+      current_line[col - 1]? || '\0'
+        # if c = input.read_char
+        #   input.pos -= c.bytesize
+        #   c
+        # else
+        #   '\0'
+        # end
+      # @text.peek[0]? || '\0'
+      # if @idx < @text.size
+      #   @text[@idx]
+      # else
+      #   '\0'
+      # end
     end
 
+    # this function is only used once by the Lexer
     def peek2 : Char
-      if @idx + 1 < @text.size
-        @text[@idx + 1]
-      else
-        '\0'
-      end
+      current_line[col]? || '\0'
+      # pos = input.pos
+      # input.pos += 1
+      # if c = input.read_char
+      #   input.pos = pos
+      #   c
+      # else
+      #   input.pos = pos
+      #   '\0'
+      # end
+      # if @idx + 1 < @text.size
+      #   @text[@idx + 1]
+      # else
+      #   '\0'
+      # end
     end
 
     def next : Char
-      if @idx < @text.size
-        char = @text[@idx]
-        @idx += 1
+      # if c = input.read_char
+      #   if c == '\n'
+      #     append_last_line
+      #     @line += 1
+      #     @col = 1
+      #   else
+      #     @col += 1
+      #   end
+      #   c
+      # else
+      #   '\0'
+      # end
+      if char = current_line[col - 1]?
         if char == '\n'
-          @line += 1
-          @col = 1
+          newline
         else
           @col += 1
         end
         char
       else
-        '\0' # End of input
+        # Reader reached end of input
+        '\0'
       end
+      # if @idx < @text.size
+      #   char = @text[@idx]
+      #   @idx += 1
+      #   if char == '\n'
+      #     @line += 1
+      #     @col = 1
+      #   else
+      #     @col += 1
+      #   end
+      #   char
+      # else
+      #   '\0' # End of input
+      # end
+    end
+
+    def newline
+      @current_line = 
+        if line = input.gets(chomp: false)
+          @source << line
+          @line += 1
+          @col = 1
+          line
+        else
+          ""
+        end
     end
 
     def has_next? : Bool
-      @idx < @text.size
+      # @idx < @text.size
+      # idx < input.bytesize
+      # peek != '\0'
+      col - 1 < current_line.size
     end
 
     def eof? : Bool
-      @idx >= @text.size
+      # idx >= input.bytesize
+      peek == '\0'
     end
 
     # Efficiently check if the substring matches
     def peek_str?(str_to_match) : Bool
-      return false if @idx + str_to_match.bytesize > @text.bytesize
-      @text.unsafe_byte_slice(@idx, str_to_match.bytesize) == str_to_match.unsafe_byte_slice(0)
+      # return false if idx + str_to_match.bytesize > input.bytesize
+      # @text.unsafe_byte_slice(@idx, str_to_match.bytesize) == str_to_match.unsafe_byte_slice(0)
+      # input.to_slice[idx, str_to_match.bytesize]? == str_to_match.to_unsafe_byte_slice(0)
+      return false if (@col - 1 + str_to_match.size) > current_line.size
+      current_line.unsafe_byte_slice(@col - 1, str_to_match.bytesize) == str_to_match.unsafe_byte_slice(0)
     end
 
     # Get sub-string via unsafe_byte_slice
-    def peek_str!(count) : String
-      @text.unsafe_byte_slice(@idx, count).to_s
-    end
+    # def peek_str!(count) : String
+    #   @text.unsafe_byte_slice(@idx, count).to_s
+    # end
 
     # Get sub-string
     def peek_str(count) : String
       if count < 0
-        @text[@idx + count, @idx]
+        current_line[@col + count - 1, @col - 1]
       else
-        @text[@idx, count]
+        current_line[@col - 1, count]
       end
     end
 
@@ -379,11 +446,11 @@ class Lexer
   end
 
   def read_word(loc : Location = @reader.location) : String
-    start_idx = @reader.idx
+    start_idx = @reader.col - 1   
     while @reader.peek.ascii_alphanumeric? || @reader.peek == '_'
       @reader.next
     end
-    word_text = @reader.text[start_idx...@reader.idx]
+    word_text = @reader.current_line[start_idx...(@reader.col - 1)]
     @log.debug(loc, "read_word: #{word_text}")
     word_text
   end

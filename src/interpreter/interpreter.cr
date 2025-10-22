@@ -5,8 +5,8 @@ require "../type_checker/type_checker"
 require "../type_checker/type_env"
 
 class Interpreter
-  property types = {} of String => TypeInfo
-  property functions = {} of String => Array(FunctionBase)
+  property types = {} of String => TypeDefinition
+  property functions = {} of String => Array(FunctionDef)
   property stack = [] of StackFrame
   property log : Logger
   def frame
@@ -15,7 +15,7 @@ class Interpreter
 
   def initialize(@log : Logger)
   end
-  def initialize(@types = {} of String => TypeInfo, @functions = {} of String => Array(FunctionBase), @log = Logger.new)
+  def initialize(@types = {} of String => TypeDefinition, @functions = {} of String => Array(FunctionDef), @log = Logger.new)
   end
   def initialize(program : String, file_path : String, line_offset, level : Logger::Level = Logger::Level::Warning)
     parser = Parser.new(program, file_path, line_offset)
@@ -37,7 +37,7 @@ class Interpreter
     call(functions["main"][0])
   end
 
-  def call(func : FunctionBase, type_args : Slice(Type), args : Array(Val)) : Val
+  def call(func : FunctionDef, type_args : Slice(Type), args : Array(Val)) : Val
     frame = StackFrame.new(func, type_args, args)
     stack << frame
     result = Val.nil
@@ -51,7 +51,7 @@ class Interpreter
     result
   end
 
-  def call(func : FunctionBase, args : Array(Val) = [] of Val) : Val
+  def call(func : FunctionDef, args : Array(Val) = [] of Val) : Val
     call(func, Slice(Type).empty, args)
   end
 
@@ -236,14 +236,14 @@ end
 # end
 
 class StackFrame
-  property function : FunctionBase
+  property function : FunctionDef
   property generics : Slice(Type)
   property variables : Hash(String, Val) = {} of String => Val
   property temps : Array(Val) = [] of Val
 
-  def initialize(@function : FunctionBase, @generics : Slice(Type), @variables : Hash(String, Val))
+  def initialize(@function : FunctionDef, @generics : Slice(Type), @variables : Hash(String, Val))
   end
-  def initialize(@function : FunctionBase, @generics : Slice(Type), vars : Array(Val))
+  def initialize(@function : FunctionDef, @generics : Slice(Type), vars : Array(Val))
     vars.each_with_index do |var, i|
       @variables[@function.parameters[i].name] = var
     end

@@ -8,7 +8,7 @@ macro not_nil!(prop)
 end
 
 def parser(source : String, level : Logger::Level = Logger::Level::Warning)
-  parser(nil, source, level)
+  parser(nil, source, 1,level)
 end
 def parser(
     file_path : (String | Nil),
@@ -16,9 +16,9 @@ def parser(
     line_offset,
     level : Logger::Level = Logger::Level::Warning
   ) : Parser
-  logger = Logger.new(level, out: TestOut.new)
+  logger = Logger.new(level, out: TestOut.silent)
   lexer = Lexer.new(
-    Lexer::Reader.new(source, file_path || "", line_offset), 
+    Lexer::Reader.new(source, file_path, line_offset), 
     if level == Logger::Level::Debug
       Logger.new(Logger::Level::Info)
     else

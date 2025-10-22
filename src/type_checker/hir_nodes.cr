@@ -84,8 +84,8 @@ abstract struct Hir < IrNode
   end
 
   struct String < Hir
-    @@base : StructBase?
-    def self.set_base(base : StructBase)
+    @@base : StructDef?
+    def self.set_base(base : StructDef)
       @@base = base
     end
     property location : Location
@@ -95,7 +95,7 @@ abstract struct Hir < IrNode
     def_init
     def binding : Binding ; Binding::Var end
     def type : Type
-      Type.struct(@@base || raise "String has no base")
+      Type.adt(@@base || raise "String has no base")
     end
     def to_s(io : IO)
       io << "\"#{value}\""
@@ -129,8 +129,8 @@ abstract struct Hir < IrNode
   end
 
   struct Array < Hir
-    @@base : StructBase?
-    def self.set_base(base : StructBase)
+    @@base : StructDef?
+    def self.set_base(base : StructDef)
       @@base = base
     end
     property location : Location
@@ -141,7 +141,7 @@ abstract struct Hir < IrNode
     def_init
     def binding : Binding ; Binding::Var end
     def type : Type 
-      Type.struct(@@base || raise("Array has no base"), Slice[element_type])
+      Type.adt(@@base || raise("Array has no base"), Slice[element_type])
     end
     def to_s(io : IO)
       io << "[#{elements.join(", ")}]"
@@ -166,11 +166,11 @@ abstract struct Hir < IrNode
   struct Call < Hir
     property location : Location
     property overload_index : Int32
-    property function : FunctionBase
+    property function : FunctionDef
     property type_args : ::Array(Type)
     property args : ::Array(Hir)
     getter type : Type
-    def initialize(@location : Location, @overload_index : Int32, @function : FunctionBase, @type_args : ::Array(Type), @args : ::Array(Hir), @type : Type)
+    def initialize(@location : Location, @overload_index : Int32, @function : FunctionDef, @type_args : ::Array(Type), @args : ::Array(Hir), @type : Type)
     end
     def_init
     def binding : Binding
@@ -193,15 +193,15 @@ abstract struct Hir < IrNode
   # Though I'm strongly considering making it `TypeName(args)` (which would then no longer be a function call)
   struct Constructor < Hir
     property location : Location
-    property struct_ : Type::Struct
+    property adt : Type::Adt
     property args : ::Array(Hir)
-    def initialize(@location : Location, @struct_ : Type::Struct, @args : ::Array(Hir))
+    def initialize(@location : Location, @adt : Type::Adt, @args : ::Array(Hir))
     end
     def_init
     def binding : Binding ; Binding::Var end
-    def type : Type ; struct_ end
+    def type : Type ; adt end
     def to_s(io : IO)
-      io << "#{struct_}(#{args.join(", ")})"
+      io << "#{adt}(#{args.join(", ")})"
     end
   end
 

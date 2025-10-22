@@ -2,15 +2,15 @@ require "./type_env"
 require "../errors/errors"
 require "../utils/logger"
 
+class AbortFunctionTypeChecking < Exception
+end
+
 # basic properties and methods included in TypeContext
 module TypeContextBase
   getter env : TypeEnv
   property type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty
   property type_args : Slice(Type) = Slice(Type).empty
   property scope : TypeScope
-  getter generics = {} of String => Type::Var
-  getter bindings = {} of Type::Var => Type
-  getter unifier = TypeUnifier.new
 
   def initialize(@env)
     @scope = TypeScope.new(env.log)
@@ -39,7 +39,7 @@ module TypeContextBase
     #   @type_args = @type_args.push(Type.var(i))
     # end
     # raise "wrong number of type args" if @type_args.size != @type_parameters.size
-  end
+  end  
   # def self.new(env : TypeEnv, ast_type_params : Slice(Ast::TypeParameter)) : TypeContext
   #   raise "called it"
   # end
@@ -148,19 +148,10 @@ module TypeContextBase
         Type.tuple(type_node.type_args.map { |t| eval(t) })
       # when "Function" then Type.function(*type_node.types.map { |t| eval(t) })
       else
-        case base = env.user_types[type_node.name]?
-        when StructBase
-          Type.struct(
-            base, 
-            eval_type_args(type_node, base.type_params)
-          )
-        when EnumBase
-          Type.enum(
-            base, 
-            eval_type_args(type_node, base.type_params)
-          )
+        if base = env.type_defs[type_node.name]?
+          Type.adt(base, eval_type_args(type_node, base.type_params))
         else
-          log.error(type_node.location, "E#{__LINE__} eval: unknown type: #{type_node.name}")
+          emit_error MissingNameError.new(type_node.location, "Unknown type: #{type_node.name}")
           Type.unknown(type_node.name, type_node.type_args.map { |t| eval(t).as Type })
         end
       end
@@ -210,7 +201,11 @@ module TypeContextBase
         log.error(type_node.location, "E#{__LINE__} #{type_node.name} expects #{type_params.size} type arguments, but #{t_args.size} were provided.")
       end
       Slice(Type).new(t_args.size) do |i|
-        eval(t_args[i], type_params[i]).as Type
+        if tp = type_params[i]?
+          eval(t_args[i], tp)
+        else
+          eval(t_args[i])
+        end
       end
     end
   ensure
@@ -383,7 +378,7 @@ module ImplementationChecker
     end
   end
 
-  def function_matches_method?(func : FunctionBase, method : Ast::AbstractMethod) : Bool
+  def function_matches_method?(func : FunctionDef, method : Ast::AbstractMethod) : Bool
     func.parameters.size == method.parameters.size &&
     func.parameters.zip(method.parameters).all? do |param, method_param|
       param.type == eval(method_param.type)
@@ -393,7 +388,7 @@ module ImplementationChecker
 
   # Check if a given function fulfills the template of the abstract method
   # log errors to the provided array
-  def function_matches_method?(func : FunctionBase, method : Ast::AbstractMethod, errors : Array(String)) : Bool
+  def function_matches_method?(func : FunctionDef, method : Ast::AbstractMethod, errors : Array(String)) : Bool
     if func.parameters.size != method.parameters.size
       errors << "def #{method.name} at #{func.location}: requires #{method.parameters.size} parameters, but #{func.parameters.size} were provided."
       return false
@@ -709,7 +704,7 @@ module TypeChecker
     # Hir::Call.new(location, func, args, func.return_type)
   end
 
-  def function_call(location, overload_index, func : FunctionBase, args : ::Array(Hir)) : Hir::Call | Error
+  def function_call(location, overload_index, func : FunctionDef, args : ::Array(Hir)) : Hir::Call | Error
     log.debug_descend(location, "TypeChecker#function_call(#{func}, #{args})") do
       if func.parameters.size != args.size
         return ArgumentMismatchError.new(location, "#{func.name} expected #{func.parameters.size} arguments, but got #{args.size}")
@@ -748,28 +743,25 @@ module TypeChecker
         end
         type_args[pattern.id] = arg
       elsif (pattern_args = pattern.type_args?) && (arg_args = arg.type_args?)
-        if arg.class != pattern.class
-          log.debug(loc, "arg.class (#{arg.class}) != pattern.class (#{pattern.class})")
+        if arg.base_or_class != pattern.base_or_class
+          log.debug(loc, "arg.base_or_class (#{arg.base_or_class}) != pattern.base_or_class (#{pattern.base_or_class})")
           return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
         end
-        if arg.is_a?(Type::Struct | Type::Enum) && 
-            pattern.is_a?(Type::Struct | Type::Enum)
-          unless arg.base == pattern.base
-            log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
-            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-          end
-        end
-        unless arg_args = arg.type_args?
-          log.debug(loc, "arg_args is nil")
-          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        end
-        if arg.class != pattern.class ||
-           (arg.is_a?(Type::Struct | Type::Enum) && 
-            pattern.is_a?(Type::Struct | Type::Enum) &&
-            arg.base != pattern.base)
-            raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
-          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        end
+        # if arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt)
+        #   unless arg.base == pattern.base
+        #     log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
+        #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        #   end
+        # end
+        # unless arg_args = arg.type_args?
+        #   log.debug(loc, "arg_args is nil")
+        #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        # end
+        # if arg.class != pattern.class ||
+        #    (arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt) && arg.base != pattern.base)
+        #     raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
+        #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        # end
         arg_args.zip(pattern_args).each do |arg_type, param_type|
           if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
             return err
@@ -836,7 +828,7 @@ module TypeChecker
           emit_error IllegalMutationError.new(lhs.location, "#{object} is not mutable")
         end
         case (t = object.type)
-        when Type::Struct
+        when Type::Adt
           if (field = t.get_field?(lhs.method))
             check_type(field.type, rhs.type, lhs.location, field.location)
             Hir::AssignField.new(lhs.location, object, field, rhs)
@@ -855,14 +847,14 @@ module TypeChecker
   end
 
   def match(lhs : Hir, rhs : Ast::Expr) : Hir
-    unless (type = lhs.type).is_a?(Type::Enum)
-      emit_error MetatypeError.new(rhs.location, "#{lhs} is not an enum; it's #{lhs.type}.  Only enums can be matched with the `is` operator.")
+    unless (type = lhs.type).is_a?(Type::Adt) && (type_def = type.base).is_a?(EnumDef)
+      emit_error MetatypeError.new(rhs.location, "#{lhs} is not an enum; it's #{type}.  Only enums can be matched with the `is` operator.")
       return Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
     end
 
     case rhs
     when Ast::Call
-      variant_index = type.base.variants.index { |v| v.name == rhs.method }
+      variant_index = type_def.variants.index { |v| v.name == rhs.method }
       if variant_index.nil?
         emit_error MetatypeError.new(rhs.location, "\"#{rhs.method}\" is a function call, not a variant of #{type}")
         Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
@@ -930,9 +922,8 @@ module TypeChecker
         case op = op_branch.operator.to_s
         when "is"
           # pattern match
-          case type = lhs.type
-          when Type::Enum
-            variants = type.base.variants
+          if (type = lhs.type).is_a?(Type::Adt) && (base = type.base).is_a?(EnumDef)
+            variants = base.variants
             jump_table = Array(Hir?).new(variants.size, nil)
             count_variants = 0
             op_branch.term_split.each do |term|
@@ -1051,13 +1042,14 @@ class TypeContext
   include TypeContextBase
   include ImplementationChecker
   include TypeChecker
+  include CanError(AbortFunctionTypeChecking)
   property scope : TypeScope
 
   # def initialize(@env : TypeEnv, @type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty, @type_args : Slice(Type) = Slice(Type).empty)
   #   @scope = TypeScope.new(self)
   # end
 
-  def self.type_check_function(env : TypeEnv, function : FunctionBase, statements : Array(Ast::Expr))
+  def self.type_check_function(env : TypeEnv, function : FunctionDef, statements : Array(Ast::Expr))
     ctx = TypeContext.new(env, function.type_params)
 
     # init scope with parameters
@@ -1124,6 +1116,7 @@ class TypeContext
 end
 
 class TypeScope
+  include CanError(AbortFunctionTypeChecking)
   getter log : Logger
   getter parent : TypeScope?
   getter vars = {} of String => Variable
@@ -1285,27 +1278,3 @@ class TypeUnifier
   end
 end
 
-# class TypeError < Exception
-#   @message : String?
-#   property location : Location
-#   property expected : Type?
-#   property actual : Type?
-#   property type_source : Location?
-#   # def initialize(@location : Location, @message : String)
-#   # end
-#   def initialize(@location : Location, @expected : Type, @actual : Type, @type_source : Location?)
-#   end
-#   def message : String
-#     @message || "Expected #{expected} (from #{type_source}), but got #{actual}."
-#   end
-# end
-
-# struct TypeBranches
-#   # this ephemeral container is used to collect the types of elements or branches 
-#   # of an ast node node containing several sub-expressions that must be of the same type
-#   # eg, `if` expressions and array literals
-#   property types = [] of (Type, Location)
-# end
-
-class AbortFunctionTypeChecking < Exception
-end

@@ -55,7 +55,11 @@ class Logger
         @out << " \u{2502}" * @indent
         @out << Level::{{level}}.color
         @out << @file_path if @file_path
-        loc.coord(@out)
+        {% if level == Level::Debug %}
+          loc.coord(@out)
+        {% else %}
+          loc.to_s(@out)
+        {% end %}
         @out << ' ' << msg
         @out << '\n'
         {% if level.id == "Error" %}
@@ -160,6 +164,7 @@ end
 
 class NullOut < IO
   def read(slice : Bytes)
+    0
   end
   def write(slice : Bytes) : Nil
   end
@@ -168,8 +173,12 @@ end
 class TestOut < IO
   @expecting : Array(String) = [] of String
   @out : IO = STDOUT
+
+  def initialize(@out : IO)
+  end
+
   def self.silent : TestOut
-    TestOut.new(IO::Null)
+    TestOut.new(NullOut.new)
   end
 
   # add a substring to expect to the end of the queue

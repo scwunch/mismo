@@ -6,7 +6,7 @@ LOG_LEVEL = Logger::Level::Warning
 describe Lexer::Reader do
 
   it "works" do
-    reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+    reader = Lexer::Reader.new("hello\nworld")
     reader.peek.should eq('h')
     reader.next.should eq('h')
     reader.peek.should eq('e')
@@ -35,14 +35,14 @@ describe Lexer::Reader do
 
   describe "#peek" do
     it "returns the next character" do
-      reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+      reader = Lexer::Reader.new("hello\nworld")
       reader.peek.should eq('h')
     end
   end
 
   describe "#next" do
     it "returns the next character" do
-      reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+      reader = Lexer::Reader.new("hello\nworld")
       reader.next.should eq('h')
       reader.next.should eq('e')
       reader.next.should eq('l')
@@ -62,7 +62,7 @@ describe Lexer::Reader do
 
   describe "#location" do
     it "returns the current location" do
-      reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+      reader = Lexer::Reader.new("hello\nworld")
       reader.location.should eq(Location.new(1, 1))
       4.times { reader.next }
       reader.peek.should eq('o')
@@ -84,8 +84,6 @@ describe Lexer::Reader do
     end
     it "returns the location of the reader in multi-line text" do
       lexer = Lexer::Reader.new(
-        file_name: __FILE__,
-        line_offset: __LINE__ + 2,
         text: <<-MISMO
           function greet(name String):
             print("hello, " + name)
@@ -103,7 +101,7 @@ describe Lexer::Reader do
 
   describe "#peek_str" do
     it "returns the next characters" do
-      reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+      reader = Lexer::Reader.new("hello\nworld")
       reader.peek_str(1).should eq("h")
       reader.peek_str(5).should eq("hello")
       reader.peek_str(6).should eq("hello\n")
@@ -114,16 +112,16 @@ describe Lexer::Reader do
 
   describe "#peek_str?" do
     it "checks to see if the given string matches the substring following the current index of the reader" do
-      reader = Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__)
+      reader = Lexer::Reader.new("hello\nworld")
       reader.peek_str?("h").should eq(true)
       reader.peek_str?("hi").should eq(false)
       reader.peek_str?("hello").should eq(true)
       reader.peek_str?("world").should eq(false)
-      reader.peek_str?("hello\nworld").should eq(true)
+      # reader.peek_str?("hello\nworld").should eq(true) # deprecated; removed ability to peek multiline strings
       5.times { reader.next }
       reader.next.should eq('\n')
       reader.peek_str?("world").should eq(true)
-      reader.peek_str?("hello\nworld").should eq(false)
+      reader.peek_str?("hello").should eq(false)
     end
   end
 end
@@ -132,7 +130,7 @@ describe Lexer do
   describe "#push_token" do
     it "stores the given token in @current_token" do
       lexer = Lexer.new(
-        Lexer::Reader.new("", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new(""),
         Logger.new(LOG_LEVEL)
       )
       lexer.current_token.class.should eq(Token::BeginFile)
@@ -150,7 +148,7 @@ describe Lexer do
   describe "#push_operator" do
     it "reads an operator" do
       lexer = Lexer.new(
-        Lexer::Reader.new("+ *= and &", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("+ *= and &"),
         Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
@@ -166,7 +164,7 @@ describe Lexer do
 
     it "parses the longest possible operator (up to three characters)" do
       lexer = Lexer.new(
-        Lexer::Reader.new("+= *= :=", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("+= *= :="),
         Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
@@ -204,7 +202,7 @@ describe Lexer do
   describe "#push_number" do
     it "reads a number" do
       lexer = Lexer.new(
-        Lexer::Reader.new("123 456.789_012 33_.44.55 66.to_string", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("123 456.789_012 33_.44.55 66.to_string"),
         Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
@@ -225,7 +223,7 @@ describe Lexer do
   describe "#read_word" do
     it "reads a word" do
       lexer = Lexer.new(
-        Lexer::Reader.new("hello\nworld", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("hello\nworld"),
         Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
@@ -238,7 +236,7 @@ describe Lexer do
   describe "#push_word" do
     it "reads a word and pushes an operator, keyword, variable, or type name" do
       lexer = Lexer.new(
-        Lexer::Reader.new("import\nstruct\nhello world def and or is not then not in", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("import\nstruct\nhello world def and or is not then not in"),
         Logger.new(LOG_LEVEL)
       )
       loc = Location.zero
@@ -273,7 +271,7 @@ describe Lexer do
   describe "#skip_comment" do
     it "consumes the rest of the line, excluding the newline character" do
       lexer = Lexer.new(
-        Lexer::Reader.new("-- comment\nhello\nworld", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("-- comment\nhello\nworld"),
         Logger.new(LOG_LEVEL)
       )
       lexer.skip_comment
@@ -284,7 +282,7 @@ describe Lexer do
   describe "#skip_whitespace_and_comments" do
     it "consumes whitespace characters" do
       lexer = Lexer.new(
-        Lexer::Reader.new("\n\t\r\f\v -- this is a comment\n   hello\nworld", file_name: __FILE__, line_offset: __LINE__),
+        Lexer::Reader.new("\n\t\r\f\v -- this is a comment\n   hello\nworld"),
         Logger.new(LOG_LEVEL)
       )
       lexer.skip_whitespace_and_comments
@@ -296,10 +294,7 @@ describe Lexer do
     it "consumes all whitespace and comments until the next non-whitespace character \
         and emits a newline token" do
       lexer = Lexer.new(
-        Lexer::Reader.new(
-          file_name: __FILE__, 
-          line_offset: __LINE__ + 2,
-          text: <<-MISMO
+        Lexer::Reader.new(<<-MISMO
           def
           -- comment
 
@@ -322,10 +317,7 @@ describe Lexer do
   describe "#next" do
     it "lexes the next token in the input" do
       lexer = Lexer.new(
-        Lexer::Reader.new(
-          file_name: __FILE__, 
-          line_offset: __LINE__ + 2,
-          text: <<-MISMO
+        Lexer::Reader.new(<<-MISMO
           function greet(name String):
             print("hello, " + name)
           MISMO

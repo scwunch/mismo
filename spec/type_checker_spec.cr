@@ -56,15 +56,15 @@ describe TypeContext do
             
         MISMO
       )
-      point = type_env.user_types["Point"].as(StructBase)
+      point = type_env.type_defs["Point"].as(StructDef)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
       param = check_me_func.parameters[0]
       param.mode.should eq(Mode::Let)
       param.name.should eq("self")
-      param.type.should eq(Type.struct(point))
+      param.type.should eq(Type.adt(point))
       check_me_func.parameters.should eq(
-        [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
+        [Parameter.new(loc, Mode::Let, "self", Type.adt(point))])
     end
   end
 end
@@ -87,15 +87,15 @@ describe TypeEnv do
             p.x + p.y
         MISMO
       )
-      point = type_env.user_types["Point"].as(StructBase)
+      point = type_env.type_defs["Point"].as(StructDef)
       check_me_func = type_env.functions["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
       param = check_me_func.parameters[0]
       param.mode.should eq(Mode::Let)
       param.name.should eq("self")
-      param.type.should eq(Type.struct(point))
+      param.type.should eq(Type.adt(point))
       check_me_func.parameters.should eq(
-        [Parameter.new(loc, Mode::Let, "self", Type.struct(point))])
+        [Parameter.new(loc, Mode::Let, "self", Type.adt(point))])
     end
 
     it "workssss" do
@@ -176,19 +176,19 @@ describe TypeEnv do
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
-      type_env.functions["main"]?.should be_a(Array(FunctionBase))
-      type_env.user_types["Point"]?.should be_a(StructBase)
-      not_nil!(result = type_env.user_types["Result"]?)
-      result.should be_a(EnumBase)
+      type_env.functions["main"]?.should be_a(Array(FunctionDef))
+      type_env.type_defs["Point"]?.should be_a(StructDef)
+      not_nil!(result = type_env.type_defs["Result"]?)
+      result.should be_a(EnumDef)
       result.type_params.should eq(
         Slice[TypeParameter.new(loc, "T"), TypeParameter.new(loc, "E")])
-      type_env.functions["ok"]?.should be_a(Array(FunctionBase))
+      type_env.functions["ok"]?.should be_a(Array(FunctionDef))
       type_env.functions["ok"].size.should eq(1)
       ok_func = type_env.functions["ok"][0]
       ok_func.type_params.should eq(
         Slice[TypeParameter.new(loc, "T"), TypeParameter.new(loc, "E")])
       not_nil!(equatable = type_env.traits["Equatable"]?)
-      equatable.should be_a(TraitBase)
+      equatable.should be_a(TraitDef)
       equatable.type_params.should eq(
         Slice[TypeParameter.new(loc, "Self"), TypeParameter.new(loc, "T")])
     end
@@ -232,19 +232,19 @@ describe TypeEnv do
       stringable = type_env.traits["Stringable"]
       sequence = type_env.traits["Sequence"]
       iterable = type_env.traits["Iterable"]
-      list = type_env.user_types["List"].as StructBase
-      array = type_env.user_types["Array"].as StructBase
+      list = type_env.type_defs["List"].as StructDef
+      array = type_env.type_defs["Array"].as StructDef
       [
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
-          Trait.new(stringable, Slice[Type.struct(list, Slice[Type.var(0)])])
+          Trait.new(stringable, Slice[Type.adt(list, Slice[Type.var(0)])])
         ),
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
           Trait.new(sequence, Slice[
-            Type.struct(list, Slice[Type.var(0)]), 
+            Type.adt(list, Slice[Type.var(0)]), 
             Type.var(0)
           ])
         ),
@@ -252,14 +252,14 @@ describe TypeEnv do
           loc,
           Slice[TypeParameter.new(loc, "T")],
           # Trait.new(stringable, Slice[Type.array(Type.var(0))])
-          Trait.new(stringable, Slice[Type.struct(array, Slice[Type.var(0)])])
+          Trait.new(stringable, Slice[Type.adt(array, Slice[Type.var(0)])])
         ),
         TraitClaim.new(
           loc,
           Slice[TypeParameter.new(loc, "T")],
           # Trait.new(sequence, Slice[Type.array(Type.var(0)), Type.var(0)])
           Trait.new(sequence, Slice[
-            Type.struct(array, Slice[Type.var(0)]),
+            Type.adt(array, Slice[Type.var(0)]),
             Type.var(0)
           ])
         ),
@@ -268,7 +268,7 @@ describe TypeEnv do
           Slice(TypeParameter).empty,
           # Trait.new(sequence, Slice[Type.array(Type.int), Type.int])
           Trait.new(sequence, Slice[
-            Type.struct(array, Slice[Type.int]),
+            Type.adt(array, Slice[Type.int]),
             Type.int
           ])
         )
@@ -287,7 +287,7 @@ describe TypeEnv do
       type_env = TypeEnv.new(Logger.new())
       impls = type_env.implementations
       impls.should eq({} of {Type, Trait} => Implements)
-      stringable = TraitBase.new(loc, Mode::Let, "Stringable")
+      stringable = TraitDef.new(loc, Mode::Let, "Stringable")
       impls[Trait.new(stringable, Type.int)] = Implements::True
       impls[Trait.new(stringable, Type.int)].should eq(Implements::True)
       impls[Trait.new(stringable, Type.int)].ok?.should be_true
@@ -300,7 +300,7 @@ describe TypeEnv do
       impls[Trait.new(stringable, Type.pointer(Type.int))].should eq(Implements::False)
       impls[Trait.new(stringable, Type.pointer(Type.int))].ok?.should be_false
 
-      equatable_base_trait = TraitBase.new(loc, Mode::Let, "Equatable", Slice[TypeParameter.new(loc, "Self"), TypeParameter.new(loc, "T")])
+      equatable_base_trait = TraitDef.new(loc, Mode::Let, "Equatable", Slice[TypeParameter.new(loc, "Self"), TypeParameter.new(loc, "T")])
       equatable = ->(type : Type) do
         Trait.new(equatable_base_trait, Slice[type])
       end
@@ -321,13 +321,16 @@ describe TypeEnv do
         file_path: __FILE__, 
         line_offset: __LINE__ + 2,
         source: program = <<-MISMO
+        struct String
+        struct Array[T]
+          
         trait Trivial
 
         trait Stringable
-          def String String
+          def string String
 
         extend Int is Trivial & Stringable
-          def String String:
+          def string String:
             "Int"
 
         trait Sequence[T] is Iterable[T]
@@ -348,7 +351,7 @@ describe TypeEnv do
 
             
         extend[T] Array[T] is Stringable
-          def String String:
+          def string String:
             "Array"        
 
         struct Array[T]
@@ -364,11 +367,11 @@ describe TypeEnv do
       trivial = type_env.traits["Trivial"]
       stringable = type_env.traits["Stringable"]
       sequence = type_env.traits["Sequence"]
-      array = type_env.user_types["Array"].as StructBase
+      array = type_env.type_defs["Array"].as StructDef
       type_env.implementations[Trait.new(trivial, Type.int)]?.should eq(Implements::True)
       type_env.implementations[Trait.new(stringable, Type.int)]?.should eq(Implements::True)
-      type_env.implementations[Trait.new(sequence, Slice[Type.struct(array, Slice[Type.var(0)]), Type.var(0)])]?.should eq(Implements::True)
-      type_env.implementations[Trait.new(stringable, Type.struct(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(sequence, Slice[Type.adt(array, Slice[Type.var(0)]), Type.var(0)])]?.should eq(Implements::True)
+      type_env.implementations[Trait.new(stringable, Type.adt(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
       # type_env.trait_claims.each do |claim|
       #   print claim; print '\n'
       # end
@@ -403,12 +406,13 @@ describe TypeEnv do
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
+      type_env.ready_to_validate_types = true
       type_env.check_trait_implementations
       trivial = type_env.traits["Trivial"]
       marker = type_env.traits["Marker"]
       equatable = type_env.traits["Equatable"]
       self_equatable = type_env.traits["SelfEquatable"]
-      string_type_arg = Type.struct(type_env.user_types["String"].as StructBase)
+      string_type_arg = Type.adt(type_env.type_defs["String"].as StructDef)
       type_env.implementations[Trait.new(trivial, Type.int)]?.should be_nil
       type_env.try_trait_implementation(Trait.new(trivial, Type.int)).should be_true
       type_env.implementations[Trait.new(trivial, Type.int)]?.should eq(Implements::True)
@@ -452,8 +456,8 @@ describe TypeEnv do
       type_env.eval_type_params_and_trait_claims(items)
       type_env.check_trait_implementations
       sequence = type_env.traits["Sequence"]
-      array = type_env.user_types["Array"].as StructBase
-      type_env.implementations[Trait.new(sequence, Type.struct(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
+      array = type_env.type_defs["Array"].as StructDef
+      type_env.implementations[Trait.new(sequence, Type.adt(array, Slice[Type.var(0)]))]?.should eq(Implements::True)
     end
   end
 
@@ -463,6 +467,7 @@ describe TypeEnv do
         file_path: __FILE__, 
         line_offset: __LINE__ + 2,
         source: program = <<-MISMO
+        struct String
         struct IntPoint
            var x Int
            var y Int
@@ -512,7 +517,7 @@ describe TypeEnv do
       type_env.check_trait_implementations
       # type_env.log.level = 
       type_env.fill_out_type_info(items)
-      point = type_env.user_types["IntPoint"].as StructBase
+      point = type_env.type_defs["IntPoint"].as StructDef
       point.fields.should eq([
         Field.new(loc, Binding::Var, "x", Type.int),
         Field.new(loc, Binding::Var, "y", Type.int),
