@@ -1,12 +1,28 @@
 extern def __zig_print(value: String)
-extern def __zig_add_int(left Int, right Int) Int
-extern def __zig_sub_int(left Int, right Int) Int
-extern def __zig_mul_int(left Int, right Int) Int
-extern def __zig_div_int(left Int, right Int) Int
-extern def __zig_add_float(left Float, right Float) Float
-extern def __zig_sub_float(left Float, right Float) Float
-extern def __zig_mul_float(left Float, right Float) Float
-extern def __zig_div_float(left Float, right Float) Float
+
+extern def __zig_eq(left Any, right Any) Bool
+extern def __zig_neq(left Any, right Any) Bool
+extern def __zig_lt(left Any, right Any) Bool
+extern def __zig_gt(left Any, right Any) Bool
+extern def __zig_lte(left Any, right Any) Bool
+extern def __zig_gte(left Any, right Any) Bool
+
+extern def __zig_add_uint(left Any, right Any) Nat
+extern def __zig_sub_uint(left Any, right Any) Nat
+extern def __zig_mul_uint(left Any, right Any) Nat
+extern def __zig_div_uint(left Any, right Any) Nat
+
+extern def __zig_neg_int(int Any) Int
+extern def __zig_add_int(left Any, right Any) Int
+extern def __zig_sub_int(left Any, right Any) Int
+extern def __zig_mul_int(left Any, right Any) Int
+extern def __zig_div_int(left Any, right Any) Int
+
+extern def __zig_neg_float(float Any) Float
+extern def __zig_add_float(left Any, right Any) Float
+extern def __zig_sub_float(left Any, right Any) Float
+extern def __zig_mul_float(left Any, right Any) Float
+extern def __zig_div_float(left Any, right Any) Float
 
 extern def __zig_nat2int(nat: Nat) Int
 extern def __zig_nat2float(nat: Nat) Float
@@ -25,6 +41,123 @@ extern def __zig_slice_size[T](slice: Slice[T]) Nat
 extern def __zig_slice2ptr[T](slice: Slice[T]) Pointer[T]
 extern def __zig_ptr2slice[T](ptr: Pointer[T], size: Nat) Slice[T]
 
+extend Bool
+    def bool Bool: self
+    def nat Nat: 
+        if self: 1
+        else: 0
+    def int Int: 
+        if self: 1
+        else: 0
+    def float Float: 
+        if self: 1.0
+        else: 0.0
+    def string String: 
+        if self: "true"
+        else: "false"
+
+    def ==(other Bool) Bool: 
+        .__zig_eq(other)
+    def !=(other Bool) Bool:
+        .__zig_neq(other)
+    def <(other Bool) Bool: 
+        not self and other
+    def <=(other Bool) Bool: 
+        not self or other
+    def >(other Bool) Bool: 
+        self and not other
+    def >=(other Bool) Bool: 
+        self or not other
+
+    def +(other Bool) Nat:
+        if 
+            self and other: 2
+            self or other: 1
+            else: 0 
+
+    def -(other Bool) Int:
+        if 
+            self and other: 0
+            self: 1
+            other: -1
+            else: 0
+    
+    def -() Int:
+        if self: -1
+        else: 0
+
+    def *(other Bool) Bool:
+        if self and other: true
+        else: false
+
+    def /(other Bool) Bool:
+        if 
+            not other:
+                1 / 0
+            self and other: true
+            else: false
+
+
+extend Nat
+    def bool Bool: self != 0
+    def nat Nat: self
+    def int Int: .__zig_nat2int
+    def float Float: .__zig_nat2float
+    def string String: .__zig_nat2string
+
+    def ==(other Nat) Bool: .__zig_eq(other)
+    def !=(other Nat) Bool: .__zig_neq(other)
+    def <(other Nat) Bool: .__zig_lt(other)
+    def <=(other Nat) Bool: .__zig_lte(other)
+    def >(other Nat) Bool: .__zig_gt(other)
+    def >=(other Nat) Bool: .__zig_gte(other)
+
+    def -() Int: .__zig_nat2int.__zig_neg_int
+    def +(other Nat) Nat: .__zig_add_uint(other)
+    def -(other Nat) Nat: .__zig_sub_uint(other)
+    def *(other Nat) Nat: .__zig_mul_uint(other)
+    def /(other Nat) Nat: .__zig_div_uint(other)
+        
+
+extend Int
+    def bool Bool: self != 0
+    def nat Nat: .__zig_int2nat
+    def int Int: self
+    def float Float: .__zig_int2float
+
+    def ==(other Int) Bool: .__zig_eq(other)
+    def !=(other Int) Bool: .__zig_neq(other)
+    def <(other Int) Bool: .__zig_lt(other)
+    def <=(other Int) Bool: .__zig_lte(other)
+    def >(other Int) Bool: .__zig_gt(other)
+    def >=(other Int) Bool: .__zig_gte(other)
+
+    def -() Int: .__zig_neg_int
+    def +(other Int) Int: .__zig_add_int(other)
+    def -(other Int) Int: .__zig_sub_int(other)
+    def *(other Int) Int: .__zig_mul_int(other)
+    def /(other Int) Int: .__zig_div_int(other)
+
+extend Float
+    def bool Bool: self != 0.0
+    def nat Nat: .__zig_float2nat
+    def int Int: .__zig_float2int
+    def float Float: self
+
+    def ==(other Float) Bool: .__zig_eq(other)
+    def !=(other Float) Bool: .__zig_neq(other)
+    def <(other Float) Bool: .__zig_lt(other)
+    def <=(other Float) Bool: .__zig_lte(other)
+    def >(other Float) Bool: .__zig_gt(other)
+    def >=(other Float) Bool: .__zig_gte(other)
+
+    def -() Float: .__zig_neg_float
+    def +(other Float) Float: .__zig_add_float(other)
+    def -(other Float) Float: .__zig_sub_float(other)
+    def *(other Float) Float: .__zig_mul_float(other)
+    def /(other Float) Float: .__zig_div_float(other)
+
+
 extend Pointer[T]
     -- static alloc Pointer[T]:
     --     __zig_alloc(1)
@@ -32,37 +165,44 @@ extend Pointer[T]
     -- static alloc(size: Nat) Pointer[T]:
     --     __zig_alloc(size)
 
-    def free(size: Nat):
-        __zig_free(self.slice(size))
+    -- def free(size: Nat):
+    --     __zig_free(self.slice(size))
 
-    def slice(size: Nat) Slice[T]:
-        __zig_ptr2slice(self, size)
+    -- def slice(size: Nat) Slice[T]:
+    --     __zig_ptr2slice(self, size)
+
 
 extend Slice[T]
     -- static alloc(size: Nat) Slice[T]:
     --     __zig_alloc(size)
 
-    def free:
-        .__zig_free
+    -- def free:
+    --     .__zig_free
 
-    def size Nat:
-        .__zig_slice_size
+    -- def size Nat:
+    --     .__zig_slice_size
+
 
 def print(str: String):
     __zig_print(str)
 
+
 struct String
     var bytes: Array[Byte]
 
-    def drop: 
-        .bytes.drop
+    -- def ==(other String) Bool: 
+    --     .bytes == other.bytes
+    
+
+    -- def drop: 
+    --     .bytes.drop
 
 struct Array[T]
     var buffer: Slice[T]
     var size: Nat
 
-    def drop: 
-        .buffer.free
+    -- def drop: 
+    --     .buffer.free
 
 trait Stringable
     def string String

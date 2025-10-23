@@ -4,3 +4,6 @@
 /.shards/
 *.dwarf
 .zig-cache
+*.code-workspace
+.editorconfig
+.vscode

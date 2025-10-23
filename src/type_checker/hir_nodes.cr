@@ -162,6 +162,23 @@ abstract struct Hir < IrNode
   end
 
   # no neg, not, or binop — all of those are smushed into Call
+  # okay, maybe just a `not` node
+
+  struct NotNode < Hir
+    property location : Location
+    property value : Cell(Hir)
+    def initialize(@location : Location, @value : Cell(Hir))
+    end
+    def initialize(@location : Location, value : Hir)
+      @value = Cell.new(value.as(Hir))
+    end
+    def_init
+    def binding : Binding ; Binding::Var end
+    def type : Type ; Type.bool end
+    def to_s(io : IO)
+      io << "not (#{value})"
+    end
+  end
 
   struct Call < Hir
     property location : Location

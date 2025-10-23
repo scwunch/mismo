@@ -114,6 +114,9 @@ module TypeContextBase
       when "Never"
         assert_no_type_args(type_node, "Primitive type ")
         Type.never
+      when "Any"
+        assert_no_type_args(type_node, "Primitive type ")
+        Type.any
       when "Nil" 
         assert_no_type_args(type_node, "Primitive type ")
         Type.nil
@@ -562,7 +565,15 @@ module TypeChecker
     when Ast::NegNode
       function_call(ast.location, "-", [infer(ast.value)])
     when Ast::NotNode
-      function_call(ast.location, "not", [infer(ast.value)])
+      # function_call(ast.location, "not", [infer(ast.value)])
+      arg = infer(ast.value)
+      if arg.type.is_a?(Type::Bool)
+        Hir::NotNode.new(ast.location, arg)
+      else
+        Hir::NotNode.new(ast.location, 
+          function_call(ast.location, "bool", [arg])
+        )
+      end
     when Ast::Binop
       case ast.operator
       when Operator::Assign
@@ -662,23 +673,6 @@ module TypeChecker
     unless overloads = env.functions[name]?
       abort! MissingNameError.new(location, "function #{name} not found")
     end
-    # matches = overloads.select do |func|
-    #   type_args = [] of Type
-    #   func.parameters.size == args.size &&
-    #   func.parameters.zip(args).all? { |param, arg| 
-    #     case t = param.type
-    #     when Type::Var
-    #       type_args[t.id] = arg.type
-    #       type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
-    #     else
-    #       param.type == arg.type
-    #     end || if overloads.size == 1
-
-    #     else
-    #       false
-    #     end
-    #   }
-    # end
     matches = [] of Hir::Call
     errors = [] of Error
     overloads.each_with_index do |func, i|
@@ -700,8 +694,25 @@ module TypeChecker
       abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
     end
     matches.first
-    # func = matches.first
-    # Hir::Call.new(location, func, args, func.return_type)
+      # matches = overloads.select do |func|
+      #   type_args = [] of Type
+      #   func.parameters.size == args.size &&
+      #   func.parameters.zip(args).all? { |param, arg| 
+      #     case t = param.type
+      #     when Type::Var
+      #       type_args[t.id] = arg.type
+      #       type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
+      #     else
+      #       param.type == arg.type
+      #     end || if overloads.size == 1
+
+      #     else
+      #       false
+      #     end
+      #   }
+      # end
+      # func = matches.first
+      # Hir::Call.new(location, func, args, func.return_type)
   end
 
   def function_call(location, overload_index, func : FunctionDef, args : ::Array(Hir)) : Hir::Call | Error
@@ -727,7 +738,11 @@ module TypeChecker
   # and collect type arguments along the way...
   def unify(loc : Location, pattern : Type, arg : Type, type_args : Array(Type?), annotation_loc : Location) : Error?
     log.debug_descend(loc, "TypeChecker#unify(#{pattern}, #{arg})") do
-      if pattern.is_a? Type::Var
+      return nil if arg.is_a? Type::Never
+      case pattern
+      when Type::Any
+        nil
+      when Type::Var
         if bound_type_arg = type_args[pattern.id]
           unless arg == bound_type_arg
             log.error(loc, "Cannot bind type variable #{pattern} to #{arg}; it is already bound to #{bound_type_arg}")
@@ -742,35 +757,37 @@ module TypeChecker
           # end
         end
         type_args[pattern.id] = arg
-      elsif (pattern_args = pattern.type_args?) && (arg_args = arg.type_args?)
-        if arg.base_or_class != pattern.base_or_class
-          log.debug(loc, "arg.base_or_class (#{arg.base_or_class}) != pattern.base_or_class (#{pattern.base_or_class})")
-          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        end
-        # if arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt)
-        #   unless arg.base == pattern.base
-        #     log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
-        #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        #   end
-        # end
-        # unless arg_args = arg.type_args?
-        #   log.debug(loc, "arg_args is nil")
-        #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        # end
-        # if arg.class != pattern.class ||
-        #    (arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt) && arg.base != pattern.base)
-        #     raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
-        #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-        # end
-        arg_args.zip(pattern_args).each do |arg_type, param_type|
-          if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
-            return err
-          end
-        end
       else
-        log.debug(loc, "pattern (#{pattern}) is concrete and non-generic")
-        unless arg == pattern
-          return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+        if (pattern_args = pattern.type_args?) && (arg_args = arg.type_args?)
+          if arg.base_or_class != pattern.base_or_class
+            log.debug(loc, "arg.base_or_class (#{arg.base_or_class}) != pattern.base_or_class (#{pattern.base_or_class})")
+            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          end
+          # if arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt)
+          #   unless arg.base == pattern.base
+          #     log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
+          #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          #   end
+          # end
+          # unless arg_args = arg.type_args?
+          #   log.debug(loc, "arg_args is nil")
+          #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          # end
+          # if arg.class != pattern.class ||
+          #    (arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt) && arg.base != pattern.base)
+          #     raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
+          #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          # end
+          arg_args.zip(pattern_args).each do |arg_type, param_type|
+            if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
+              return err
+            end
+          end
+        else
+          log.debug(loc, "pattern (#{pattern}) is concrete and non-generic")
+          unless arg == pattern
+            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+          end
         end
       end
       log.debug(loc, "unify(#{pattern}, #{arg}) => nil")

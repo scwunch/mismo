@@ -62,6 +62,10 @@ abstract struct Type
     primitive
   end
 
+  struct Any < Type
+    primitive
+  end
+
   struct Nil < Type
     primitive
   end

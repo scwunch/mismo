@@ -8,6 +8,41 @@ pub fn __zig_print_0(value: String_t) void {
     _ = std.fs.File.stdout().write(value.bytes.buffer) catch unreachable;
     _ = std.fs.File.stdout().write("\n") catch unreachable;
 }
+
+pub fn __zig_eq_0(left: anytype, right: anytype) bool {
+    return left == right;
+}
+pub fn __zig_neq_0(left: anytype, right: anytype) bool {
+    return left != right;
+}
+pub fn __zig_lt_0(left: anytype, right: anytype) bool {
+    return left < right;
+}
+pub fn __zig_gt_0(left: anytype, right: anytype) bool {
+    return left > right;
+}
+pub fn __zig_lte_0(left: anytype, right: anytype) bool {
+    return left <= right;
+}
+pub fn __zig_gte_0(left: anytype, right: anytype) bool {
+    return left >= right;
+}
+
+pub fn __zig_add_uint_0(left: usize, right: usize) usize {
+    return left + right;
+}
+pub fn __zig_sub_uint_0(left: usize, right: usize) usize {
+    return left - right;
+}
+pub fn __zig_mul_uint_0(left: usize, right: usize) usize {
+    return left * right;
+}
+pub fn __zig_div_uint_0(left: usize, right: usize) usize {
+    return left / right;
+}
+pub fn __zig_neg_int_0(int: anytype) isize {
+    return -int;
+}
 pub fn __zig_add_int_0(left: isize, right: isize) isize {
     return left + right;
 }
@@ -19,6 +54,9 @@ pub fn __zig_mul_int_0(left: isize, right: isize) isize {
 }
 pub fn __zig_div_int_0(left: isize, right: isize) isize {
     return left / right;
+}
+pub fn __zig_neg_float_0(float: anytype) f64 {
+    return -float;
 }
 pub fn __zig_add_float_0(left: f64, right: f64) f64 {
     return left + right;
@@ -37,14 +75,14 @@ pub fn __zig_div_float_0(left: f64, right: f64) f64 {
 pub fn __zig_nat2int_0(nat: usize) isize {
     return @intCast(nat);
 }
-pub fn __zig_nat2float(nat: usize) f64 {
+pub fn __zig_nat2float_0(nat: usize) f64 {
     return @floatFromInt(nat);
 }
-pub fn __zig_nat2string(nat: usize) String_t {
+pub fn __zig_nat2string_0(nat: usize) String_t {
     const buffer = std.fmt.allocPrint(debug_allocator, "{d}", .{nat}) catch unreachable;
     return String_t{ .bytes = Array_t(u8){ .buffer = buffer, .size = buffer.len } };
 }
-pub fn __zig_int2nat(int: isize) usize {
+pub fn __zig_int2nat_0(int: isize) usize {
     return @intCast(int);
 }
 pub fn __zig_int2float_0(int: isize) f64 {
@@ -57,7 +95,7 @@ pub fn __zig_int2string_0(int: isize) String_t {
 pub fn __zig_float2int_0(float: f64) isize {
     return @intFromFloat(float);
 }
-pub fn __zig_float2nat(float: f64) usize {
+pub fn __zig_float2nat_0(float: f64) usize {
     return @intFromFloat(float);
 }
 pub fn __zig_float2string_0(float: f64) String_t {

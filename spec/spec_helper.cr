@@ -1,6 +1,7 @@
 require "spec"
 require "../src/mismo"
 require "../src/*"
+require "../src/ast/*"
 
 macro not_nil!(prop)
   {{ prop }}.should_not be_nil

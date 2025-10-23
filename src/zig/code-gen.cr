@@ -88,21 +88,19 @@ class CodeGenerator
     type_name(type_def.name)
     io << " = "
     emit_anonymous_struct_def(type_def)
+    io << ';'
+    newline
   end
 
   def emit_anonymous_struct_def(type_def : StructDef)
     io << "struct"
     start_block
-    type_def.fields.each do |field|
+    join(type_def.fields.each, ->{io << ','; newline}) do |field|
       ident(field.name)
       io << ": "
       emit(field.type)
-      io << ","
-      newline
     end
     end_block
-    io << ';'
-    newline
   end
 
   def emit_generic_type_def(type_def : StructDef)
@@ -118,13 +116,34 @@ class CodeGenerator
     start_block
     io << "return "
     emit_anonymous_struct_def(type_def)
+    io << ';'
     end_block
     newline
   end
 
+  def join(iter : Iterator, joiner, &block)
+    first = iter.next
+    return if first.is_a?(Iterator::Stop)
+    yield first
+    iter.each do |item|
+      io << joiner
+      yield item
+    end
+  end
+
+  def join(iter : Iterator, join_proc, &block)
+    first = iter.next
+    return if first.is_a?(Iterator::Stop)
+    yield first
+    iter.each do |item|
+      join_proc.call
+      yield item
+    end
+  end
+
   def emit(function : FunctionDef, index : Int)
     if function.name == "drop"
-      p! function.body.first? || raise "OH NO!  Drop has no body!"
+      p function.body.first? || raise "OH NO!  Drop has no body!"
     end
     io << "pub fn "
     function_name(function.name, index)
@@ -225,7 +244,7 @@ class CodeGenerator
     when Type::Var
       io << "T#{type.id}"
     when Type::Unknown
-      io << "#{type.name}[#{type.type_args.join(", ")}]"
+      abort! "unknown type: #{type}"
     else
       raise "unhandled type: #{type}"
     end
@@ -278,11 +297,15 @@ class CodeGenerator
       end
       io << "]"
     when Hir::Tuple
-      io << "("
+      io << ".{"
       expr.elements.each do |e|
         emit(e)
         io << ", "
       end
+      io << "}"
+    when Hir::NotNode
+      io << "!("
+      emit(expr.value.value)
       io << ")"
     when Hir::Call
       emit_call(expr)
@@ -313,6 +336,8 @@ class CodeGenerator
       else
         emit_declare(expr.name)
       end
+    when Hir::If
+      emit_if(expr)
     else
       raise "unhandled expr in #{current_function}: #{expr}"
     end
@@ -339,8 +364,10 @@ class CodeGenerator
   end
 
   def emit_call(call : Hir::Call)
-    case call.function.name
-    when "+", "*", "-", "/"
+    if call.function.name.in?("+", "*", "-", "/") &&
+        call.args.size == 2 && 
+        call.args.all? &.type.primitive? &&
+        call.args[0].type == call.args[1].type
       emit call.args[0]
       io << call.function.name
       emit call.args[1]
@@ -351,6 +378,31 @@ class CodeGenerator
         emit(arg)
       end
       io << ")"
+    end
+  end
+
+  def emit_if(if_node : Hir::If)
+    if_node.tests_and_bindings.each_with_index do |test, i|
+      case test
+      in Hir::Test
+        io << (i == 0 ? "if (" : "else if (")
+        emit(test.expr)
+        io << ") "
+        case cons = test.@consequent_or_additional_conditions
+        in Hir
+          emit(cons)
+        in Array(Hir::TestOrBinding)
+          emit_if(Hir::If.new(if_node.location, cons))
+          raise "This is going to take more thought.........."
+        end
+      in Hir::BindTemp
+        raise "temp bindings in if blocks not yet supported"
+      in Hir::Else
+        io << " else "
+        emit(test.consequent)
+      in Hir::TestOrBinding
+        raise "exhaustive case"
+      end
     end
   end
 
@@ -381,6 +433,11 @@ class CodeGenerator
         raise "unhandled type: #{ty}"
       end
     end
+  end
+
+  def abort!(message : String)
+    io.flush
+    raise message
   end
 end
 

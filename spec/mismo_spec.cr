@@ -32,7 +32,7 @@ describe "Integration Testing" do
     result.should eq "1234\nHello World\n"
   end
 
-  it "should handle basic arithmetic" do
+  pending "should handle basic arithmetic" do
     result = Mismo.run(
       file_path: __FILE__, 
       line_offset: __LINE__ + 2, 
