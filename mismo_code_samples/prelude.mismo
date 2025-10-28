@@ -41,6 +41,7 @@ extern def __zig_slice_size[T](slice: Slice[T]) Nat
 extern def __zig_slice2ptr[T](slice: Slice[T]) Pointer[T]
 extern def __zig_ptr2slice[T](ptr: Pointer[T], size: Nat) Slice[T]
 
+"""
 extend Bool
     def bool Bool: self
     def nat Nat: 
@@ -99,8 +100,8 @@ extend Bool
 
 
 extend Nat
-    def bool Bool: self != 0
-    def nat Nat: self
+    -- def bool Bool: !=(self, 0)
+    -- def nat Nat: self
     def int Int: .__zig_nat2int
     def float Float: .__zig_nat2float
     def string String: .__zig_nat2string
@@ -181,7 +182,7 @@ extend Slice[T]
 
     -- def size Nat:
     --     .__zig_slice_size
-
+"""
 
 def print(str: String):
     __zig_print(str)

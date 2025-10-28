@@ -1,7 +1,5 @@
 require "spec"
-require "../src/mismo"
-require "../src/*"
-require "../src/ast/*"
+require "../src/**"
 
 macro not_nil!(prop)
   {{ prop }}.should_not be_nil
@@ -14,12 +12,12 @@ end
 def parser(
     file_path : (String | Nil),
     source : String, 
-    line_offset,
+    starting_line,
     level : Logger::Level = Logger::Level::Warning
   ) : Parser
   logger = Logger.new(level, out: TestOut.silent)
   lexer = Lexer.new(
-    Lexer::Reader.new(source, file_path, line_offset), 
+    Lexer::Reader.new(source, file_path, starting_line), 
     if level == Logger::Level::Debug
       Logger.new(Logger::Level::Info)
     else
@@ -29,8 +27,8 @@ def parser(
   Parser.new(lexer, logger)
 end
 
-def expression_parser(test_name : String, line_offset, code : String, level : Logger::Level = Logger::Level::Warning)
-  ExpressionParser.new(parser(test_name, code, line_offset, level))
+def expression_parser(test_name : String, starting_line, code : String, level : Logger::Level = Logger::Level::Warning)
+  ExpressionParser.new(parser(test_name, code, starting_line, level))
 end
 def expression_parser(test_name : String, code : String, level : Logger::Level = Logger::Level::Warning)
   ExpressionParser.new(parser(test_name, code, 0, level))
@@ -59,10 +57,10 @@ def type_checker(file : String, program : String, level : Logger::Level = Logger
   TypeContext.new(type_env(file, program, level))
 end
 
-def type_check_program(file_path : String, line_offset, program : String, level : Logger::Level = Logger::Level::Warning)
+def type_check_program(file_path : String, starting_line, program : String, level : Logger::Level = Logger::Level::Warning)
   prelude_parser = parser("/home/ryan/programming-projects/crystal/mismo/mismo_code_samples/prelude.mismo", get_prelude, 0, Logger::Level::Error)
   items = prelude_parser.parse
-  parser = parser(file_path, program, line_offset, Logger::Level::Error)
+  parser = parser(file_path, program, starting_line, Logger::Level::Error)
   items.concat parser.parse
   parser.log.level = level
   type_env = TypeEnv.new(parser.log)

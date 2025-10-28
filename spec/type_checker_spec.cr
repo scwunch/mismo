@@ -27,7 +27,7 @@ describe TypeContext do
     it "works" do
       type_env = type_check_program(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         program: <<-MISMO
         struct Point
           field x Int
@@ -74,7 +74,7 @@ describe TypeEnv do
     it "works" do
       type_env = type_check_program(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         program: <<-MISMO
         struct Point
           field x Int
@@ -101,7 +101,7 @@ describe TypeEnv do
     it "workssss" do
       type_env = type_check_program(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         program: <<-MISMO
         def main:
           let t = true
@@ -152,7 +152,7 @@ describe TypeEnv do
     it "works" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: <<-MISMO
         struct Point
           field x Int
@@ -195,7 +195,7 @@ describe TypeEnv do
     it "registers trait claims properly" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: program = <<-MISMO
         trait Stringable
           def String String
@@ -319,7 +319,7 @@ describe TypeEnv do
     it "verifies basic trait implementations requiring zero or one type parameters, and up to two methods" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: program = <<-MISMO
         struct String
         struct Array[T]
@@ -382,7 +382,7 @@ describe TypeEnv do
     it "verifies more complex trait implementations" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: program = <<-MISMO
         trait Trivial
 
@@ -434,7 +434,7 @@ describe TypeEnv do
     pending "detects when traits are implemented by generic traits" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: <<-MISMO
         trait Sequence[T]
           def get(index Nat) T
@@ -465,7 +465,7 @@ describe TypeEnv do
     it "fills out type info for structs and enum variants" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: program = <<-MISMO
         struct String
         struct IntPoint
@@ -542,7 +542,7 @@ describe TypeEnv do
     pending "detects when traits imply other traits, ie sub-trait inference" do
       items = parser(
         file_path: __FILE__, 
-        line_offset: __LINE__ + 2,
+        starting_line: __LINE__ + 2,
         source: <<-MISMO
         trait Floatable
           def float -> Float

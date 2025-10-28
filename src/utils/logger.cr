@@ -66,14 +66,13 @@ class Logger
           if 0 < loc.line && loc.line < loc.source.size
             @out << ' '
             @out << " \u{2502}" * @indent
-            @out << loc.source[loc.line]
+            line = loc.source[loc.line]
+            @out << line
             if loc.column != 0
-              @out << "\n "
+              @out << '\n' unless line.ends_with?('\n')
               @out << " \u{2502}" * @indent
               @out << " " * (loc.column - 1)
               @out << "^\n"
-            else
-              @out << '\n'
             end
           end
         {% end %}
@@ -119,6 +118,10 @@ class Logger
       @out
     )
     @out << "\033[0m"
+  end
+
+  def has_errors?
+    @errors.any?
   end
 
   # def contains?(str : String)

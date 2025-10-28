@@ -215,7 +215,7 @@ describe Parser do
     end
     it "newlines act as delimiters in type parameters and parameters" do
       parser("newline-type-params", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
           [
             T
@@ -666,7 +666,7 @@ describe Parser do
     end
     it "parses an enum with methods and stuff" do
       parser = parser("enum-Color", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         enum Color
           Red
@@ -720,7 +720,7 @@ describe Parser do
     end
     it "parses an enum with type parameters and methods" do
       parser = parser("enum-Result", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         enum Result[T, E]
           Ok(T)
@@ -761,7 +761,7 @@ describe Parser do
     self_param = Ast::Parameter.new(loc, "self", Ast::Type.new(loc, "Self"))
     it "parses a trait" do
       parser = parser("trait-IO", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         trait IO
           def read String
@@ -792,7 +792,7 @@ describe Parser do
     end
     it "parses a trait with convention and type parameters and super traits" do
       parser = parser("trait-Mutable", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         trait mut Mutable[X] is Dangerous & Fun
           def mutate_me(pls Please)
@@ -846,7 +846,7 @@ describe Parser do
   describe "#parse_extend" do
     it "parses an extend" do
       parser = parser("extend-Format", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         extend[T: String] T is Format
           def format String: 
@@ -879,7 +879,7 @@ describe Parser do
   describe "#parse_def" do
     it "parses a def block" do
       parser = parser("def-block", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def foo:
             1 + 1 
@@ -975,7 +975,7 @@ describe Parser do
     end
     it "parses multiple unrelated functions in one def block, with optional additional type parameters" do
       parser = parser("def-block-2", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def[T, U] 
           foo(a T, b U) T:
@@ -1050,7 +1050,7 @@ describe Parser do
   describe "#parse" do
     it "parses a bunch of definitions" do
       parser = parser("bunch-of-defs", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         struct IntPoint
           var x Int
@@ -1136,7 +1136,7 @@ describe ExpressionParser do
   end
   it "respects operator precedence"do
     parser = expression_parser("op-precedence", 
-      line_offset: __LINE__ + 2, 
+      starting_line: __LINE__ + 2, 
       code: <<-MISMO
         not this and not that == -1 + - 2 * 3
         foo = bar = baz
@@ -1413,7 +1413,7 @@ describe UcsParser do
   describe "#parse" do
     it "parses basic single line conditional" do
       parser = parser("ucs basic", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def main:
           if x > y: r
@@ -1444,7 +1444,7 @@ describe UcsParser do
     end
     it "parses basic branched conditionals" do
       parser = parser("ucs branched conditions", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def main:
           if x > y: r
@@ -1486,7 +1486,7 @@ describe UcsParser do
     end
     it "parses branched conditionals with 'else's" do
       parser = parser("ucs else conditions", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def main:
           if x > y: 
@@ -1552,7 +1552,7 @@ describe UcsParser do
     end
     it "parses branched conditionals with unary conditions/tests" do
       parser = parser("ucs unary conditions", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def main:
           if some_boolean: 
@@ -1598,7 +1598,7 @@ describe UcsParser do
     end
     it "parses branched conditionals with nested tests via 'and' connector" do
       parser = parser("ucs nested 'and' conditions", 
-        line_offset: __LINE__ + 2, 
+        starting_line: __LINE__ + 2, 
         source: <<-MISMO
         def main:
           if x > y and x > z: r

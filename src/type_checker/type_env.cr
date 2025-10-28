@@ -33,6 +33,11 @@ class TypeEnv
   end
 
   def type_check_program(items : Array(Ast::TopLevelItem))
+    declaration_collection(items)
+    type_check_functions
+  end
+
+  def declaration_collection(items : Array(Ast::TopLevelItem))
     
     # first pass
     register_types_and_collect_items(items)
@@ -56,7 +61,9 @@ class TypeEnv
 
     # add_built_ins
     # NOTE: Built-ins are now included in the prelude
-
+  end
+  
+  def type_check_functions
     # fifth pass: type check functions
     ast_functions.each do |name, ast_funcs| 
       # name, ast_funcs = ast_funcs

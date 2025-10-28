@@ -182,9 +182,9 @@ describe Lexer do
       lexer = Lexer.new(
         Lexer::Reader.new(
           file_name: __FILE__, 
-          line_offset: __LINE__ + 2,
+          starting_line: __LINE__ + 2,
           text: <<-MISMO
-          "hello" `backticks` 'world'
+          "hello" `backticks` 'world' ""
           MISMO
         ),
         Logger.new(LOG_LEVEL)
@@ -196,6 +196,114 @@ describe Lexer do
       lexer.current_token.should eq(Token.string(loc, "backticks"))
       lexer.push_string(loc); lexer.reader.next
       lexer.current_token.should eq(Token.string(loc, "world"))
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, ""))
+    end
+
+    it "parses a string with escaped characters" do
+      lexer = Lexer.new(
+        Lexer::Reader.new(
+          file_name: __FILE__, 
+          starting_line: __LINE__ + 2,
+          text: <<-MISMO
+          "\\\"hello\\n\\tworld, \\\\backslash\\\""
+          MISMO
+        ),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "\"hello\n\tworld, \\backslash\""))
+    end
+
+    it "parses a raw string" do
+      lexer = Lexer.new(
+        Lexer::Reader.new(
+          file_name: __FILE__, 
+          starting_line: __LINE__ + 2,
+          text: <<-MISMO
+          `this string contains \"quotes\" and unescaped \\backslashes\\`
+          ``I can even put `backticks` in this one``
+          MISMO
+        ),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "this string contains \"quotes\" and unescaped \\backslashes\\"))
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "I can even put `backticks` in this one"))
+    end
+
+    it "parses a multi-line string" do
+      lexer = Lexer.new(
+        Lexer::Reader.new(
+          file_name: __FILE__, 
+          starting_line: __LINE__ + 2,
+          text: <<-MISMO
+          """
+            This is a multi-line string.
+            It can contain "quotes" and even """triple quotes""" too.
+            """
+          MISMO
+        ),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "This is a multi-line string.\nIt can contain \"quotes\" and even \"\"\"triple quotes\"\"\" too.")) 
+    end
+
+    it "parses a multi-line raw string" do
+      lexer = Lexer.new(
+        Lexer::Reader.new(
+          file_name: __FILE__, 
+          starting_line: __LINE__ + 2,
+          text: <<-MISMO
+          ```
+            This is a multi-line raw string.
+            It can contain "quotes" too.
+            ```
+
+            ````
+            Using 4 backticks, you can even place
+            ```
+            code fences
+            ```
+            in your string.
+            ````
+          MISMO
+        ),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_string(loc)
+      lexer.current_token.should eq(Token.string(loc, "This is a multi-line raw string.\nIt can contain \"quotes\" too.")) 
+      lexer.skip_whitespace_and_comments
+      lexer.reader.peek.should eq '`'
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "Using 4 backticks, you can even place\n\`\`\`\ncode fences\n\`\`\`\nin your string.")) 
+    end
+
+    it "preserves newlines in multi-line strings (except for the first and last)" do
+      lexer = Lexer.new(
+        Lexer::Reader.new(
+          file_name: __FILE__, 
+          starting_line: __LINE__ + 2,
+          text: <<-MISMO
+          """
+            First line.
+
+            Third line.
+            
+            """
+          MISMO
+        ),
+        Logger.new(LOG_LEVEL)
+      )
+      loc = Location.zero
+      lexer.push_string(loc); lexer.reader.next
+      lexer.current_token.should eq(Token.string(loc, "First line.\n\nThird line.\n")) 
     end
   end
 
@@ -351,7 +459,7 @@ describe Lexer do
       lexer = Lexer.new(
         Lexer::Reader.new(
           file_name: __FILE__, 
-          line_offset: __LINE__ + 2,
+          starting_line: __LINE__ + 2,
           text: <<-MISMO
           'hello'
           path/to/module
@@ -375,7 +483,7 @@ describe Lexer do
       lexer = Lexer.new(
         Lexer::Reader.new(
           file_name: __FILE__, 
-          line_offset: __LINE__ + 2,
+          starting_line: __LINE__ + 2,
           text: <<-MISMO
           {foo, bar}
           { foo , bar }

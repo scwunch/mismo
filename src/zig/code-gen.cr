@@ -277,6 +277,10 @@ class CodeGenerator
     case expr
     when Hir::Block
       raise "I thought this would be caught by the overloaded definition."
+    when Hir::True
+      io << "true"
+    when Hir::False
+      io << "false"
     when Hir::Int
       io << expr.value.to_s
     when Hir::Float
@@ -307,6 +311,18 @@ class CodeGenerator
       io << "!("
       emit(expr.value.value)
       io << ")"
+    when Hir::And
+      io << '('
+      emit(expr.left.value)
+      io << ") and ("
+      emit(expr.right.value)
+      io << ')'
+    when Hir::Or
+      io << '('
+      emit(expr.left.value)
+      io << ") or ("
+      emit(expr.right.value)
+      io << ')'
     when Hir::Call
       emit_call(expr)
     when Hir::Constructor
@@ -339,7 +355,7 @@ class CodeGenerator
     when Hir::If
       emit_if(expr)
     else
-      raise "unhandled expr in #{current_function}: #{expr}"
+      raise "unhandled #{expr.class} expr in #{current_function}: #{expr}"
     end
   end
 
@@ -385,7 +401,7 @@ class CodeGenerator
     if_node.tests_and_bindings.each_with_index do |test, i|
       case test
       in Hir::Test
-        io << (i == 0 ? "if (" : "else if (")
+        io << (i == 0 ? "if (" : " else if (")
         emit(test.expr)
         io << ") "
         case cons = test.@consequent_or_additional_conditions

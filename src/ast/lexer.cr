@@ -13,8 +13,8 @@ class Lexer
   def initialize(@reader : Reader, @log : Logger)
     skip_whitespace_and_comments
   end
-  def initialize(text : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
-    @reader = Reader.new(text, file_path, line_offset)
+  def initialize(text : String, file_path : String, starting_line, log_level : Logger::Level = Logger::Level::Warning)
+    @reader = Reader.new(text, file_path, starting_line)
     @log = Logger.new(log_level)
     skip_whitespace_and_comments
   end
@@ -29,7 +29,7 @@ class Lexer
     getter line : UInt32
     getter col : UInt32 = 1_u32 # Represents column *before* processing char at @idx, 1-based for new lines
 
-    def initialize(@input : IO, file_name : String?=nil, line_offset = 1)
+    def initialize(@input : IO, file_name : String?=nil, starting_line = 1)
       # source_lines = @text.split("\n")
       if file_name
         file_name = file_name.sub("/home/ryan/programming-projects/crystal/mismo/", "")
@@ -39,12 +39,12 @@ class Lexer
       end
       # source_lines.insert(0, file_name)
       # @text = IO::Memory.new(text)
-      @line = line_offset.to_u32
+      @line = starting_line.to_u32
       @current_line = input.gets(chomp: false) || ""
       @source << @current_line
     end
-    def initialize(text : String, file_name : String?=nil, line_offset = 1)
-      initialize(IO::Memory.new(text), file_name, line_offset)
+    def initialize(text : String, file_name : String?=nil, starting_line = 1)
+      initialize(IO::Memory.new(text), file_name, starting_line)
     end
 
     def peek : Char
@@ -171,6 +171,10 @@ class Lexer
     def location
       Location.new(@source, @line, @col)
     end
+
+    def indent
+      @col - 1
+    end
   end
 
   def push_token(tok : Token)
@@ -178,9 +182,8 @@ class Lexer
     @current_token = tok
   end
 
-  def lex
-    # tokens = [@current_token]
-    tokens = [] of Token
+  def lex(tokens = [] of Token)
+    # tokens = [@current_token]    
     while true
       tokens << (tok = self.next)
       break if tok.is_a?(Token::EOF)
@@ -232,7 +235,7 @@ class Lexer
         push_token(Token.rbrace(loc)); @reader.next
       when '.'
         push_token(Token.dot(loc)); @reader.next
-      when '"', '\''
+      when '"', '\'', '`'
         push_string(loc) # push_string consumes
       when '0'..'9'
         push_number(loc) # push_number consumes
@@ -456,14 +459,49 @@ class Lexer
   end
 
   def push_string(loc : Location)
+    push_string(loc, @reader.next)
+  end
+
+  def push_string(loc : Location, quote : Char)
     @log.debug_descend(loc, "push string") do
-      str = case @reader.peek
-      when '"', '\'' then parse_string(@reader.next)
-      when '`' then parse_raw_string
-      else
-        push_token(Token.error(loc, "Invalid string quote: '#{@reader.next}'"))
-        return
+      quote_width = 1  # assume first opening quote has already been consumed
+      while @reader.peek == quote
+        quote_width += 1
+        @reader.next
       end
+      str = if quote_width >= 3
+        parse_multiline_string(quote, quote_width)
+      elsif quote == '`'
+        parse_raw_string(quote_width)
+      elsif quote_width == 2
+        ""
+      else
+        # assert quote_width == 1
+        parse_string(quote)
+      end
+      
+        # str = case @reader.peek
+        # when '"', '\''
+        #   quote = @reader.next
+        #   quote_width = 1
+        #   while @reader.peek == quote
+        #     @reader.next
+        #     quote_width += 1
+        #   end
+        #   case quote_width
+        #   when 1
+        #     parse_string(@reader.next)
+        #   when 2
+        #     ""
+        #   else
+        #     parse_multiline_string(quote, quote_width)
+        #   end
+        # when '`' 
+        #   parse_raw_string
+        # else
+        #   push_token(Token.error(loc, "Invalid string quote: '#{@reader.next}'"))
+        #   return
+        # end
       push_token(Token.string(loc, str))
     end
   end
@@ -489,7 +527,7 @@ class Lexer
                 push_token(Token.error(@reader.location - 1, "Invalid escape sequence: '\\#{char}"))
                 char
               end
-          when '\0'
+          when '\0', '\n'
             push_token(Token.error(@reader.location - 1, "Unterminated string literal"))
             break
           else
@@ -500,6 +538,165 @@ class Lexer
     end
   end
 
+  # function is called immediately after consumption of the opening quote
+  def parse_multiline_string(quote : Char, quote_width : Int)
+    @log.debug_descend(@reader.location, "parse multiline string") do
+      if @reader.peek != '\n'
+        push_token Token.error(@reader.location, "Multiline string start token must be followed by a newline")
+      else
+        @reader.next
+      end
+      range = get_string_lines(quote.to_s * quote_width)
+      indent = @reader.indent
+      quote_width.times { @reader.next }
+      String.build do |str|
+        if @reader.source[range]?.nil?
+          log.error(@reader.location, "Multiline string range of lines out of bounds: #{range}")
+          log.error(@reader.location, "source lines (#{@reader.source.size}): #{@reader.source}")
+          raise "BREAK"
+        end
+        @reader.source[range].each_with_index do |line, idx|
+          str << '\n' if idx > 0
+          if quote == '`'  # raw string
+            str << line[indent..-2]
+          else
+            unescaped(line, indent, str)
+          end
+        end
+      end
+    end
+  end
+
+  def unescaped(line : String, indent, io : IO)
+    char_iterator = line.each_char
+    indent.times do |i|
+      case char_iterator.next
+      when '\n' then return
+      when ' '
+      else
+        push_token(Token.error(@reader.location - 1, "Invalid indent on line #{i+1} of multiline string (this also needs a more descriptive message)"))
+      end
+    end
+    char_iterator.each do |c|
+      case c
+      when '\\'
+        io << case char = char_iterator.next
+          when '\\' then '\\'
+          when 'n' then '\n'
+          when 't' then '\t'
+          when 'r' then '\r'
+          when 'f' then '\f'
+          when 'b' then '\b'
+          # when 'u' then 
+          else
+            push_token(Token.error(@reader.location - 1, "Invalid escape sequence: '\\#{char}"))
+            char
+          end
+      else
+        break if c == '\n'
+        io << c
+      end
+    end
+  end
+
+  # this function should be called after the opening quote has already been consumed,
+  # and does not consume the end quote
+  def get_string_lines(quote : String) : Range
+    @log.debug_descend(@reader.location, "get string lines") do
+      start = @reader.source.size
+      expecting_end_quote = true
+      while @reader.has_next?
+        c = @reader.peek
+        if expecting_end_quote
+          break if @reader.peek_str?(quote)
+          expecting_end_quote = c.ascii_whitespace?
+        elsif c == '\n'
+          expecting_end_quote = true
+        end
+        @reader.next
+      end
+      stop = @reader.source.size - 1
+      Range.new(start, stop)
+    end
+  end
+
+  def parse_multiline_string_deprecated(quote : Char, quote_width, deprecated) : String
+    @log.debug_descend(@reader.location, "parse multiline string") do
+      end_quote = quote.to_s * quote_width
+      expecting_end_quote = true
+      String.build do |str|
+        while true
+          case char = @reader.next
+          when quote
+            break if expecting_end_quote && @reader.peek_str?(end_quote)
+            puts "NOTE: found quote (#{quote}), but not end quote (#{end_quote})"
+            str << quote
+          when '\\'
+            str << case char = @reader.next
+              when quote then quote
+              when '\\' then '\\'
+              when 'n' then '\n'
+              when 't' then '\t'
+              when 'r' then '\r'
+              when 'f' then '\f'
+              when 'b' then '\b'
+              # when 'u' then 
+              else
+                push_token(Token.error(@reader.location - 1, "Invalid escape sequence: '\\#{char}"))
+                char
+              end
+          when '\n'
+            expecting_end_quote = true
+            str << '\n'
+          when '\0'
+            push_token(Token.error(@reader.location - 1, "Unterminated string literal"))
+            break
+          else
+            if expecting_end_quote
+              expecting_end_quote = char.ascii_whitespace?
+            end
+            str << char
+          end
+        end
+      end
+    end
+  end
+
+  def parse_raw_string(num_backticks) : String
+    @log.debug_descend(@reader.location, "parse") do
+      multiline = num_backticks >= 3
+      backticks = "`" * num_backticks
+      expecting_end_quote = true
+      String.build do |str|
+        while true
+          if @reader.peek_str?(backticks) 
+            backticks.size.times { @reader.next }
+            if expecting_end_quote
+              break
+            else
+              str << backticks
+            end
+          elsif @reader.has_next?
+            str << (c = @reader.next)
+            if multiline
+              if expecting_end_quote
+                expecting_end_quote = c.ascii_whitespace?
+              elsif c == '\n'
+                expecting_end_quote = true
+              end
+            elsif c == '\n'
+              push_token Token.error(@reader.location, "Unterminated string literal")
+            end
+          else
+            push_token(Token.error(@reader.location, "Unterminated string literal"))
+            break
+          end
+        end
+      end
+    end
+  end
+  
+  @[Deprecated("Use `#parse_raw_string(num_backticks : Int)` instead")]
   def parse_raw_string : String
     @log.debug_descend(@reader.location, "parse raw string") do
       backticks = String.build do |str|
@@ -633,5 +830,12 @@ class Lexer
         nil
       end
     end
+  end
+end
+
+class String
+  def strip_margin(margin) : String
+    self.each_line.map { |line| line[margin..] }
+    .join '\n'
   end
 end

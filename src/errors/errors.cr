@@ -1,3 +1,5 @@
+require "../type_checker/types"
+
 # base class for all errors emitted by the compiler
 abstract struct Error
   property location : Location
@@ -42,16 +44,14 @@ module ErrorWithMessage
     io << self.class << " from " << location << ": " << message
     io << '\n'
     if 0 < location.line && location.line < source.size
-      io << ' '
       io << prefix
-      io << source[location.line]
+      line = source[location.line]
+      io << line
+      io << '\n' unless line.ends_with?('\n')
       if location.column != 0
-        io << "\n "
         io << prefix
         io << " " * location.indent
         io << "^\n"
-      else
-        io << '\n'
       end
     end
   end
@@ -99,28 +99,26 @@ struct TypeMismatchError < TypeError
     io << self.class << " from " << location << ": expected " << expected << ", got " << actual
     io << '\n'
     if 0 < location.line && location.line < source.size
-      io << ' '
       io << prefix
-      io << source[location.line]
+      line = source[location.line]
+      io << line
+      io << '\n' unless line.ends_with?('\n')
       if location.column != 0
-        io << "\n "
         io << prefix
         io << " " * location.indent
         io << "^\n"
-      else
-        io << '\n'
       end
     end
     io << prefix << "Expected " << expected << " because of line " << @annotation << ":\n"
     if 0 < @annotation.line && @annotation.line < source.size
-      io << source[@annotation.line]
+      io << prefix
+      line = source[@annotation.line]
+      io << line
+      io << '\n' unless line.ends_with?('\n')
       if @annotation.column != 0
-        io << "\n "
         io << prefix
         io << " " * @annotation.indent
         io << "^\n"
-      else
-        io << '\n'
       end
     else
       io << "HEEY!  Where did my source_lines go?"
@@ -143,28 +141,25 @@ struct TypeSatisfiesConstraintsError < TypeError
     io << self.class << " " << location << " expected " << constraints << ", got " << type
     io << '\n'
     if 0 < location.line && location.line < source.size
-      io << ' '
       io << prefix
-      io << source[location.line]
+      line = source[location.line]
+      io << line
+      io << '\n' unless line.ends_with?('\n')
       if location.column != 0
-        io << "\n "
         io << prefix
         io << " " * location.indent
         io << "^\n"
-      else
-        io << '\n'
       end
     end
     if 0 < @annotation.line && @annotation.line < source.size
       io << prefix << "Constraints " << constraints << " from this line:\n"
-      io << source[@annotation.line]
+      line = source[@annotation.line]
+      io << line
+      io << '\n' unless line.ends_with?('\n')
       if @annotation.column != 0
-        io << "\n "
         io << prefix
         io << " " * (@annotation.column - 1)
         io << "^\n"
-      else
-        io << '\n'
       end
     end
   end

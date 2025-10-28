@@ -657,6 +657,8 @@ module TopLevelItemParser
         break if skip_newline_unless_block_end?(decl_loc.indent)
         if (key = consume?(Token::KeyWord)) && key.data == KeyWord::Var
           struct_dec.fields << parse_field(key.location)
+        elsif str_tok = consume?(Token::String)
+          @log.info(str_tok.location, "Skipping docstring:\n#{str_tok.data}")
         else
           key_tok = consume!(Token::Variable)
           case key_tok.data
@@ -767,6 +769,10 @@ module TopLevelItemParser
       receiver = Ast::Parameter.new(decl_loc, "self", Ast::Type.new(decl_loc, "Self"))
       until eof?
         break if skip_newline_unless_block_end?(decl_loc.indent)
+        if str_tok = consume?(Token::String)
+          @log.info(str_tok.location, "Skipping docstring:\n#{str_tok.data}")
+          next
+        end
         key_tok = consume!(Token::Variable)
         case key_tok.data
         when "field"
@@ -799,6 +805,8 @@ module TopLevelItemParser
         if variant_token = consume?(Token::Type)
           enum_dec.variants << parse_variant(variant_token.location, variant_token.data.as(String))
           next
+        elsif str_tok = consume?(Token::String)
+          @log.info(str_tok.location, "Skipping docstring:\n#{str_tok.data}")
         end
         key_tok = consume!(Token::Variable)
         case key_tok.data
@@ -869,6 +877,10 @@ module TopLevelItemParser
       receiver = Ast::Parameter.new(decl_loc, "self", type)
       until eof?
         break if skip_newline_unless_block_end?(decl_loc.indent)
+        if str_tok = consume?(Token::String)
+          @log.info(str_tok.location, "Skipping docstring:\n#{str_tok.data}")
+          next
+        end
         key_tok = consume!(Token::Variable)
         case key_tok.data
         when "field"
@@ -1466,14 +1478,14 @@ class Parser
     end
   end
 
-  def initialize(lexer : Lexer, @log : Logger)
+  def initialize(@tokens, @log, @declarations = [] of Ast::TopLevelItem)
+  end
+  def initialize(lexer : Lexer, @log : Logger, @declarations = [] of Ast::TopLevelItem)
     @tokens = lexer.lex
   end
-  def initialize(@tokens, @log)
-  end
-  def initialize(text : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
+  def initialize(text : String, file_path : String, starting_line, log_level : Logger::Level = Logger::Level::Warning)
     @log = Logger.new(log_level)
-    @tokens = Lexer.new(Lexer::Reader.new(text, file_path, line_offset), @log).lex
+    @tokens = Lexer.new(Lexer::Reader.new(text, file_path, starting_line), @log).lex
   end
 
   # == Main Entry Point ==
@@ -1482,7 +1494,11 @@ class Parser
 
     until eof?
       begin
-        parse_top_level_item
+        if peek.is_a?(Token::String)
+          @log.info(peek.location, "Skipping docstring:\n#{next_token.data}")
+        else
+          parse_top_level_item
+        end
         # parse_top_level_item is expected to add items to @declarations directly
         # if it parses a construct that can produce multiple items (like 'function' block).
         # Otherwise, it returns a single item.

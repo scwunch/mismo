@@ -566,14 +566,8 @@ module TypeChecker
       function_call(ast.location, "-", [infer(ast.value)])
     when Ast::NotNode
       # function_call(ast.location, "not", [infer(ast.value)])
-      arg = infer(ast.value)
-      if arg.type.is_a?(Type::Bool)
-        Hir::NotNode.new(ast.location, arg)
-      else
-        Hir::NotNode.new(ast.location, 
-          function_call(ast.location, "bool", [arg])
-        )
-      end
+      arg = infer_implicit_bool(ast.value.value)
+      Hir::NotNode.new(ast.location, arg)
     when Ast::Binop
       case ast.operator
       when Operator::Assign
@@ -581,6 +575,10 @@ module TypeChecker
         assign(ast.left.value, expr)
       when Operator::Is
         match(infer(ast.left), ast.right.value)
+      when Operator::And
+        Hir::And.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
+      when Operator::Or
+        Hir::Or.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
       else
         left = infer(ast.left)
         right = infer(ast.right)
@@ -650,6 +648,15 @@ module TypeChecker
       end
     end
     true
+  end
+
+  def infer_implicit_bool(ast : Ast::Expr) : Hir
+    arg = infer(ast)
+    if arg.type.is_a?(Type::Bool)
+      arg
+    else
+      function_call(ast.location, "bool", [arg])
+    end
   end
 
   def declare(binding : Binding, dec_type : Hir.class, loc : Location, name : ::String, value : Cell(Ast::Expr)? = nil) : Hir

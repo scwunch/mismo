@@ -17,8 +17,8 @@ class Interpreter
   end
   def initialize(@types = {} of String => TypeDefinition, @functions = {} of String => Array(FunctionDef), @log = Logger.new)
   end
-  def initialize(program : String, file_path : String, line_offset, level : Logger::Level = Logger::Level::Warning)
-    parser = Parser.new(program, file_path, line_offset)
+  def initialize(program : String, file_path : String, starting_line, level : Logger::Level = Logger::Level::Warning)
+    parser = Parser.new(program, file_path, starting_line)
     items = parser.parse
     parser.log.level = level
     type_env = TypeEnv.new(parser.log)
@@ -28,8 +28,8 @@ class Interpreter
     @log = parser.log
   end
 
-  def self.run(program : String, file_path : String, line_offset, log_level : Logger::Level = Logger::Level::Warning)
-    interpreter = Interpreter.new(program, file_path, line_offset, log_level)
+  def self.run(program : String, file_path : String, starting_line, log_level : Logger::Level = Logger::Level::Warning)
+    interpreter = Interpreter.new(program, file_path, starting_line, log_level)
     interpreter.run
   end
 

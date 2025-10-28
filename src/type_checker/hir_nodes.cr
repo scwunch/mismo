@@ -1,6 +1,7 @@
 require "../ast/mode_convention"
 require "../ast/tokens"
 require "../type_checker/types"
+require "../type_checker/type_checker"
 require "../utils/cell"
 require "../ast/abstract_node"
 
@@ -177,6 +178,42 @@ abstract struct Hir < IrNode
     def type : Type ; Type.bool end
     def to_s(io : IO)
       io << "not (#{value})"
+    end
+  end
+
+  struct And < Hir
+    property location : Location
+    property left : Cell(Hir)
+    property right : Cell(Hir)
+    def initialize(@location : Location, @left : Cell(Hir), @right : Cell(Hir))
+    end
+    def initialize(@location : Location, left : Hir, right : Hir)
+      @left = Cell.new(left.as(Hir))
+      @right = Cell.new(right.as(Hir))
+    end
+    def_init
+    def binding : Binding ; Binding::Var end
+    def type : Type ; Type.bool end
+    def to_s(io : IO)
+      io << "(#{left}) and (#{right})"
+    end
+  end
+
+  struct Or < Hir
+    property location : Location
+    property left : Cell(Hir)
+    property right : Cell(Hir)
+    def initialize(@location : Location, @left : Cell(Hir), @right : Cell(Hir))
+    end
+    def initialize(@location : Location, left : Hir, right : Hir)
+      @left = Cell.new(left.as(Hir))
+      @right = Cell.new(right.as(Hir))
+    end
+    def_init
+    def binding : Binding ; Binding::Var end
+    def type : Type ; Type.bool end
+    def to_s(io : IO)
+      io << "(#{left}) or (#{right})"
     end
   end
 
