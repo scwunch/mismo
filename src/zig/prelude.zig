@@ -8,6 +8,12 @@ pub fn __zig_print_0(value: String_t) void {
     _ = std.fs.File.stdout().write(value.bytes.buffer) catch unreachable;
     _ = std.fs.File.stdout().write("\n") catch unreachable;
 }
+pub fn __zig_panic_0(value: String_t) noreturn {
+    _ = std.fs.File.stdout().write("\x1B[90mPanic: ") catch unreachable;
+    _ = std.fs.File.stdout().write(value.bytes.buffer) catch unreachable;
+    _ = std.fs.File.stdout().write("\x1B[0m\n") catch unreachable;
+    std.process.exit(1);
+}
 
 pub fn __zig_eq_0(left: anytype, right: anytype) bool {
     return left == right;
@@ -53,7 +59,7 @@ pub fn __zig_mul_int_0(left: isize, right: isize) isize {
     return left * right;
 }
 pub fn __zig_div_int_0(left: isize, right: isize) isize {
-    return left / right;
+    return @divTrunc(left, right);
 }
 pub fn __zig_neg_float_0(float: anytype) f64 {
     return -float;

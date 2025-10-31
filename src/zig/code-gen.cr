@@ -142,9 +142,6 @@ class CodeGenerator
   end
 
   def emit(function : FunctionDef, index : Int)
-    if function.name == "drop"
-      p function.body.first? || raise "OH NO!  Drop has no body!"
-    end
     io << "pub fn "
     function_name(function.name, index)
     io << "("
@@ -171,17 +168,23 @@ class CodeGenerator
     else
       emit(function.return_type)
     end
+
+    # emit body
     start_block
     function.body.each_with_index do |stmt, i|
-      if i == function.body.size - 1
+      if i == function.body.size - 1 && function.return_type != Type.nil
         io << "return " unless stmt.is_a?(Hir::Return)
         emit(stmt)
         io << ";"
       else
         emit(stmt)
-        io << ";"
+        io << ";" unless stmt.is_a?(Hir::Block | Hir::If)
         newline
       end
+    end
+    if function.return_type == Type.nil
+      io << "return;"
+      newline
     end
     end_block
     newline
@@ -243,6 +246,8 @@ class CodeGenerator
       emit(type.return_type)
     when Type::Var
       io << "T#{type.id}"
+    when Type::Never
+      io << "noreturn"
     when Type::Unknown
       abort! "unknown type: #{type}"
     else
@@ -264,13 +269,21 @@ class CodeGenerator
   end
 
   def emit(block : Hir::Block)
-    io << "{\n"
-    block.statements.each do |stmt|
-      emit(stmt)
-      io << ";"
-      newline
+    blk_id = indent
+    io << "@\"block$#{blk_id}\": "
+    start_block
+    block.statements.each_with_index do |stmt, i|
+      if i < block.statements.size - 1
+        emit(stmt)
+        io << ";"
+        newline
+      else
+        io << "break :@\"block$#{blk_id}\" "
+        emit(stmt)
+        io << ";"
+      end
     end
-    io << "}"
+    end_block
   end
 
   def emit(expr : Hir)
@@ -281,10 +294,14 @@ class CodeGenerator
       io << "true"
     when Hir::False
       io << "false"
+    # when Hir::Nat
+    #   io << "@as(usize, #{expr.value})"
     when Hir::Int
-      io << expr.value.to_s
+      expr.value.to_s(io)
+      # io << "@as(isize, #{expr.value})"
     when Hir::Float
-      io << expr.value.to_s
+      expr.value.to_s(io)
+      # io << "@as(f64, #{expr.value})"
     when Hir::String
       io << "string_from_literal(\""
       io << expr.value
@@ -292,7 +309,7 @@ class CodeGenerator
     when Hir::Identifier
       ident(expr.name)
     when Hir::TempVar
-      io << "temp_#{expr.id}"
+      io << "@\"temp$#{expr.id}\""
     when Hir::Array
       io << "["
       expr.elements.each do |e|
@@ -339,19 +356,15 @@ class CodeGenerator
       io << '.'
       ident(expr.field.name)
     when Hir::Let
-      io << "const "
-      if val = expr.value
-        emit_assign(expr.name, val)
-      else
-        emit_declare(expr.name)
-      end
+      emit_declare(expr.name, expr.value)
+      # io << "const "
+      # if val = expr.value
+      #   emit_assign(expr.name, val)
+      # else
+      #   emit_declare(expr.name)
+      # end
     when Hir::Var
-      io << "var "
-      if val = expr.value
-        emit_assign(expr.name, val)
-      else
-        emit_declare(expr.name)
-      end
+      emit_declare(expr.name, expr.value)
     when Hir::If
       emit_if(expr)
     else
@@ -369,10 +382,17 @@ class CodeGenerator
     emit_assign(name, value.value)
   end
 
-  def emit_declare(name : String)
+  def emit_declare(name : String, value : Cell(Hir)?)
+    io << "var "
     ident(name)
-    io << " = "
-    io << "undefined"
+    if value
+      io << ": "
+      emit(value.value.type)
+      io << " = undefined; "
+      emit_assign(name, value.value) 
+    else
+      io << " = undefined"
+    end
   end
 
   def emit(cell : Cell)
@@ -380,12 +400,15 @@ class CodeGenerator
   end
 
   def emit_call(call : Hir::Call)
-    if call.function.name.in?("+", "*", "-", "/") &&
+    # NOTE: '/' is intentionally left off here because integers cannot be divided with this operator
+    if call.function.name.in?("+", "*", "-", "<", "<=", "==", "!=", ">", ">=") &&
         call.args.size == 2 && 
         call.args.all? &.type.primitive? &&
         call.args[0].type == call.args[1].type
       emit call.args[0]
+      io << ' '
       io << call.function.name
+      io << ' '
       emit call.args[1]
     else
       function_name(call.function.name, call.overload_index)
@@ -397,29 +420,36 @@ class CodeGenerator
     end
   end
 
-  def emit_if(if_node : Hir::If)
+  def emit_if(if_node : Hir::If, blk_id = indent)
+    io << "@\"block$" << blk_id << "\": "
+    start_block
     if_node.tests_and_bindings.each_with_index do |test, i|
+      newline if i > 0
       case test
       in Hir::Test
-        io << (i == 0 ? "if (" : " else if (")
+        # io << (i == 0 ? "if (" : " else if (")
+        io << "if ("
         emit(test.expr)
         io << ") "
         case cons = test.@consequent_or_additional_conditions
         in Hir
+          io << "break :@\"block$" << blk_id << "\" "
           emit(cons)
         in Array(Hir::TestOrBinding)
-          emit_if(Hir::If.new(if_node.location, cons))
-          raise "This is going to take more thought.........."
+          emit_if(Hir::If.new(if_node.location, cons), blk_id)
         end
       in Hir::BindTemp
-        raise "temp bindings in if blocks not yet supported"
+        io << "const "
+        emit_assign("temp$#{test.id}", test.value)
       in Hir::Else
-        io << " else "
+        io << "break :@\"block$" << blk_id << "\" "
         emit(test.consequent)
       in Hir::TestOrBinding
-        raise "exhaustive case"
+        raise "exhaustive case to satisfy crystal compiler"
       end
+      io << ';'
     end
+    end_block
   end
 
   def emit_constructor(cons : Hir::Constructor)

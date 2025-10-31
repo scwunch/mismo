@@ -282,7 +282,7 @@ describe Lexer do
       lexer.skip_whitespace_and_comments
       lexer.reader.peek.should eq '`'
       lexer.push_string(loc); lexer.reader.next
-      lexer.current_token.should eq(Token.string(loc, "Using 4 backticks, you can even place\n\`\`\`\ncode fences\n\`\`\`\nin your string.")) 
+      lexer.current_token.should eq(Token.string(loc, "Using 4 backticks, you can even place\n```\ncode fences\n```\nin your string.")) 
     end
 
     it "preserves newlines in multi-line strings (except for the first and last)" do

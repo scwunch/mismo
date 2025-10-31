@@ -511,105 +511,108 @@ module TypeChecker
   # this is to allow control-flow nodes (eg if blocks) to be used as statements without 
   # needing to have a consistent return type in all branches
   def type_check_statement(ast : Ast::Expr) : Hir
-    if !ast.branching?
-      infer(ast)
-    else
-      case ast
-      when Ast::If
-        Hir::If.new(ast.location, ucs_statement(ast.conditionals))
-      when Ast::Block
-        Hir::Block.new(ast.location, ast.statements.map(&->type_check_statement(Ast::Expr)))
+    log.debug_descend(ast.location, "#type_check_statement #{ast}") do
+      if !ast.branching?
+        infer(ast)
       else
-        raise "TypeEnv#type_check_statement: unhandled AST type: #{ast.class}"
+        case ast
+        when Ast::If
+          Hir::If.new(ast.location, ucs_statement(ast.conditionals))
+        when Ast::Block
+          Hir::Block.new(ast.location, ast.statements.map(&->type_check_statement(Ast::Expr)))
+        else
+          raise "TypeEnv#type_check_statement: unhandled AST type: #{ast.class}"
+        end
       end
     end
   end
 
   def infer_block(ast : Ast::Block) : Hir
-    case ast.statements.size
-    when 0
-      Hir::Nil.new(ast.location)
-    when 1
-      infer(ast.statements.first)
-    else
-      hirs = [] of Hir
-      (ast.statements.size - 1).times do |i|
-        hirs << type_check_statement(ast.statements[i])
+    log.debug_descend(ast.location, "#infer_block #{ast}") do
+      case ast.statements.size
+      when 0
+        Hir::Nil.new(ast.location)
+      when 1
+        infer(ast.statements.first)
+      else
+        hirs = [] of Hir
+        (ast.statements.size - 1).times do |i|
+          hirs << type_check_statement(ast.statements[i])
+        end
+        hirs << infer(ast.statements.last)
+        Hir::Block.new(ast.location, hirs)
       end
-      hirs << infer(ast.statements.last)
-      Hir::Block.new(ast.location, hirs)
     end
   end
 
   # transfrom an ast node to hir, inferring its type
   def infer(ast : Ast::Expr) : Hir
-    case ast
-    when Ast::Nil
-      Hir::Nil.new(ast.location)
-    when Ast::True
-      Hir::True.new(ast.location)
-    when Ast::False
-      Hir::False.new(ast.location)
-    when Ast::Int
-      Hir::Int.new(ast.location, ast.value)
-    when Ast::Float
-      Hir::Float.new(ast.location, ast.value)
-    when Ast::String
-      Hir::String.new(ast.location, ast.value)
-    when Ast::Identifier
-      identifier(ast.location, ast.name)
-    when Ast::Array
-      elements = ast.elements.map { |e| infer(e) }
-      element_type = elements.first.type
-      Hir::Array.new(ast.location, element_type, elements)
-    when Ast::NegNode
-      function_call(ast.location, "-", [infer(ast.value)])
-    when Ast::NotNode
-      # function_call(ast.location, "not", [infer(ast.value)])
-      arg = infer_implicit_bool(ast.value.value)
-      Hir::NotNode.new(ast.location, arg)
-    when Ast::Binop
-      case ast.operator
-      when Operator::Assign
-        expr = infer(ast.right)
-        assign(ast.left.value, expr)
-      when Operator::Is
-        match(infer(ast.left), ast.right.value)
-      when Operator::And
-        Hir::And.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
-      when Operator::Or
-        Hir::Or.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
+    log.debug_descend(ast.location, "#infer #{ast}") do
+      case ast
+      when Ast::Nil
+        Hir::Nil.new(ast.location)
+      when Ast::True
+        Hir::True.new(ast.location)
+      when Ast::False
+        Hir::False.new(ast.location)
+      when Ast::Int
+        Hir::Int.new(ast.location, ast.value)
+      when Ast::Float
+        Hir::Float.new(ast.location, ast.value)
+      when Ast::String
+        Hir::String.new(ast.location, ast.value)
+      when Ast::Identifier
+        identifier(ast.location, ast.name)
+      when Ast::Array
+        elements = ast.elements.map { |e| infer(e) }
+        element_type = elements.first.type
+        Hir::Array.new(ast.location, element_type, elements)
+      when Ast::NegNode
+        function_call(ast.location, "-", [infer(ast.value)])
+      when Ast::NotNode
+        # function_call(ast.location, "not", [infer(ast.value)])
+        arg = infer_implicit_bool(ast.value.value)
+        Hir::NotNode.new(ast.location, arg)
+      when Ast::Binop
+        case ast.operator
+        when Operator::Assign
+          expr = infer(ast.right)
+          assign(ast.left.value, expr)
+        when Operator::Is
+          match(infer(ast.left), ast.right.value)
+        when Operator::And
+          Hir::And.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
+        when Operator::Or
+          Hir::Or.new(ast.location, infer_implicit_bool(ast.left.value), infer_implicit_bool(ast.right.value))
+        else
+          left = infer(ast.left)
+          right = infer(ast.right)
+          function_call(ast.location, ast.operator.to_s, [left, right])
+        end
+      when Ast::Call
+        function_call(ast.location, ast.method, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
+      when Ast::Constructor
+        function_call(ast.location, ast.type.name, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
+      when Ast::StaticCall
+        function_call(
+          ast.location, 
+          "#{ast.type}.#{ast.call.method}", 
+          ast.call.args.try &.map(&->infer(Ast::Expr)) || [] of Hir
+        )
+      when Ast::Var
+        declare(Binding::Var, Hir::Var, ast.location, ast.name, ast.value)
+      when Ast::Let
+        declare(Binding::Let, Hir::Let, ast.location, ast.name, ast.value)
+      when Ast::If
+        Hir::If.new(ast.location, ucs_expression(ast.conditionals))
+      when Ast::Block
+        infer_block(ast)
+      when Ast::Return
+        Hir::Return.new(ast.location, infer(ast.value))
       else
-        left = infer(ast.left)
-        right = infer(ast.right)
-        function_call(ast.location, ast.operator.to_s, [left, right])
+        raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
       end
-    when Ast::Call
-      function_call(ast.location, ast.method, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
-    when Ast::Constructor
-      function_call(ast.location, ast.type.name, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
-    when Ast::StaticCall
-      function_call(
-        ast.location, 
-        "#{ast.type}.#{ast.call.method}", 
-        ast.call.args.try &.map(&->infer(Ast::Expr)) || [] of Hir
-      )
-    when Ast::Var
-      declare(Binding::Var, Hir::Var, ast.location, ast.name, ast.value)
-    when Ast::Let
-      declare(Binding::Let, Hir::Let, ast.location, ast.name, ast.value)
-    when Ast::If
-      Hir::If.new(ast.location, ucs_expression(ast.conditionals))
-    when Ast::Block
-      infer_block(ast)
-    when Ast::Return
-      Hir::Return.new(ast.location, infer(ast.value))
-    else
-      raise "TypeEnv#type_check: unknown AST type: #{ast.class}"
     end
-  # rescue type_error : TypeError
-  #   log.error(type_error.location, type_error.message)
-  #   Hir::Nil.new(ast.location)
   end
 
   # :ditto:
@@ -656,6 +659,48 @@ module TypeChecker
       arg
     else
       function_call(ast.location, "bool", [arg])
+    end
+  end
+
+  def or_op(left : Hir, right : Hir) : Hir
+    if left.type == right.type
+      # this transforms the expression `a or b` into
+      # ```
+      # let temp = a;
+      # if temp:
+      #   temp
+      # else:
+      #   b
+      # ```
+      temp = scope.new_temp(left)
+      Hir::If.new(left.location, [
+        Hir::BindTemp.new(left.location, temp),
+        Hir::Test.new(infer_implicit_bool(temp), temp),
+        Hir::Else.new(right.location, right)
+      ])
+    else
+      Hir::Or.new(left.location, infer_implicit_bool(left), infer_implicit_bool(right))
+    end
+  end
+
+  def and_op(left : Hir, right : Hir) : Hir
+    if left.type == right.type
+      # this transforms the expression `a and b` into
+      # ```
+      # let temp = a;
+      # if temp:
+      #   b
+      # else:
+      #   temp
+      # ```
+      temp = scope.new_temp(left)
+      Hir::If.new(left.location, [
+        Hir::BindTemp.new(left.location, temp),
+        Hir::Test.new(infer_implicit_bool(temp), right),
+        Hir::Else.new(right.location, temp)
+      ])
+    else
+      Hir::Or.new(left.location, infer_implicit_bool(left), infer_implicit_bool(right))
     end
   end
 
@@ -723,7 +768,7 @@ module TypeChecker
   end
 
   def function_call(location, overload_index, func : FunctionDef, args : ::Array(Hir)) : Hir::Call | Error
-    log.debug_descend(location, "TypeChecker#function_call(#{func}, #{args})") do
+    log.debug_descend(location, "TypeChecker#function_call(`#{func}`, [#{args.join(", ")})") do
       if func.parameters.size != args.size
         return ArgumentMismatchError.new(location, "#{func.name} expected #{func.parameters.size} arguments, but got #{args.size}")
       end
@@ -800,40 +845,6 @@ module TypeChecker
       log.debug(loc, "unify(#{pattern}, #{arg}) => nil")
       nil
     end
-    # case pattern
-    # when .primitive?
-    #   unless arg == pattern
-    #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-    #   end
-    # when Type::Var
-    #   if bound_type_arg = type_args[pattern.id]
-    #     unless arg == bound_type_arg
-    #       log.error(loc, "Cannot bind type variable #{pattern} to #{arg}; it is already bound to #{bound_type_arg}")
-    #       return TypeMismatchError.new(loc, actual: arg, expected: bound_type_arg, annotation: annotation_loc)
-    #     end
-    #   else
-    #     log.warning(loc, "TODO: type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id]) ... or call it in TypeChecker#function_call")
-    #     # unless type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
-    #     #   log.warning(arg.location, "Oh shoot, type #{arg.type} does not satisfy constraint #{func.type_params[t.id]}")
-    #     #   raise "BREAKPOINT!"
-    #     #   return TypeSatisfiesConstraintsError.new(loc, arg, func.type_params[t.id], annotation_loc)
-    #     # end
-    #   end
-    #   type_args[pattern.id] = arg
-    # when Type::Struct, Type::Enum
-    #   # type constructor like Array(T)
-    #   unless arg.is_a?(Type::Struct | Type::Enum) && arg.base == pattern.base
-    #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-    #   end
-    #   arg.type_args.zip(pattern.type_args).each do |arg_type, param_type|
-    #     if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
-    #       return err
-    #     end
-    #   end
-    # else
-    #   raise "cannot unify #{arg} with #{pattern}"
-    # end
-    # nil
   end
 
   def assign(lhs : Ast::Expr, rhs : Hir) : Hir
@@ -871,8 +882,8 @@ module TypeChecker
   end
 
   def match(lhs : Hir, rhs : Ast::Expr) : Hir
-    unless (type = lhs.type).is_a?(Type::Adt) && (type_def = type.base).is_a?(EnumDef)
-      emit_error MetatypeError.new(rhs.location, "#{lhs} is not an enum; it's #{type}.  Only enums can be matched with the `is` operator.")
+    unless (type_def = lhs.type.type_def?).is_a?(EnumDef)  # (type = lhs.type).is_a?(Type::Adt) && (type_def = type.base).is_a?(EnumDef)
+      emit_error MetatypeError.new(rhs.location, "#{lhs} is not an enum; it's a #{lhs.type}.  Only enums can be matched with the `is` operator.")
       return Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
     end
 
@@ -880,7 +891,7 @@ module TypeChecker
     when Ast::Call
       variant_index = type_def.variants.index { |v| v.name == rhs.method }
       if variant_index.nil?
-        emit_error MetatypeError.new(rhs.location, "\"#{rhs.method}\" is a function call, not a variant of #{type}")
+        emit_error MetatypeError.new(rhs.location, "\"#{rhs.method}\" is a function call, not a variant of #{type_def}")
         Hir::MatchExpr.new(lhs.location, lhs, Int32::MAX)
       else
         if rhs.args.try { |args| args.size > 0 }
@@ -894,33 +905,17 @@ module TypeChecker
     end
   end
 
-  def ucs(ast : Array(Ast::Condition), needs_consistent_output_type : Bool) : Array(Hir::Condition)
-    conditions = ast.map { |c| conditional(c) }
-    if needs_consistent_output_type
-      types_and_locations = conditions
-        .map { |c| {c.type, c.location} }
-        .uniq { |t| t.first.class }
-      p! types_and_locations
-      if types_and_locations.size > 1
-        type_error(ast.location, "All branches of an if block must have the same output type when the block is used as an expression")
-      end
-    end
-    conditions
-  end
-
   def ucs_expression(ast : Array(Ast::Condition)) : Array(Hir::TestOrBinding)
     steps = [] of Hir::TestOrBinding
-    # conditional(ast[0], steps)
-    # type = steps[0].type
-    # ast.each_with_index do |cond, i|
-    #   unless i == 0
-    #     conditional(cond, steps, true)
-    #   end
-    # end
     ast.each do |cond|
       conditional(cond, steps, true)
     end
-    # raise("check type of conditional, use the Union.type constructor")
+    # check for type consistency
+    types = Type.union(steps.each.select { |t| !t.is_a?(Hir::BindTemp) }.map &.type)
+    if types.is_a?(Type::Union)
+      emit_error TypeMismatchError.new(ast.last.location, types.types.first, types.types.last, ast.first.location)
+      # replace this error with a type error specifically designed for branching HIRs
+    end
     steps
   end
 
@@ -946,66 +941,11 @@ module TypeChecker
         case op = op_branch.operator.to_s
         when "is"
           # pattern match
-          if (type = lhs.type).is_a?(Type::Adt) && (base = type.base).is_a?(EnumDef)
-            variants = base.variants
-            jump_table = Array(Hir?).new(variants.size, nil)
-            count_variants = 0
-            op_branch.term_split.each do |term|
-              case pattern = term.term
-              when Ast::Constructor
-                variant_index = variants.index { |v| v.name == pattern.type.name }
-                if variant_index.nil?
-                  log.error(pattern.location, "\"#{pattern.type.name}\" is not a variant of #{type}.  Variants are: #{variants.map { |v| v.name }.join(", ")}")
-                else
-                  log.warning(pattern.location, "pattern variable binding not supported yet")
-                  if cons = term.consequent
-                    jump_table[variant_index] = is_expression ? infer(cons) : type_check_statement(cons)
-                    count_variants += 1
-                  else
-                    log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
-                  end
-                end
-              when Ast::Call
-                # variant_index = variants.index { |v| v.name == pattern.method }
-                # if variant_index.nil?
-                  log.error(pattern.location, "\"#{pattern.method}\" is a function call; not a variant of #{type}")
-                # else
-                #   log.warning(pattern.location, "pattern variable binding not supported yet")
-                #   if cons = term.consequent
-                #     jump_table[variant_index] = is_expression ? infer(cons) : type_check_statement(cons)
-                #     count_variants += 1
-                #   else
-                #     log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
-                #   end
-                # end
-              when Ast::Identifier 
-                if pattern.name == "_"
-                  # catch-all
-                  count_variants = variants.size
-                  if cons = term.consequent
-                    jump_table << (is_expression ? infer(cons) : type_check_statement(cons))
-                  else
-                    log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
-                  end
-                else
-                  log.error(pattern.location, "\"#{pattern}\" is not a variant of #{type}; patterns must be upper-case.")
-                end
-              else
-                log.error(pattern.location, "Expected variant of #{type}, but got \"#{pattern}\" which is #{pattern.class}.")
-              end
-            end
-            if count_variants < variants.size
-              missing_variants = [] of String
-              variants.each_with_index do |variant, index|
-                if jump_table[index] == nil
-                  missing_variants << variant.name
-                end
-              end
-              log.error(cond.location, "Not all variants of #{type} were matched: missing #{missing_variants.join(", ")}")
-            end
+          if (type_def = lhs.type.type_def?).is_a?(EnumDef)
+            jump_table = pattern_match(cond.location, op_branch.term_split, type_def, is_expression)
             steps << Hir::MatchBlock.new(cond.location, temp, jump_table)
           else
-            emit_error MetatypeError.new(cond.location, "Can only pattern match on enums; #{lhs} is a #{type}")
+            emit_error MetatypeError.new(cond.location, "#{lhs} is not an enum; it's a #{lhs.type}.  Only enums can be matched with the `is` operator.")
           end
         else
           # regular comparison operator (eg ==, <, >=, etc)
@@ -1015,7 +955,7 @@ module TypeChecker
               in ::Array(Ast::Condition)
                 raise "not consequence_statement(cons)"
               in Ast::Expr
-                raise "consequence_statement(cons)"
+                is_expression ? infer(cons) : type_check_statement(cons)
               end
             steps << Hir::Test.new(test_expr, cons_cond)
           end
@@ -1032,23 +972,67 @@ module TypeChecker
     end
   end
 
+  def pattern_match(loc : Location, branches : Array(Ast::RTerm), enum_type : EnumDef, is_expression : Bool) : Array(Hir?)
+    variants = enum_type.variants
+    jump_table = Array(Hir?).new(variants.size, nil)
+    count_variants = 0
+    branches.each do |term|
+      case pattern = term.term
+      when Ast::Constructor
+        variant_index = variants.index { |v| v.name == pattern.type.name }
+        if variant_index.nil?
+          log.error(pattern.location, "\"#{pattern.type.name}\" is not a variant of #{enum_type}.  Variants are: #{variants.map { |v| v.name }.join(", ")}")
+        else
+          log.warning(pattern.location, "pattern variable binding not supported yet")
+          if cons = term.consequent
+            if jump_table[variant_index]
+              log.error(pattern.location, "variant \"#{pattern.type.name}\" was matched more than once")
+            else
+              jump_table[variant_index] = is_expression ? infer(cons) : type_check_statement(cons)
+              count_variants += 1
+            end
+          else
+            log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
+          end
+        end
+      when Ast::Call
+        log.error(pattern.location, "\"#{pattern.method}\" is a function call; not a variant of #{enum_type}")
+      when Ast::Identifier 
+        if pattern.name == "_"
+          # catch-all
+          count_variants = variants.size
+          if cons = term.consequent
+            jump_table << (is_expression ? infer(cons) : type_check_statement(cons))
+          else
+            log.error(pattern.location, "\"and\" not yet supported while pattern matching.")
+          end
+        else
+          log.error(pattern.location, "\"#{pattern}\" is not a variant of #{enum_type}; patterns must be upper-case.")
+        end
+      else
+        log.error(pattern.location, "Expected variant of #{enum_type}, but got \"#{pattern}\" which is #{pattern.class}.")
+      end
+    end
+
+    # exhaustivity check to see if all variants were matched
+    if count_variants < variants.size
+      missing_variants = [] of String
+      variants.each_with_index do |variant, index|
+        if jump_table[index] == nil
+          missing_variants << variant.name
+        end
+      end
+      log.error(loc, "Not all variants of #{enum_type} were matched: missing #{missing_variants.join(", ")}")
+    end
+
+    jump_table
+  end
+
   def consequence_statement(ast : Ast::Expr)
     type_check_statement(ast)
   end
   def consequence_statement(conditionals : Array(Ast::Condition))
     ucs_statement(conditionals)
-  end
-
-  def conditional(cond : Ast::Condition)
-    case cond
-    in Ast::BinaryCondition
-      
-    in Ast::UnaryCondition
-      
-    in Ast::ElseCondition
-      
-    end
-    raise "TODO"
   end
 
   def type_error(location : Location, message : String)

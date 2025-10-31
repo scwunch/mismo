@@ -1,4 +1,5 @@
 extern def __zig_print(value: String)
+extern def __zig_panic(value: String) Never
 
 extern def __zig_eq(left Any, right Any) Bool
 extern def __zig_neq(left Any, right Any) Bool
@@ -26,7 +27,7 @@ extern def __zig_div_float(left Any, right Any) Float
 
 extern def __zig_nat2int(nat: Nat) Int
 extern def __zig_nat2float(nat: Nat) Float
-extern def __zig_nat2string(nat: Nat) Nat
+extern def __zig_nat2string(nat: Nat) String
 extern def __zig_int2nat(int: Int) Nat
 extern def __zig_int2float(int: Int) Float
 extern def __zig_int2string(int: Int) String
@@ -41,12 +42,13 @@ extern def __zig_slice_size[T](slice: Slice[T]) Nat
 extern def __zig_slice2ptr[T](slice: Slice[T]) Pointer[T]
 extern def __zig_ptr2slice[T](ptr: Pointer[T], size: Nat) Slice[T]
 
-"""
+def bool(_ Nil) Bool: false
+
 extend Bool
     def bool Bool: self
     def nat Nat: 
-        if self: 1
-        else: 0
+        nat(if self: 1
+        else: 0)
     def int Int: 
         if self: 1
         else: 0
@@ -57,24 +59,33 @@ extend Bool
         if self: "true"
         else: "false"
 
-    def ==(other Bool) Bool: 
-        .__zig_eq(other)
-    def !=(other Bool) Bool:
-        .__zig_neq(other)
-    def <(other Bool) Bool: 
-        not self and other
-    def <=(other Bool) Bool: 
-        not self or other
-    def >(other Bool) Bool: 
-        self and not other
-    def >=(other Bool) Bool: 
-        self or not other
+    def ==(other Bool) Bool: .__zig_eq(other)
+    def ==(other Nat) Bool: .__zig_eq(other)
+    def ==(other Int) Bool: .__zig_eq(other)
+    def !=(other Bool) Bool: .__zig_neq(other)
+    def !=(other Nat) Bool: .__zig_neq(other)
+    def !=(other Int) Bool: .__zig_neq(other)
+    def <(other Bool) Bool: not self and other
+    def <(other Nat) Bool: .nat.__zig_lt(other)
+    def <(other Int) Bool: .int.__zig_lt(other)
+    def <=(other Bool) Bool: not self or other
+    def <=(other Nat) Bool: .nat.__zig_lte(other)
+    def <=(other Int) Bool: .int.__zig_lte(other)
+    def >(other Bool) Bool: self and not other
+    def >(other Nat) Bool: .nat.__zig_gt(other)
+    def >(other Int) Bool: .int.__zig_gt(other)
+    def >=(other Bool) Bool: self or not other
+    def >=(other Nat) Bool: .nat.__zig_gte(other)
+    def >=(other Int) Bool: .int.__zig_gte(other)
 
     def +(other Bool) Nat:
-        if 
+        nat(if 
             self and other: 2
             self or other: 1
             else: 0 
+        )
+    def +(other Nat) Nat: .nat.__zig_add_uint(other)
+    def +(other Int) Int: .int.__zig_add_int(other)
 
     def -(other Bool) Int:
         if 
@@ -82,6 +93,8 @@ extend Bool
             self: 1
             other: -1
             else: 0
+    def -(other Nat) Int: .nat.__zig_sub_int(other)
+    def -(other Int) Int: .int.__zig_sub_int(other)
     
     def -() Int:
         if self: -1
@@ -90,34 +103,64 @@ extend Bool
     def *(other Bool) Bool:
         if self and other: true
         else: false
+    def *(other Nat) Nat: 
+        if self: other
+        else: nat(0)
+    def *(other Int) Int: 
+        if self: other
+        else: 0
+    def *(other Float) Float: 
+        if self: other
+        else: 0.0
 
     def /(other Bool) Bool:
         if 
             not other:
-                1 / 0
+                panic("divide by zero")
             self and other: true
             else: false
-
+    def /(other Nat) Nat: .nat.__zig_div_uint(other)
+    def /(other Int) Int: .int.__zig_div_int(other)
 
 extend Nat
-    -- def bool Bool: !=(self, 0)
-    -- def nat Nat: self
+    def bool Bool: .__zig_neq(0)
+    def nat Nat: self
     def int Int: .__zig_nat2int
     def float Float: .__zig_nat2float
     def string String: .__zig_nat2string
 
+    def ==(other Bool) Bool: .__zig_eq(other)
     def ==(other Nat) Bool: .__zig_eq(other)
+    def ==(other Int) Bool: .__zig_eq(other)
+    def !=(other Bool) Bool: .__zig_neq(other)
     def !=(other Nat) Bool: .__zig_neq(other)
+    def !=(other Int) Bool: .__zig_neq(other)
+    def <(other Bool) Bool: .__zig_lt(other.nat)
     def <(other Nat) Bool: .__zig_lt(other)
+    def <(other Int) Bool: .int.__zig_lt(other)
+    def <=(other Bool) Bool: .__zig_lte(other.nat)
     def <=(other Nat) Bool: .__zig_lte(other)
+    def <=(other Int) Bool: .int.__zig_lte(other)
+    def >(other Bool) Bool: .__zig_gt(other.nat)
     def >(other Nat) Bool: .__zig_gt(other)
+    def >(other Int) Bool: .int.__zig_gt(other)
+    def >=(other Bool) Bool: .__zig_gte(other.nat)
     def >=(other Nat) Bool: .__zig_gte(other)
+    def >=(other Int) Bool: .int.__zig_gte(other)
 
     def -() Int: .__zig_nat2int.__zig_neg_int
+    def +(other Bool) Nat: .__zig_add_uint(other.nat)
     def +(other Nat) Nat: .__zig_add_uint(other)
+    def +(other Int) Int: .int.__zig_add_int(other)
+    def -(other Bool) Nat: .__zig_sub_uint(other.nat)
     def -(other Nat) Nat: .__zig_sub_uint(other)
+    def -(other Int) Int: .int.__zig_sub_int(other)
+    def *(other Bool) Nat: if other: self else: nat(0)
     def *(other Nat) Nat: .__zig_mul_uint(other)
+    def *(other Int) Int: .int.__zig_mul_int(other)
+    def /(other Bool) Nat: .__zig_div_uint(other.nat)
     def /(other Nat) Nat: .__zig_div_uint(other)
+    def /(other Int) Int: .int.__zig_div_int(other)
         
 
 extend Int
@@ -125,25 +168,45 @@ extend Int
     def nat Nat: .__zig_int2nat
     def int Int: self
     def float Float: .__zig_int2float
+    def string String: .__zig_int2string
 
+    def ==(other Bool) Bool: .__zig_eq(other)
+    def ==(other Nat) Bool: .__zig_eq(other)
     def ==(other Int) Bool: .__zig_eq(other)
+    def !=(other Bool) Bool: .__zig_neq(other)
+    def !=(other Nat) Bool: .__zig_neq(other)
     def !=(other Int) Bool: .__zig_neq(other)
+    def <(other Bool) Bool: .__zig_lt(other.int)
+    def <(other Nat) Bool: .__zig_lt(other.int)
     def <(other Int) Bool: .__zig_lt(other)
+    def <=(other Bool) Bool: .__zig_lte(other.int)
+    def <=(other Nat) Bool: .__zig_lte(other.int)
     def <=(other Int) Bool: .__zig_lte(other)
+    def >(other Bool) Bool: .__zig_gt(other.int)
+    def >(other Nat) Bool: .__zig_gt(other.int)
     def >(other Int) Bool: .__zig_gt(other)
+    def >=(other Bool) Bool: .__zig_gte(other.int)
+    def >=(other Nat) Bool: .__zig_gte(other.int)
     def >=(other Int) Bool: .__zig_gte(other)
 
     def -() Int: .__zig_neg_int
+    def +(other Bool) Int: .__zig_add_int(other.int)
+    def +(other Nat) Int: .__zig_add_int(other.int)
     def +(other Int) Int: .__zig_add_int(other)
+    def -(other Bool) Int: .__zig_sub_int(other.int)
+    def -(other Nat) Int: .__zig_sub_int(other.int)
     def -(other Int) Int: .__zig_sub_int(other)
+    def *(other Bool) Int: .__zig_mul_int(other.int)
+    def *(other Nat) Int: .__zig_mul_int(other.int)
     def *(other Int) Int: .__zig_mul_int(other)
+    def /(other Bool) Int: .__zig_div_int(other.int)
+    def /(other Nat) Int: .__zig_div_int(other.int)
     def /(other Int) Int: .__zig_div_int(other)
 
 extend Float
-    def bool Bool: self != 0.0
-    def nat Nat: .__zig_float2nat
     def int Int: .__zig_float2int
     def float Float: self
+    def string String: .__zig_float2string
 
     def ==(other Float) Bool: .__zig_eq(other)
     def !=(other Float) Bool: .__zig_neq(other)
@@ -158,7 +221,7 @@ extend Float
     def *(other Float) Float: .__zig_mul_float(other)
     def /(other Float) Float: .__zig_div_float(other)
 
-
+"""
 extend Pointer[T]
     -- static alloc Pointer[T]:
     --     __zig_alloc(1)
@@ -187,6 +250,8 @@ extend Slice[T]
 def print(str: String):
     __zig_print(str)
 
+def panic(str: String) -> Never:
+    __zig_panic(str)
 
 struct String
     var bytes: Array[Byte]
@@ -214,8 +279,8 @@ trait Intable
 trait Floatable
     def float Float
 
+extend Bool is Stringable
+
 extend Int is Stringable
-    def string String: .__zig_int2string
 
 extend Int is Floatable
-    def float Float: .__zig_int2float

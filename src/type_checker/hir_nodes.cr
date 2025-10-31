@@ -236,7 +236,11 @@ abstract struct Hir < IrNode
     def to_s(io : IO)
       io << function.name
       if type_args.any?
-        io << "[#{type_args.join(", ")}]"
+        type_args.each_with_index do |ta, i|
+          io << i == 0 ? '[' : ", "
+          io << ta
+        end
+        io << "]"
       end
       io << "(#{args.join(", ")})"
     end
@@ -503,7 +507,9 @@ abstract struct Hir < IrNode
     def initialize(@location, @tests_and_bindings)
     end
     def binding : Binding ; Binding::Var end
-    def type : Type ; Type.nil end
+    def type : Type
+      tests_and_bindings.last.type
+    end
     def to_s(io : IO)
       io << "if "
       if tests_and_bindings.size == 1
@@ -538,12 +544,12 @@ abstract struct Hir < IrNode
     end
 
     def type : Type
-      case cons = consequent
+      case cons = @consequent_or_additional_conditions
       in Hir
         cons.type
       in ::Array(TestOrBinding)
         Type.union(
-          cons.each.filter { |t| !t.is_a?(BindTemp) }.map &.type
+          cons.each.select { |t| !t.is_a?(BindTemp) }.map &.type
         )
       end
     end
@@ -599,7 +605,7 @@ abstract struct Hir < IrNode
     def location : Location ; value.location end
     def type : Type
       Type.union(
-        jump_table.each.filter { |t| !t.nil? }.map &.type
+        jump_table.each.select { |t| !t.nil? }.map { |t| t.not_nil!.type }
       )
     end
     def to_s(io : IO)

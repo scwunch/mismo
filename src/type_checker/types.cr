@@ -24,6 +24,11 @@ abstract struct Type
       self.class
     end
   end
+  def is_enum?; false end
+  def is_struct?; false end
+  def type_def? : ::TypeDefinition?
+    nil
+  end
 
   def inspect(io : IO)
     io << {{@type.name.stringify}} << '('
@@ -210,14 +215,11 @@ abstract struct Type
     def type_args : ::Slice(Type)
       types
     end
-    def Type.union(*args)
-      Union.new(*args).as Type
-    end
     def Type.union(one_type : Type)
       Union.new(Slice[one_type]).as Type
     end
-    def Type.union(types : Iterable(Type))
-      types = types.uniq.to_a
+    def Type.union(types : Iterator(Type))
+      types = types.uniq.select { |t| t != Type.never }.to_a
       case types.size
       when 0 then Type.never
       when 1 then types.first.as Type
@@ -264,6 +266,9 @@ abstract struct Type
     end
     def is_struct?
       base.is_a?(StructDef)
+    end
+    def type_def? : ::TypeDefinition?
+      @base
     end
     def to_s(io : IO)
       io << base.name

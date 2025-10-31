@@ -164,7 +164,10 @@ struct Parameter < IrNode
   def initialize(@location : Location, @mode : Mode, @name : String, @type : Type)
   end
   def to_s(io : IO)
-    io << "#{mode} #{name}: #{type}"
+    io << mode << ' ' if mode
+    io << name
+    io << ": "
+    io << type
   end
 end
 
