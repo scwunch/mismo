@@ -386,12 +386,13 @@ module Ast
     property location : Location
     property variable : Cell(Expr)
     property collection : Cell(Expr)
-    property body : ::Array(Expr)
-    def initialize(@location : Location, @variable : Cell(Expr), @collection : Cell(Expr), @body : ::Array(Expr))
+    property body : Cell(Expr)
+    def initialize(@location : Location, @variable : Cell(Expr), @collection : Cell(Expr), @body : Cell(Expr))
     end
-    def initialize(@location : Location, variable : Expr, collection : Expr, @body : ::Array(Expr))
+    def initialize(@location : Location, variable : Expr, collection : Expr, body : Expr)
       @variable = Cell.new(variable.as(Expr))
       @collection = Cell.new(collection.as(Expr))
+      @body = Cell.new(body.as(Expr))
     end
     def branching? : Bool
       true
@@ -403,11 +404,12 @@ module Ast
   struct WhileLoop < Expr
     property location : Location
     property condition : Cell(Expr)
-    property body : ::Array(Expr)
-    def initialize(@location : Location, @condition : Cell(Expr), @body : ::Array(Expr))
+    property body : Cell(Expr)
+    def initialize(@location : Location, @condition : Cell(Expr), @body : Cell(Expr))
     end
-    def initialize(@location : Location, condition : Expr, @body : ::Array(Expr))
+    def initialize(@location : Location, condition : Expr, body : Expr)
       @condition = Cell.new(condition.as(Expr))
+      @body = Cell.new(body.as(Expr))
     end
     def branching? : Bool
       true
@@ -759,14 +761,14 @@ module Ast
   struct Function < TopLevelItem
     property name : ::String
     property signature : Signature
-    property body : ::Array(Expr)
-    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
+    property body : Expr
+    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : Expr)
     end
-    def initialize(@name : ::String, @signature : Signature, @body : ::Array(Expr) = [] of Expr)
+    def initialize(@name : ::String, @signature : Signature, @body : Expr)
       @location = @signature.location
     end
     def to_s(io : IO)
-      io << "def #{name}#{signature}: #{body.join("\n")}"
+      io << "def #{name}#{signature}: #{body}"
     end
     include HasSignature
   end
@@ -774,12 +776,12 @@ module Ast
   struct AbstractMethod < TopLevelItem
     property name : ::String
     property signature : Signature
-    property body : ::Array(Expr)?
-    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : ::Array(Expr)? = nil)
+    property body : Expr?
+    def initialize(@location : Location, @name : ::String, @signature : Signature, @body : Expr? = nil)
     end
     def to_s(io : IO)
       io << "abstract def #{name}#{signature}"
-      io << ": <body(#{body.try &.size})>" if body
+      io << ": <body>" if body
     end
     include HasSignature
   end

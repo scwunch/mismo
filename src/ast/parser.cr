@@ -589,9 +589,10 @@ module TopLevelItemParser
   end
 
   # Parses `: BLOCK_OF_STATEMENTS`
-  def parse_colon_and_block(block_base_indent : UInt32 = @current_line_indent)
+  def parse_colon_and_block(block_base_indent : UInt32 = @current_line_indent) : Ast::Expr
     @log.debug_descend(peek.location, "Parsing colon and block (base indent: #{block_base_indent})...") do
       consume!(Token::Colon)
+      loc = peek.location
       # Statements are parsed relative to the block_base_indent.
       # A statement belongs to the block if it's indented further than block_base_indent.
       statements = [] of Ast::Expr
@@ -608,7 +609,14 @@ module TopLevelItemParser
           statements << parse_expression(peek.location.indent)
         end
       end
-      statements
+      case statements.size
+      when 0
+        raise "empty block"
+      when 1
+        statements[0]
+      else
+        Ast::Block.new(loc, statements)
+      end
     end
   end
   
@@ -1379,7 +1387,7 @@ struct UcsParser < SubParser
           if conditions.size == 0
             raise report_error(peek.location, "Expected conditional after `if`, `while`, or `and` token.")
           end
-          consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+          consequent = parser.parse_colon_and_block(indent)
           conditions << Ast::Condition.else(else_tok.location, consequent)
           return conditions
         end
@@ -1388,10 +1396,10 @@ struct UcsParser < SubParser
         
         # check for unary condition
         if peek.is_a? Token::Colon
-          consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+          consequent = parser.parse_colon_and_block(indent)
           conditions << Ast::Condition.unary(lhs.location, lhs, consequent)
           if else_tok = consume?(Token::Else)
-            consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+            consequent = parser.parse_colon_and_block(indent)
             conditions << Ast::Condition.else(else_tok.location, consequent)
             return conditions
           end
@@ -1410,7 +1418,7 @@ struct UcsParser < SubParser
           indent = peek.location.indent if indented
           if else_tok = consume?(Token::Else)
             raise report_error(peek.location, "Expected boolean operator after lhs #{lhs}") if ops.size == 0
-            consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+            consequent = parser.parse_colon_and_block(indent)
             conditions << Ast::Condition.else(else_tok.location, consequent)
             return conditions
           end
@@ -1422,13 +1430,13 @@ struct UcsParser < SubParser
             indent = peek.location.indent if indented
             if else_tok = consume?(Token::Else)
               raise report_error(peek.location, "Expected right-hand term after operator #{op_tok}") if term_split.size == 0
-              consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+              consequent = parser.parse_colon_and_block(indent)
               conditions << Ast::Condition.else(else_tok.location, consequent)
               return conditions
             end
             rhs = parser.parse_expression(indent, StopAt::UcsEnd)
             if peek.is_a? Token::Colon
-              consequent = Ast::Block.new(parser.parse_colon_and_block(indent))
+              consequent = parser.parse_colon_and_block(indent)
               term_split << Ast::RTerm.new(rhs.location, rhs, consequent)
             elsif consume?(Operator::And)
               nested = UcsParser.new(parser).parse(indent)
@@ -1454,7 +1462,7 @@ struct UcsParser < SubParser
           next_token             # newline
           else_tok = next_token  # else
           raise "OOPS" unless else_tok.class == Token::Else
-          consequent = Ast::Block.new(parser.parse_colon_and_block)
+          consequent = parser.parse_colon_and_block
           conditions << Ast::Condition.else(else_tok.location, consequent)
         end
       end
