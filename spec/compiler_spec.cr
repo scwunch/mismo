@@ -24,6 +24,7 @@ describe Compiler do
         let nat = 1.nat
         let int = -2
         let float = 3.14
+        -- "drop me".drop
 
         string(bool + nat).print
         string(nat - int).print

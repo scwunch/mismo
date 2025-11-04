@@ -7,7 +7,7 @@ macro not_nil!(prop)
 end
 
 def parser(source : String, level : Logger::Level = Logger::Level::Warning)
-  parser(nil, source, 1,level)
+  parser(nil, source, 1, level)
 end
 def parser(
     file_path : (String | Nil),
@@ -62,8 +62,7 @@ def type_check_program(file_path : String, starting_line, program : String, leve
   items = prelude_parser.parse
   parser = parser(file_path, program, starting_line, Logger::Level::Error)
   items.concat parser.parse
-  parser.log.level = level
-  type_env = TypeEnv.new(parser.log)
+  type_env = TypeEnv.new(Logger.new(level))
   type_env.type_check_program(items)
   type_env
 end

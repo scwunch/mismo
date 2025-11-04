@@ -102,16 +102,17 @@ class Compiler
     type_env.declaration_collection(items)
     return type_env if target_stage == Stage::DeclarationCollection
     
-    type_env.type_check_functions
-    return type_env if target_stage == Stage::TypeCheck
-    
+    # Specialization
+    functions = type_env.type_check_functions
+    return functions if target_stage == Stage::TypeCheck
+
     # CodeGenerator
     main_path = zig_dir / "main.zig"
     File.copy(src: zig_dir / "prelude.zig", dst: main_path)
     main_file = File.open(main_path, "a")
     main_file << '\n'
     code_generator = CodeGenerator.new(main_file)
-    code_generator.generate_program(type_env)
+    code_generator.generate_program(type_env, functions)
     main_file.close
     return code_generator if target_stage == Stage::CodeGen
     

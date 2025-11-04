@@ -3,6 +3,7 @@
 /bin/
 /.shards/
 *.dwarf
+zig-out
 .zig-cache
 *.code-workspace
 .editorconfig

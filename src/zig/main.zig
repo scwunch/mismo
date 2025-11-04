@@ -160,472 +160,94 @@ pub fn Array_t(comptime T0: type) type {
   };
 }
 
-pub fn @"bool_0"(_: void) bool {
-  return false;
-}
-pub fn @"bool_1"(self: bool) bool {
-  return self;
-}
-pub fn @"bool_2"(self: usize) bool {
-  return __zig_neq_0(self, 0);
-}
-pub fn @"bool_3"(self: isize) bool {
-  return self != 0;
-}
-pub fn nat_0(self: bool) usize {
-  return nat_2(@"block$1":  {
-    if (self) break :@"block$1" 1;
-    break :@"block$1" 0;
-  });
-}
-pub fn nat_1(self: usize) usize {
-  return self;
-}
-pub fn nat_2(self: isize) usize {
-  return __zig_int2nat_0(self);
-}
-pub fn int_0(self: bool) isize {
+pub fn main_0() void {
   return @"block$1":  {
-    if (self) break :@"block$1" 1;
-    break :@"block$1" 0;
+    var greeting: String_t = undefined; greeting = string_from_literal("Hello World");
+    print_0(string_0(1234));
+    print_0(greeting);
+    var unused: String_t = undefined; unused = string_from_literal("I'm not used anywehere");
+    var a: isize = undefined; a = 0;
+    var b: isize = undefined; b = 1;
+    @"block$2":  {
+      const @"temp$0" = a;
+      if (@"temp$0" < 0) break :@"block$2" print_0(string_0(a));
+      if (@"temp$0" < -10) break :@"block$2" print_0(string_from_literal("will not print"));
+      break :@"block$2" @"block$3":  {
+        b = b + 1;
+        break :@"block$3" print_0(string_0(b));
+      };
+    }
+    var @"bool": bool = undefined; @"bool" = true;
+    var nat: usize = undefined; nat = nat_0(1);
+    var int: isize = undefined; int = -2;
+    var float: f64 = undefined; float = 3.14;
+    print_0(string_1(@"+_1"(@"bool", nat)));
+    print_0(string_0(@"-_0"(nat, int)));
+    print_0(string_0(@"/_0"(int, @"bool")));
+    print_0(string_1(@"/_1"(nat, nat)));
+    print_0(string_0(@"/_2"(nat, int)));
+    print_0(string_0(@"/_3"(int, nat)));
+    print_0(string_0(@"/_4"(int, int)));
+    break :@"block$1" print_0(string_2(@"/_5"(float, float)));
   };
 }
-pub fn int_1(self: usize) isize {
-  return __zig_nat2int_0(self);
-}
-pub fn int_2(self: isize) isize {
-  return self;
-}
-pub fn int_3(self: f64) isize {
-  return __zig_float2int_0(self);
-}
-pub fn float_0(self: bool) f64 {
-  return @"block$1":  {
-    if (self) break :@"block$1" 1.0;
-    break :@"block$1" 0.0;
-  };
-}
-pub fn float_1(self: usize) f64 {
-  return __zig_nat2float_0(self);
-}
-pub fn float_2(self: isize) f64 {
-  return __zig_int2float_0(self);
-}
-pub fn float_3(self: f64) f64 {
-  return self;
-}
-pub fn string_0(self: bool) String_t {
-  return @"block$1":  {
-    if (self) break :@"block$1" string_from_literal("true");
-    break :@"block$1" string_from_literal("false");
-  };
+pub fn string_0(self: isize) String_t {
+  return __zig_int2string_0(self);
 }
 pub fn string_1(self: usize) String_t {
   return __zig_nat2string_0(self);
 }
-pub fn string_2(self: isize) String_t {
-  return __zig_int2string_0(self);
-}
-pub fn string_3(self: f64) String_t {
+pub fn string_2(self: f64) String_t {
   return __zig_float2string_0(self);
 }
-pub fn @"==_0"(self: bool, other: bool) bool {
-  return __zig_eq_0(self, other);
+pub fn print_0(str: String_t) void {
+  return __zig_print_0(str);
 }
-pub fn @"==_1"(self: bool, other: usize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_2"(self: bool, other: isize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_3"(self: usize, other: bool) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_4"(self: usize, other: usize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_5"(self: usize, other: isize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_6"(self: isize, other: bool) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_7"(self: isize, other: usize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_8"(self: isize, other: isize) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"==_9"(self: f64, other: f64) bool {
-  return __zig_eq_0(self, other);
-}
-pub fn @"!=_0"(self: bool, other: bool) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_1"(self: bool, other: usize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_2"(self: bool, other: isize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_3"(self: usize, other: bool) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_4"(self: usize, other: usize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_5"(self: usize, other: isize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_6"(self: isize, other: bool) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_7"(self: isize, other: usize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_8"(self: isize, other: isize) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"!=_9"(self: f64, other: f64) bool {
-  return __zig_neq_0(self, other);
-}
-pub fn @"<_0"(self: bool, other: bool) bool {
-  return (!(self)) and (other);
-}
-pub fn @"<_1"(self: bool, other: usize) bool {
-  return __zig_lt_0(nat_0(self), other);
-}
-pub fn @"<_2"(self: bool, other: isize) bool {
-  return __zig_lt_0(int_0(self), other);
-}
-pub fn @"<_3"(self: usize, other: bool) bool {
-  return __zig_lt_0(self, nat_0(other));
-}
-pub fn @"<_4"(self: usize, other: usize) bool {
+pub fn @"<_0"(self: isize, other: isize) bool {
   return __zig_lt_0(self, other);
 }
-pub fn @"<_5"(self: usize, other: isize) bool {
-  return __zig_lt_0(int_1(self), other);
+pub fn @"+_0"(self: isize, other: isize) isize {
+  return __zig_add_int_0(self, other);
 }
-pub fn @"<_6"(self: isize, other: bool) bool {
-  return __zig_lt_0(self, int_0(other));
+pub fn @"+_1"(self: bool, other: usize) usize {
+  return __zig_add_uint_0(nat_1(self), other);
 }
-pub fn @"<_7"(self: isize, other: usize) bool {
-  return __zig_lt_0(self, int_1(other));
+pub fn nat_0(self: isize) usize {
+  return __zig_int2nat_0(self);
 }
-pub fn @"<_8"(self: isize, other: isize) bool {
-  return __zig_lt_0(self, other);
-}
-pub fn @"<_9"(self: f64, other: f64) bool {
-  return __zig_lt_0(self, other);
-}
-pub fn @"<=_0"(self: bool, other: bool) bool {
-  return (!(self)) or (other);
-}
-pub fn @"<=_1"(self: bool, other: usize) bool {
-  return __zig_lte_0(nat_0(self), other);
-}
-pub fn @"<=_2"(self: bool, other: isize) bool {
-  return __zig_lte_0(int_0(self), other);
-}
-pub fn @"<=_3"(self: usize, other: bool) bool {
-  return __zig_lte_0(self, nat_0(other));
-}
-pub fn @"<=_4"(self: usize, other: usize) bool {
-  return __zig_lte_0(self, other);
-}
-pub fn @"<=_5"(self: usize, other: isize) bool {
-  return __zig_lte_0(int_1(self), other);
-}
-pub fn @"<=_6"(self: isize, other: bool) bool {
-  return __zig_lte_0(self, int_0(other));
-}
-pub fn @"<=_7"(self: isize, other: usize) bool {
-  return __zig_lte_0(self, int_1(other));
-}
-pub fn @"<=_8"(self: isize, other: isize) bool {
-  return __zig_lte_0(self, other);
-}
-pub fn @"<=_9"(self: f64, other: f64) bool {
-  return __zig_lte_0(self, other);
-}
-pub fn @">_0"(self: bool, other: bool) bool {
-  return (self) and (!(other));
-}
-pub fn @">_1"(self: bool, other: usize) bool {
-  return __zig_gt_0(nat_0(self), other);
-}
-pub fn @">_2"(self: bool, other: isize) bool {
-  return __zig_gt_0(int_0(self), other);
-}
-pub fn @">_3"(self: usize, other: bool) bool {
-  return __zig_gt_0(self, nat_0(other));
-}
-pub fn @">_4"(self: usize, other: usize) bool {
-  return __zig_gt_0(self, other);
-}
-pub fn @">_5"(self: usize, other: isize) bool {
-  return __zig_gt_0(int_1(self), other);
-}
-pub fn @">_6"(self: isize, other: bool) bool {
-  return __zig_gt_0(self, int_0(other));
-}
-pub fn @">_7"(self: isize, other: usize) bool {
-  return __zig_gt_0(self, int_1(other));
-}
-pub fn @">_8"(self: isize, other: isize) bool {
-  return __zig_gt_0(self, other);
-}
-pub fn @">_9"(self: f64, other: f64) bool {
-  return __zig_gt_0(self, other);
-}
-pub fn @">=_0"(self: bool, other: bool) bool {
-  return (self) or (!(other));
-}
-pub fn @">=_1"(self: bool, other: usize) bool {
-  return __zig_gte_0(nat_0(self), other);
-}
-pub fn @">=_2"(self: bool, other: isize) bool {
-  return __zig_gte_0(int_0(self), other);
-}
-pub fn @">=_3"(self: usize, other: bool) bool {
-  return __zig_gte_0(self, nat_0(other));
-}
-pub fn @">=_4"(self: usize, other: usize) bool {
-  return __zig_gte_0(self, other);
-}
-pub fn @">=_5"(self: usize, other: isize) bool {
-  return __zig_gte_0(int_1(self), other);
-}
-pub fn @">=_6"(self: isize, other: bool) bool {
-  return __zig_gte_0(self, int_0(other));
-}
-pub fn @">=_7"(self: isize, other: usize) bool {
-  return __zig_gte_0(self, int_1(other));
-}
-pub fn @">=_8"(self: isize, other: isize) bool {
-  return __zig_gte_0(self, other);
-}
-pub fn @">=_9"(self: f64, other: f64) bool {
-  return __zig_gte_0(self, other);
-}
-pub fn @"+_0"(self: bool, other: bool) usize {
-  return nat_2(@"block$1":  {
-    if ((self) and (other)) break :@"block$1" 2;
-    if ((self) or (other)) break :@"block$1" 1;
+pub fn nat_1(self: bool) usize {
+  return nat_0(@"block$1":  {
+    if (self) break :@"block$1" 1;
     break :@"block$1" 0;
   });
 }
-pub fn @"+_1"(self: bool, other: usize) usize {
-  return __zig_add_uint_0(nat_0(self), other);
-}
-pub fn @"+_2"(self: bool, other: isize) isize {
-  return __zig_add_int_0(int_0(self), other);
-}
-pub fn @"+_3"(self: usize, other: bool) usize {
-  return __zig_add_uint_0(self, nat_0(other));
-}
-pub fn @"+_4"(self: usize, other: usize) usize {
-  return __zig_add_uint_0(self, other);
-}
-pub fn @"+_5"(self: usize, other: isize) isize {
-  return __zig_add_int_0(int_1(self), other);
-}
-pub fn @"+_6"(self: isize, other: bool) isize {
-  return __zig_add_int_0(self, int_0(other));
-}
-pub fn @"+_7"(self: isize, other: usize) isize {
-  return __zig_add_int_0(self, int_1(other));
-}
-pub fn @"+_8"(self: isize, other: isize) isize {
-  return __zig_add_int_0(self, other);
-}
-pub fn @"+_9"(self: f64, other: f64) f64 {
-  return __zig_add_float_0(self, other);
-}
-pub fn @"-_0"(self: bool, other: bool) isize {
-  return @"block$1":  {
-    if ((self) and (other)) break :@"block$1" 0;
-    if (self) break :@"block$1" 1;
-    if (other) break :@"block$1" -1;
-    break :@"block$1" 0;
-  };
-}
-pub fn @"-_1"(self: bool, other: usize) isize {
-  return __zig_sub_int_0(nat_0(self), other);
-}
-pub fn @"-_2"(self: bool, other: isize) isize {
+pub fn @"-_0"(self: usize, other: isize) isize {
   return __zig_sub_int_0(int_0(self), other);
 }
-pub fn @"-_3"(self: bool) isize {
-  return @"block$1":  {
-    if (self) break :@"block$1" -1;
-    break :@"block$1" 0;
-  };
-}
-pub fn @"-_4"(self: usize) isize {
-  return __zig_neg_int_0(__zig_nat2int_0(self));
-}
-pub fn @"-_5"(self: usize, other: bool) usize {
-  return __zig_sub_uint_0(self, nat_0(other));
-}
-pub fn @"-_6"(self: usize, other: usize) usize {
-  return __zig_sub_uint_0(self, other);
-}
-pub fn @"-_7"(self: usize, other: isize) isize {
-  return __zig_sub_int_0(int_1(self), other);
-}
-pub fn @"-_8"(self: isize) isize {
-  return __zig_neg_int_0(self);
-}
-pub fn @"-_9"(self: isize, other: bool) isize {
-  return __zig_sub_int_0(self, int_0(other));
-}
-pub fn @"-_10"(self: isize, other: usize) isize {
-  return __zig_sub_int_0(self, int_1(other));
-}
-pub fn @"-_11"(self: isize, other: isize) isize {
-  return __zig_sub_int_0(self, other);
-}
-pub fn @"-_12"(self: f64) f64 {
-  return __zig_neg_float_0(self);
-}
-pub fn @"-_13"(self: f64, other: f64) f64 {
-  return __zig_sub_float_0(self, other);
-}
-pub fn @"*_0"(self: bool, other: bool) bool {
-  return @"block$1":  {
-    if ((self) and (other)) break :@"block$1" true;
-    break :@"block$1" false;
-  };
-}
-pub fn @"*_1"(self: bool, other: usize) usize {
-  return @"block$1":  {
-    if (self) break :@"block$1" other;
-    break :@"block$1" nat_2(0);
-  };
-}
-pub fn @"*_2"(self: bool, other: isize) isize {
-  return @"block$1":  {
-    if (self) break :@"block$1" other;
-    break :@"block$1" 0;
-  };
-}
-pub fn @"*_3"(self: bool, other: f64) f64 {
-  return @"block$1":  {
-    if (self) break :@"block$1" other;
-    break :@"block$1" 0.0;
-  };
-}
-pub fn @"*_4"(self: usize, other: bool) usize {
-  return @"block$1":  {
-    if (other) break :@"block$1" self;
-    break :@"block$1" nat_2(0);
-  };
-}
-pub fn @"*_5"(self: usize, other: usize) usize {
-  return __zig_mul_uint_0(self, other);
-}
-pub fn @"*_6"(self: usize, other: isize) isize {
-  return __zig_mul_int_0(int_1(self), other);
-}
-pub fn @"*_7"(self: isize, other: bool) isize {
-  return __zig_mul_int_0(self, int_0(other));
-}
-pub fn @"*_8"(self: isize, other: usize) isize {
-  return __zig_mul_int_0(self, int_1(other));
-}
-pub fn @"*_9"(self: isize, other: isize) isize {
-  return __zig_mul_int_0(self, other);
-}
-pub fn @"*_10"(self: f64, other: f64) f64 {
-  return __zig_mul_float_0(self, other);
-}
-pub fn @"/_0"(self: bool, other: bool) bool {
-  return @"block$1":  {
-    if (!(other)) break :@"block$1" panic_0(string_from_literal("divide by zero"));
-    if ((self) and (other)) break :@"block$1" true;
-    break :@"block$1" false;
-  };
-}
-pub fn @"/_1"(self: bool, other: usize) usize {
-  return __zig_div_uint_0(nat_0(self), other);
-}
-pub fn @"/_2"(self: bool, other: isize) isize {
-  return __zig_div_int_0(int_0(self), other);
-}
-pub fn @"/_3"(self: usize, other: bool) usize {
-  return __zig_div_uint_0(self, nat_0(other));
-}
-pub fn @"/_4"(self: usize, other: usize) usize {
-  return __zig_div_uint_0(self, other);
-}
-pub fn @"/_5"(self: usize, other: isize) isize {
-  return __zig_div_int_0(int_1(self), other);
-}
-pub fn @"/_6"(self: isize, other: bool) isize {
-  return __zig_div_int_0(self, int_0(other));
-}
-pub fn @"/_7"(self: isize, other: usize) isize {
+pub fn @"/_0"(self: isize, other: bool) isize {
   return __zig_div_int_0(self, int_1(other));
 }
-pub fn @"/_8"(self: isize, other: isize) isize {
+pub fn @"/_1"(self: usize, other: usize) usize {
+  return __zig_div_uint_0(self, other);
+}
+pub fn @"/_2"(self: usize, other: isize) isize {
+  return __zig_div_int_0(int_0(self), other);
+}
+pub fn @"/_3"(self: isize, other: usize) isize {
+  return __zig_div_int_0(self, int_0(other));
+}
+pub fn @"/_4"(self: isize, other: isize) isize {
   return __zig_div_int_0(self, other);
 }
-pub fn @"/_9"(self: f64, other: f64) f64 {
+pub fn @"/_5"(self: f64, other: f64) f64 {
   return __zig_div_float_0(self, other);
 }
-pub fn print_0(str: String_t) void {
-  __zig_print_0(str);
-  return;
-  
+pub fn int_0(self: usize) isize {
+  return __zig_nat2int_0(self);
 }
-pub fn panic_0(str: String_t) noreturn {
-  return __zig_panic_0(str);
-}
-pub fn main_0() void {
-  var greeting: String_t = undefined; greeting = string_from_literal("Hello World");
-  print_0(string_2(1234));
-  print_0(greeting);
-  var unused: String_t = undefined; unused = string_from_literal("I'm not used anywehere");
-  var a: isize = undefined; a = 0;
-  var b: isize = undefined; b = 1;
-  @"block$1":  {
-    const @"temp$0" = a;
-    if (@"temp$0" < 0) break :@"block$1" print_0(string_2(a));
-    if (@"temp$0" < -10) break :@"block$1" print_0(string_from_literal("will not print"));
-    break :@"block$1" @"block$2":  {
-      b = b + 1;
-      break :@"block$2" print_0(string_2(b));
-    };
-  }
-  var @"bool": bool = undefined; @"bool" = true;
-  var nat: usize = undefined; nat = nat_2(1);
-  var int: isize = undefined; int = -2;
-  var float: f64 = undefined; float = 3.14;
-  print_0(string_1(@"+_1"(@"bool", nat)));
-  print_0(string_2(@"-_7"(nat, int)));
-  print_0(string_2(@"/_6"(int, @"bool")));
-  print_0(string_1(@"/_4"(nat, nat)));
-  print_0(string_2(@"/_5"(nat, int)));
-  print_0(string_2(@"/_7"(int, nat)));
-  print_0(string_2(@"/_8"(int, int)));
-  print_0(string_3(@"/_9"(float, float)));
-  return;
-  
-}
-pub fn bytes_0(self: String_t) Array_t(u8) {
-  return &self.bytes;
-}
-pub fn String_0(bytes: Array_t(u8)) String_t {
-  return String_t{ .bytes = bytes };
-}
-pub fn buffer_0(comptime T0: type, self: Array_t(T0)) []T0 {
-  return &self.buffer;
-}
-pub fn size_0(comptime T0: type, self: Array_t(T0)) usize {
-  return &self.size;
-}
-pub fn Array_0(comptime T0: type, buffer: []T0, size: usize) Array_t(T0) {
-  return Array_t(T0){ .buffer = buffer, .size = size };
+pub fn int_1(self: bool) isize {
+  return @"block$1":  {
+    if (self) break :@"block$1" 1;
+    break :@"block$1" 0;
+  };
 }

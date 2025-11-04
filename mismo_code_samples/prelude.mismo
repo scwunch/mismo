@@ -221,7 +221,7 @@ extend Float
     def *(other Float) Float: .__zig_mul_float(other)
     def /(other Float) Float: .__zig_div_float(other)
 
-"""
+
 extend Pointer[T]
     -- static alloc Pointer[T]:
     --     __zig_alloc(1)
@@ -229,23 +229,23 @@ extend Pointer[T]
     -- static alloc(size: Nat) Pointer[T]:
     --     __zig_alloc(size)
 
-    -- def free(size: Nat):
-    --     __zig_free(self.slice(size))
+    def free(size: Nat):
+        __zig_free(self.slice(size))
 
-    -- def slice(size: Nat) Slice[T]:
-    --     __zig_ptr2slice(self, size)
+    def slice(size: Nat) Slice[T]:
+        __zig_ptr2slice(self, size)
 
 
 extend Slice[T]
     -- static alloc(size: Nat) Slice[T]:
     --     __zig_alloc(size)
 
-    -- def free:
-    --     .__zig_free
+    def free:
+        .__zig_free
 
-    -- def size Nat:
-    --     .__zig_slice_size
-"""
+    def size Nat:
+        .__zig_slice_size
+
 
 def print(str: String):
     __zig_print(str)
@@ -256,19 +256,19 @@ def panic(str: String) -> Never:
 struct String
     var bytes: Array[Byte]
 
-    -- def ==(other String) Bool: 
-    --     .bytes == other.bytes
+    def ==(other String) Bool: 
+        .bytes == other.bytes
     
 
-    -- def drop: 
-    --     .bytes.drop
+    def drop: 
+        .bytes.drop
 
 struct Array[T]
     var buffer: Slice[T]
     var size: Nat
 
-    -- def drop: 
-    --     .buffer.free
+    def drop: 
+        .buffer.free
 
 trait Stringable
     def string String

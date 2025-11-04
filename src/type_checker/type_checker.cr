@@ -11,15 +11,23 @@ module TypeContextBase
   property type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty
   property type_args : Slice(Type) = Slice(Type).empty
   property scope : TypeScope
+  getter specializer : Specializer
 
   def initialize(@env)
     @scope = TypeScope.new(env.log)
+    @specializer = Specializer.new(env)
   end
-  def initialize(@env, @type_parameters)
+  def initialize(@env, @specializer)
+    @scope = TypeScope.new(env.log)
+  end
+
+  # I don't think these other three inits are used anymore?  not sure...
+  def initialize(@env, @type_parameters : Slice(TypeParameter))
     @scope = TypeScope.new(env.log)
     @type_args = Slice(Type).new(@type_parameters.size) do |i|
       type_args[i]? || Type.var(i)
     end
+    @specializer = Specializer.new(@env)
   end
   def initialize(@env, @type_parameters, @type_args)
     @scope = TypeScope.new(env.log)
@@ -28,21 +36,9 @@ module TypeContextBase
       @type_args = Slice(Type).new(@type_parameters.size) do |i|
         @type_args[i]? || Type.var(i)
       end
-      # ptr = @type_args.@pointer.realloc(@type_parameters.size)
-      # (@type_args.size .. @type_parameters.size).each do |i|
-      #   ptr[i] = Type.var(i)
-      # end
-      # @type_args = Slice(Type).new(ptr, @type_parameters.size)
     end
-    # @type_args = type_args
-    # (@type_args.size .. @type_parameters.size).each do |i|
-    #   @type_args = @type_args.push(Type.var(i))
-    # end
-    # raise "wrong number of type args" if @type_args.size != @type_parameters.size
+    @specializer = Specializer.new(@env)
   end  
-  # def self.new(env : TypeEnv, ast_type_params : Slice(Ast::TypeParameter)) : TypeContext
-  #   raise "called it"
-  # end
   def initialize(@env, ast_type_params : Slice(Ast::TypeParameter), @type_args = Slice(Type).empty)
     @scope = TypeScope.new(env.log)
     if ast_type_params.size == 0 && @type_args.size == 0
@@ -92,6 +88,7 @@ module TypeContextBase
       log.debug(ast_type_params[0]?.try &.location || Location.zero, "type parameters: #{@type_parameters}")
       log.debug(ast_type_params[0]?.try &.location || Location.zero, "type args: #{@type_args}")
     end
+    @specializer = Specializer.new(@env)
     # raise "wrong number of type args (init 2)" if @type_args.size != @type_parameters.size
   end
 
@@ -343,7 +340,7 @@ module ImplementationChecker
   # Check if a method template is implemented as a function in the current environment
   def method_implemented?(method : Ast::AbstractMethod) : Bool
     log.debug_descend(method.location, "#method_implemented? #{method}") do
-      if overloads = env.functions[method.name]?
+      if overloads = env.function_defs[method.name]?
         overloads.each do |func|
           return true if function_matches_method?(func, method)
         end
@@ -358,10 +355,10 @@ module ImplementationChecker
   # Return false and log errors if implementation fails.
   def try_method_implementation(method : Ast::AbstractMethod) : Bool
     log.debug_descend(method.location, "#try_method_implementation #{method}") do
-      overloads = env.functions[method.name]?
+      overloads = env.function_defs[method.name]?
       if overloads.nil?
         if method.body
-          # env.functions[method.name] = [Function.new(method)]
+          # env.function_defs[method.name] = [Function.new(method)]
           log.warning(method.location, "W#{__LINE__} method \"#{method.name}\" does not exist, but has a default body.  Implementation should be automated here.")
           return true
         else
@@ -435,7 +432,7 @@ module ImplementationChecker
   # the list of type_args of the trait owning the method so that types can be substituted
   # def type_has_method?(type : Type, method : Ast::AbstractMethod) : Array(TypeError)?
     # log.debug_descend(Location.zero, "#type_has_method?(#{type}, #{method})") do
-    #   overloads = env.functions[method.name]?
+    #   overloads = env.function_defs[method.name]?
     #   unless overloads
     #     return [TypeError.new(Location.zero, "#{method.name} does not exist.")]
     #   end
@@ -722,14 +719,14 @@ module TypeChecker
   end
 
   def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
-    unless overloads = env.functions[name]?
+    unless overloads = env.function_defs[name]?
       abort! MissingNameError.new(location, "function #{name} not found")
     end
-    matches = [] of Hir::Call
+    matches = [] of OverloadMatch
     errors = [] of Error
     overloads.each_with_index do |func, i|
-      case res = function_call(location, i, func, args)
-      when Hir::Call
+      case res = try_function_call(location, i, func, args)
+      when OverloadMatch
         matches << res
       when Error
         errors << res
@@ -745,30 +742,18 @@ module TypeChecker
     if matches.size > 1
       abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
     end
-    matches.first
-      # matches = overloads.select do |func|
-      #   type_args = [] of Type
-      #   func.parameters.size == args.size &&
-      #   func.parameters.zip(args).all? { |param, arg| 
-      #     case t = param.type
-      #     when Type::Var
-      #       type_args[t.id] = arg.type
-      #       type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
-      #     else
-      #       param.type == arg.type
-      #     end || if overloads.size == 1
-
-      #     else
-      #       false
-      #     end
-      #   }
-      # end
-      # func = matches.first
-      # Hir::Call.new(location, func, args, func.return_type)
+    match = matches.first
+    function = specializer.get_or_make_function(
+      location, 
+      match.function_def, 
+      match.type_args.to_unsafe_slice, 
+      match.ast_overload_index
+    )
+    Hir::Call.new(location, function, args)
   end
 
-  def function_call(location, overload_index, func : FunctionDef, args : ::Array(Hir)) : Hir::Call | Error
-    log.debug_descend(location, "TypeChecker#function_call(`#{func}`, [#{args.join(", ")})") do
+  def try_function_call(location, overload_index, func : FunctionDef, args : Array(Hir)) : OverloadMatch | Error
+    log.debug_descend(location, "TypeChecker#try_function_call(`#{func}`, [#{args.join(", ")})") do
       if func.parameters.size != args.size
         return ArgumentMismatchError.new(location, "#{func.name} expected #{func.parameters.size} arguments, but got #{args.size}")
       end
@@ -779,8 +764,20 @@ module TypeChecker
           return error
         end
       end
-      type_args = type_args.map {|t| t || return AmbiguousFunctionCallError.new(location, "Not all type arguments were matched.")}
-      Hir::Call.new(location, overload_index, func, type_args, args, func.return_type)
+      # convert type_args to non-nilable Array(Type)
+      type_args = type_args.map { |t| t || return AmbiguousFunctionCallError.new(location, "Not all type arguments were matched.") }
+      OverloadMatch.new(func, overload_index, type_args)
+      # Hir::Call.new(location, overload_index, func, type_args, args, func.return_type)
+    end
+  end
+
+  # temporary container for data needed to match calls to specific function overloads
+  # before sending them off to Specializer
+  struct OverloadMatch
+    property function_def : FunctionDef
+    property ast_overload_index : Int32
+    property type_args : ::Array(Type)
+    def initialize(@function_def : FunctionDef, @ast_overload_index : Int32, @type_args : ::Array(Type))
     end
   end
 
@@ -1051,13 +1048,20 @@ class TypeContext
   include ImplementationChecker
   include TypeChecker
   include CanError(AbortFunctionTypeChecking)
-  property scope : TypeScope
 
-  # def initialize(@env : TypeEnv, @type_parameters : Slice(TypeParameter) = Slice(TypeParameter).empty, @type_args : Slice(Type) = Slice(Type).empty)
-  #   @scope = TypeScope.new(self)
-  # end
+  def type_check_function(function : Function, type_parameters : Slice(TypeParameter), type_args : Slice(Type), body : Ast::Expr) : Hir?
+    self.type_parameters = type_parameters
+    self.type_args = type_args
+    self.scope.clear
+    function.parameters.each do |param|
+      scope[param.name] = Variable.new(param.location, param.mode.to_binding, param.name, param.type)
+    end
+    type_check(body, function.return_type, function.location)
+  rescue AbortFunctionTypeChecking
+    nil
+  end
 
-  def self.type_check_function(env : TypeEnv, function : FunctionDef, statements : Array(Ast::Expr))
+  def self.type_check_function_old(env : TypeEnv, function : FunctionDef, statements : Array(Ast::Expr))
     ctx = TypeContext.new(env, function.type_params)
 
     # init scope with parameters
@@ -1188,6 +1192,12 @@ class TypeScope
 
   def empty?
     vars.empty? && ((p = parent).nil? || p.empty?)
+  end
+
+  def clear
+    vars.clear
+    temps.clear
+    parent = nil
   end
 
   def to_s(io : IO)

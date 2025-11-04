@@ -5,6 +5,7 @@ abstract struct Type
 
   abstract def to_s(io : IO)
   abstract def mode : Mode
+  abstract def substitute(type_args : ::Slice(Type)) : Type
   def primitive? : ::Bool; false end
   def copy_type? : ::Bool; false end
   def generic? : ::Bool
@@ -54,6 +55,9 @@ abstract struct Type
     def mode : Mode ; Mode::Move end
     def primitive? : ::Bool; true end
     def copy_type? : ::Bool; true end
+    def substitute(type_args : ::Slice(Type)) : Type
+      self
+    end
     def ==(other : Type)
       self.class == other.class
     end
@@ -117,6 +121,10 @@ abstract struct Type
       # raise "I found the T1!" if @id == 1
     end
     def Type.var(*args) ; Var.new(*args).as Type end
+
+    def substitute(type_args : ::Slice(Type)) : Type
+      type_args[@id]
+    end
   
     def to_s(io : IO)
       io << "T#{@id}"
@@ -135,6 +143,9 @@ abstract struct Type
     end
     def Type.unknown(name, type_args = ::Slice(Type).empty)
       Unknown.new(name, type_args).as Type
+    end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Unknown.new(@name, @type_args.map { |ta| ta.substitute(type_args) })
     end
     def to_s(io : IO)
       io << "Unknown[#{@name}, #{@type_args.join(", ")}]"
@@ -171,6 +182,9 @@ abstract struct Type
     def mode : Mode ; Mode::Move end
     def primitive? : ::Bool; true end
     def copy_type? : ::Bool; true end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Pointer.new(element_type.value.substitute(type_args))
+    end
     def Type.pointer(type) ; Pointer.new(type.as(Type)).as(Type) end
   end
 
@@ -180,6 +194,9 @@ abstract struct Type
     def mode : Mode ; Mode::Move end
     def primitive? : ::Bool; true end
     def copy_type? : ::Bool; true end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Slice.new(element_type.value.substitute(type_args))
+    end
   end
 
   struct Tuple < Type
@@ -200,9 +217,9 @@ abstract struct Type
       io << "Tuple[#{@types.join(", ")}]"
     end
     def mode : Mode ; Mode::Let end
-    # def substitute_Self_with(type : Type) : Type
-    #   Tuple.new(@types.map { |t| t.substitute_Self_with(type) })
-    # end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Tuple.new(types.map { |t| t.substitute(type_args) })
+    end
   end
 
   struct Union < Type
@@ -231,9 +248,9 @@ abstract struct Type
       io << "Union[#{@types.join(", ")}]"
     end
     def mode : Mode ; Mode::Let end
-    # def substitute_Self_with(type : Type) : Type
-    #   Union.new(@types.map { |t| t.substitute_Self_with(type) })
-    # end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Type.union(types.each.map { |t| t.substitute(type_args) })
+    end
   end
 
   # def Type.adt(base : StructDef, type_args : ::Slice(Type) = ::Slice(Type).empty)
@@ -285,9 +302,9 @@ abstract struct Type
       end
       nil
     end
-    # def substitute_Self_with(type : Type) : Type
-    #   Adt.new(@type_args.map { |ta| ta.substitute_Self_with(type) })
-    # end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Adt.new(base, type_args.map { |ta| ta.substitute(type_args) })
+    end
   end
 
   # struct Struct < Type
@@ -347,8 +364,8 @@ abstract struct Type
       io << "(#{args.join(", ")}) -> #{@return_type.value}"
     end
     def mode : Mode; Mode::Let end
-    # def substitute_Self_with(type : Type) : Type
-    #   Function.new(@args.map { |ta| ta.substitute_Self_with(type) }, @return_type.value.substitute_Self_with(type))
-    # end
+    def substitute(type_args : ::Slice(Type)) : Type
+      Function.new(args.map { |ta| ta.substitute(type_args) }, @return_type.value.substitute(type_args))
+    end
   end
 end

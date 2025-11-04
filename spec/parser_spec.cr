@@ -281,7 +281,7 @@ describe Parser do
           ], 
           Ast::Type.new(loc, "Int32")
         ),
-        [] of Ast::Expr
+        Ast::Block.empty
       ))
     end
     it "parses a receiver convention that overrides the default" do
@@ -299,7 +299,7 @@ describe Parser do
             Ast::Parameter.new(loc, Mode::Mut, "self", Ast::Type.new(loc, "Object"))
           ]
         ),
-        [] of Ast::Expr
+        Ast::Block.empty
       ))
     end
     it "parses a method that overloads an operator" do
@@ -319,7 +319,7 @@ describe Parser do
           ], 
           Ast::Type.new(loc, "Self")
         ),
-        [] of Ast::Expr
+        Ast::Block.empty
       ))
     end
     it "parses a method that acts as a getter" do
@@ -336,7 +336,7 @@ describe Parser do
           [self_param], 
           Ast::Type.new(loc, "Int")
         ),
-        [] of Ast::Expr
+        Ast::Block.empty
       ))
     end
     it "parses a method that acts as a constructor for another type" do
@@ -353,7 +353,7 @@ describe Parser do
           [self_param], 
           Ast::Type.new(loc, "String")
         ),
-        [] of Ast::Expr
+        Ast::Block.empty
       ))
     end
   end
@@ -1424,8 +1424,9 @@ describe UcsParser do
       main = items[0]
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
-      body.size.should eq(1)
-      cond = body[0]
+      # body.size.should eq(1)
+      # cond = body[0]
+      cond = body
       cond.should be_a(Ast::If)
       cond.should eq(Ast::If.new(loc, [
         Ast::UnaryCondition.new(
@@ -1435,10 +1436,7 @@ describe UcsParser do
             Operator::Gt,
             Ast::Identifier.new(loc, "y")
           ),
-          Ast::Block.new(
-            loc,
-            [Ast::Identifier.new(loc, "r").as(Ast::Expr)]
-          )
+          Ast::Identifier.new(loc, "r").as(Ast::Expr)
         ).as(Ast::Condition)
       ]))
     end
@@ -1477,7 +1475,11 @@ describe UcsParser do
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
       # body.size.should eq(4)
-      body.each { |stmt|
+      body.should be_a(Ast::Block)
+      stmts = body.as(Ast::Block).statements
+      stmts.should be_a(Array(Ast::Expr))
+      stmts.size.should eq(4)
+      stmts.each { |stmt|
         stmt.should be_a(Ast::If)
         if parser.log.level == Logger::Level::Debug
           puts stmt
@@ -1538,17 +1540,19 @@ describe UcsParser do
       main = items[0]
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
-      # body.size.should be_gt(4)
-      body.each { |stmt|
+      body.should be_a(Ast::Block)
+      stmts = body.as(Ast::Block).statements
+      stmts.size.should eq(7)
+      stmts.each { |stmt|
         stmt.should be_a(Ast::If)
         if parser.log.level == Logger::Level::Debug
           puts stmt
         end
       }
-      body[0].should eq(body[1])
-      body[2].should eq(body[3])
-      body[4].should eq(body[5])
-      body[5].should eq(body[6])
+      stmts[0].should eq(stmts[1])
+      stmts[2].should eq(stmts[3])
+      stmts[4].should eq(stmts[5])
+      stmts[5].should eq(stmts[6])
     end
     it "parses branched conditionals with unary conditions/tests" do
       parser = parser("ucs unary conditions", 
@@ -1578,22 +1582,24 @@ describe UcsParser do
       main = items[0]
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
-      # body.size.should be_gt(4)
-      body.each { |stmt|
+      body.should be_a(Ast::Block)
+      stmts = body.as(Ast::Block).statements
+      stmts.size.should eq(2)
+      stmts.each { |stmt|
         stmt.should be_a(Ast::If)
         if parser.log.level == Logger::Level::Debug
           puts stmt
         end
       }
-      if1 = body[0]
+      if1 = stmts[0]
       if1.as(Ast::If).conditionals.should eq([
         Ast::Condition.unary(
           loc, 
           Ast::Identifier.new(loc, "some_boolean"), 
-          Ast::Block.new([Ast::Identifier.new(loc, "result").as(Ast::Expr)])
+          Ast::Identifier.new(loc, "result").as(Ast::Expr)
         )
       ])
-      if2 = body[1]
+      if2 = stmts[1]
       if2.as(Ast::If).conditionals.size.should eq(5)
     end
     it "parses branched conditionals with nested tests via 'and' connector" do
@@ -1655,8 +1661,9 @@ describe UcsParser do
       main = items[0]
       main.should be_a(Ast::Function)
       body = main.as(Ast::Function).body
-      # body.size.should be_gt(4)
-      body.each { |stmt|
+      stmts = body.as(Ast::Block).statements
+      stmts.size.should eq(4)
+      stmts.each { |stmt|
         stmt.should be_a(Ast::If)
         if parser.log.level == Logger::Level::Debug
           puts stmt

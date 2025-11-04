@@ -219,29 +219,29 @@ abstract struct Hir < IrNode
 
   struct Call < Hir
     property location : Location
-    property overload_index : Int32
-    property function : FunctionDef
-    property type_args : ::Array(Type)
+    # property overload_index : Int32
+    property function : Function
+    # property type_args : ::Array(Type)
     property args : ::Array(Hir)
-    getter type : Type
-    def initialize(@location : Location, @overload_index : Int32, @function : FunctionDef, @type_args : ::Array(Type), @args : ::Array(Hir), @type : Type)
+    # getter type : Type
+    def initialize(@location : Location, @function : Function, @args : ::Array(Hir))
     end
     def_init
     def binding : Binding
       function.return_mode.to_binding
     end
-    # def type : Type
-    #   function.return_type.substitute(type_args)
-    # end
+    def type : Type
+      function.return_type
+    end
     def to_s(io : IO)
       io << function.name
-      if type_args.any?
-        type_args.each_with_index do |ta, i|
-          io << i == 0 ? '[' : ", "
-          io << ta
-        end
-        io << "]"
-      end
+      # if type_args.any?
+      #   type_args.each_with_index do |ta, i|
+      #     io << i == 0 ? '[' : ", "
+      #     io << ta
+      #   end
+      #   io << "]"
+      # end
       io << "(#{args.join(", ")})"
     end
   end
@@ -367,6 +367,9 @@ abstract struct Hir < IrNode
     property location : Location
     property statements : ::Array(Hir)
     def initialize(@location : Location, @statements : ::Array(Hir))
+    end
+    def self.empty(location : Location = Location.zero)
+      Block.new(location, [] of Hir)
     end
     def binding : Binding ; Binding::Var end
     def type : Type

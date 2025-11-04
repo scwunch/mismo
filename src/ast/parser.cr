@@ -611,7 +611,7 @@ module TopLevelItemParser
       end
       case statements.size
       when 0
-        raise "empty block"
+        Ast::Block.empty(loc)
       when 1
         statements[0]
       else

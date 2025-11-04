@@ -169,6 +169,9 @@ struct Parameter < IrNode
     io << ": "
     io << type
   end
+  def substitute(type_args : ::Slice(Type))
+    Parameter.new(location, mode, name, type.substitute(type_args))
+  end
 end
 
 struct Trait

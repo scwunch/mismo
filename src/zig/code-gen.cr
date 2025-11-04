@@ -4,20 +4,24 @@ require "../utils/validate_zig_identifier"
 class CodeGenerator
   property io : IO
   property indent : UInt32 = 0
-  property current_function : FunctionDef = FunctionDef.new(Location.zero, "<none>")
+  property current_function : Function = Function.blank
   def initialize(@io : IO)
   end
 
-  def generate_program(env : TypeEnv)
-    env.type_defs.each do |name, type|
+  def generate_program(specializer : Specializer)
+    generate_program(specializer.env, specializer.functions)
+  end
+
+  def generate_program(type_env : TypeEnv, functions : Hash(String, Array(Function)))
+    type_env.type_defs.each do |name, type|
       emit(type)
     end
     newline
-    env.functions.each do |name, functions|
+    functions.each do |name, functions|
       functions.each_with_index do |function, i|
-        next if function.extern?
+        next if function.function_def.extern?
         @current_function = function
-        emit(function, i)
+        emit(function)
       end
     end
   end
@@ -141,20 +145,20 @@ class CodeGenerator
     end
   end
 
-  def emit(function : FunctionDef, index : Int)
+  def emit(function : Function)
     io << "pub fn "
-    function_name(function.name, index)
+    function_name(function.name, function.index)
     io << "("
-    if function.type_params.any?
-      emit_type_param(0)
-      (function.type_params.size - 1).times do |i|
-        io << ", "
-        emit_type_param(i)
-      end
-      if function.parameters.any?
-        io << ", "
-      end
-    end
+    # if function.type_params.any?
+    #   emit_type_param(0)
+    #   (function.type_params.size - 1).times do |i|
+    #     io << ", "
+    #     emit_type_param(i)
+    #   end
+    #   if function.parameters.any?
+    #     io << ", "
+    #   end
+    # end
     if function.parameters.any?
       emit(function.parameters.first)
       function.parameters[1..].each do |param|
@@ -171,21 +175,24 @@ class CodeGenerator
 
     # emit body
     start_block
-    function.body.each_with_index do |stmt, i|
-      if i == function.body.size - 1 && function.return_type != Type.nil
-        io << "return " unless stmt.is_a?(Hir::Return)
-        emit(stmt)
-        io << ";"
-      else
-        emit(stmt)
-        io << ";" unless stmt.is_a?(Hir::Block | Hir::If)
-        newline
-      end
-    end
-    if function.return_type == Type.nil
-      io << "return;"
-      newline
-    end
+    io << "return "
+    emit(function.body)
+    io << ";"
+    # function.body.each_with_index do |stmt, i|
+    #   if i == function.body.size - 1 && function.return_type != Type.nil
+    #     io << "return " unless stmt.is_a?(Hir::Return)
+    #     emit(stmt)
+    #     io << ";"
+    #   else
+    #     emit(stmt)
+    #     io << ";" unless stmt.is_a?(Hir::Block | Hir::If)
+    #     newline
+    #   end
+    # end
+    # if function.return_type == Type.nil
+    #   io << "return;"
+    #   newline
+    # end
     end_block
     newline
   end
@@ -248,6 +255,8 @@ class CodeGenerator
       io << "T#{type.id}"
     when Type::Never
       io << "noreturn"
+    when Type::Any
+      io << "anytype"
     when Type::Unknown
       abort! "unknown type: #{type}"
     else
@@ -275,7 +284,7 @@ class CodeGenerator
     block.statements.each_with_index do |stmt, i|
       if i < block.statements.size - 1
         emit(stmt)
-        io << ";"
+        io << ";" unless stmt.is_a?(Hir::Block | Hir::If)
         newline
       else
         io << "break :@\"block$#{blk_id}\" "
@@ -411,7 +420,7 @@ class CodeGenerator
       io << ' '
       emit call.args[1]
     else
-      function_name(call.function.name, call.overload_index)
+      function_name(call.function.name, call.function.index)
       call.args.each_with_index do |arg, i|
         io << (i == 0 ? "(" : ", ")
         emit(arg)

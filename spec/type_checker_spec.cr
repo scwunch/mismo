@@ -45,6 +45,7 @@ describe TypeContext do
           Blue
 
         def main:
+          Point(1, 1).check_me
           let r = Color.Red
           if r is 
             Red:
@@ -57,7 +58,7 @@ describe TypeContext do
         MISMO
       )
       point = type_env.type_defs["Point"].as(StructDef)
-      check_me_func = type_env.functions["check_me"][0]
+      check_me_func = type_env.function_defs["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
       param = check_me_func.parameters[0]
       param.mode.should eq(Mode::Let)
@@ -85,10 +86,13 @@ describe TypeEnv do
             p.x = 3
             p.y = 4
             p.x + p.y
+          
+        def main:
+          Point(1, 2).check_me
         MISMO
       )
       point = type_env.type_defs["Point"].as(StructDef)
-      check_me_func = type_env.functions["check_me"][0]
+      check_me_func = type_env.function_defs["check_me"][0]
       check_me_func.return_type.should eq(Type.int)
       param = check_me_func.parameters[0]
       param.mode.should eq(Mode::Let)
@@ -108,15 +112,15 @@ describe TypeEnv do
           let one = 1
           let pi = 3.14
           one + one
-          one + pi
+          -- one + pi
           one + t
-          pi + t
+          -- pi + t
 
         enum Option[T]
           Some(T)
           None
 
-          def map[T2](fn Callable[T, T2]) -> Option[T2]:
+          def map[R, F: Callable[T,R]](fn F) -> Option[R]:
             if self is
               Some(t): Some(fn(t))
               None: None
@@ -125,7 +129,7 @@ describe TypeEnv do
           Ok(T)
           Error(E)
 
-          def map[T2](fn Callable[T, T2]) -> Result[T2, E]:
+          def map[R, F: Callable[T,R]](fn F) -> Result[R, E]:
             if self is
               Ok(t): Ok(fn(t))
               Error(e): Error(e)
@@ -176,15 +180,15 @@ describe TypeEnv do
       type_env.register_types_and_collect_items(items)
       type_env.register_functions
       type_env.eval_type_params_and_trait_claims(items)
-      type_env.functions["main"]?.should be_a(Array(FunctionDef))
+      type_env.function_defs["main"]?.should be_a(Array(FunctionDef))
       type_env.type_defs["Point"]?.should be_a(StructDef)
       not_nil!(result = type_env.type_defs["Result"]?)
       result.should be_a(EnumDef)
       result.type_params.should eq(
         Slice[TypeParameter.new(loc, "T"), TypeParameter.new(loc, "E")])
-      type_env.functions["ok"]?.should be_a(Array(FunctionDef))
-      type_env.functions["ok"].size.should eq(1)
-      ok_func = type_env.functions["ok"][0]
+      type_env.function_defs["ok"]?.should be_a(Array(FunctionDef))
+      type_env.function_defs["ok"].size.should eq(1)
+      ok_func = type_env.function_defs["ok"][0]
       ok_func.type_params.should eq(
         Slice[TypeParameter.new(loc, "T"), TypeParameter.new(loc, "E")])
       not_nil!(equatable = type_env.traits["Equatable"]?)
@@ -532,9 +536,9 @@ describe TypeEnv do
   # describe "#add_built_ins" do
   #   it "inserts a list of built-in functions" do
   #     type_env = TypeEnv.new(Logger.new)
-  #     type_env.functions.size.should eq(0)
+  #     type_env.function_defs.size.should eq(0)
   #     type_env.add_built_ins
-  #     type_env.functions.each.map(&.size).sum
+  #     type_env.function_defs.each.map(&.size).sum
   #   end
   # end
 

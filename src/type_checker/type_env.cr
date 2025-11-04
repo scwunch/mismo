@@ -25,7 +25,8 @@ class TypeEnv
   property trait_claims = [] of TraitClaim
   property ast_functions = {} of String => Array(Ast::Function)
   property external_functions = [] of Ast::ExternalFunction
-  property functions = {} of String => Array(FunctionDef)
+  property function_defs = {} of String => Array(FunctionDef)
+  property functions = {} of String => Array(Function)
   property ready_to_validate_types = false
   property eval_depth = 0
 
@@ -63,12 +64,12 @@ class TypeEnv
     # NOTE: Built-ins are now included in the prelude
   end
   
-  def type_check_functions
+  def type_check_functions_old
     # fifth pass: type check functions
     ast_functions.each do |name, ast_funcs| 
       # name, ast_funcs = ast_funcs
       ast_funcs.each_with_index do |f, i|
-        func_base = functions[name][i]
+        func_base = function_defs[name][i]
         # if params = f.parameters
         #   func_base.parameters = params.map { |p| Parameter.new(p.location, p.name, eval(p.type)) }
         # end
@@ -78,6 +79,20 @@ class TypeEnv
         TypeContext.type_check_function(self, func_base, f.body)
       end
     end
+  end
+
+  def type_check_functions
+    mains = ast_functions["main"]?
+    unless mains
+      log.error(Location.zero, "#{__FILE__}:#{__LINE__} no main function")
+      return Hash(String, Array(Function)).new
+    end
+    unless mains.size == 1
+      log.error(Location.zero, "#{__FILE__}:#{__LINE__} multiple main functions")
+    end
+    specializer = Specializer.new(self, mains.first)
+    specializer.run
+    specializer.functions
   end
 
   # For each Ast struct, enum, and trait, construct its complementary HIR item in 
@@ -226,12 +241,12 @@ class TypeEnv
     log.info_descend(Location.zero, "Register #{external_functions.size} external functions") do
       external_functions.each do |func|
         log.debug_descend(func.location, "register #{func.name}#{func.signature}") do
-          if functions.includes?(func.name)
+          if function_defs.includes?(func.name)
             log.error(func.location, "E#{__LINE__} duplicate externally implemented function: #{func.name}; overwriting.")
           end
           register_function(
             func, 
-            functions[func.name] = [] of FunctionDef
+            function_defs[func.name] = [] of FunctionDef
           )
             .set_as_extern
         end
@@ -245,10 +260,10 @@ class TypeEnv
   def register_functions
     log.info_descend(Location.zero, "Register all functions (#{ast_functions.size})") do
       ast_functions.each do |name, overloads|
-        if functions.includes?(name)
+        if function_defs.includes?(name)
           log.warning(overloads.first.location, "E#{__LINE__} overwriting externally implemented function: #{name}")
         end
-        func_bases = functions[name] = [] of FunctionDef
+        func_bases = function_defs[name] = [] of FunctionDef
         overloads.each do |ast_func|
           register_function(ast_func, func_bases)
           # context = TypeContext.new(self, ast_func.type_params)
@@ -443,6 +458,7 @@ class TypeEnv
                 Type::Adt.new(enum_base, context.type_args),
                 constructor_args
               )
+              log.debug(variant.location, "Constructor for #{item.name}.#{variant.name}: #{constructor_hir}")
               upsert(FunctionDef.new(
                 location: variant.location, 
                 name: "#{item.name}.#{variant.name}", 
@@ -453,6 +469,7 @@ class TypeEnv
                 return_type: Type.adt(enum_base, context.type_args),
                 body: [constructor_hir]
               ))
+              log.debug(variant.location, "Verify constructor function added: #{function_defs["#{item.name}.#{variant.name}"]}")
                 # if fields = variant.fields
                 #   raise "I guess you should make a constructor here..."
                 #   # ->(interpreter : Interpreter) {
@@ -491,7 +508,7 @@ class TypeEnv
   end
 
   def get_function(name : String, loc : Location)
-    functions[name].find { |f| f.location == loc } ||
+    function_defs[name].find { |f| f.location == loc } ||
       raise "TypeEnv#get_function: unknown function: #{name} @ #{loc}"
   end
 
@@ -503,10 +520,10 @@ class TypeEnv
   # end
 
   def upsert(func : FunctionDef)
-    if overloads = functions[func.name]?
+    if overloads = function_defs[func.name]?
       overloads << func
     else
-      functions[func.name] = [func]
+      function_defs[func.name] = [func]
     end
   end
 end

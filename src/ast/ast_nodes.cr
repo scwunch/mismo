@@ -160,8 +160,11 @@ module Ast
     property statements : ::Array(Expr)
     def initialize(@location : Location, @statements : ::Array(Expr))
     end
-    def initialize(@statements)
+    def initialize(@statements : ::Array(Expr))
       @location = @statements[0]?.try &.location || Location.zero
+    end
+    def self.empty(loc = Location.zero)
+      new(loc, [] of Expr)
     end
     def to_s(io : IO)
       io << "#{statements.join("\n")}"
