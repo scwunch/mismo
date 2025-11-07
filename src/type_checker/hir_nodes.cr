@@ -310,10 +310,16 @@ abstract struct Hir < IrNode
     property location : Location
     property object : Cell(Hir)
     property field : ::Field
-    def initialize(@location : Location, @object : Cell(Hir), @field : ::Field)
+    def initialize(@location : Location, @object : Cell(Hir), field : ::Field, type_args : Slice(Type))
+      @field = Field.new(
+        field.location,
+        field.binding,
+        field.name,
+        field.type.substitute(type_args)
+      )
     end
-    def initialize(@location : Location, object : Hir, @field : ::Field)
-      @object = Cell.new(object.as(Hir))
+    def self.new(location : Location, object : Hir, field : ::Field, type_args : Slice(Type))
+      new(location, Cell.new(object.as(Hir)), field, type_args)
     end
     def_init
     def binding : Binding

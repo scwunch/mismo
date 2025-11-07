@@ -465,7 +465,7 @@ module TopLevelItemParser
         name = consume_type_name!
         constraints = parse_constraints
         # type_params << Ast::TypeParameter.new(param_loc, name, constraints)
-        type_params = type_params.push(Ast::TypeParameter.new(param_loc, name, constraints))
+        type_params = push!(type_params, Ast::TypeParameter.new(param_loc, name, constraints))
         consume_list_separator?(params_indent) || break
       end
       consume!(Token::RBracket)

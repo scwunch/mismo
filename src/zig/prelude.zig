@@ -116,21 +116,29 @@ pub fn __zig_string2float_0(string: []const u8) f64 {
 }
 
 /// Pointer/Slice Allocation
-pub fn __zig_alloc_0(comptime T: type, size: usize) []T {
+pub fn __zig_alloc(comptime T: type, size: usize) []T {
     return debug_allocator.alloc(T, size) catch unreachable;
 }
-pub fn __zig_free_0(comptime T: type, ptr: []T) void {
-    debug_allocator.free(ptr);
-}
-pub fn __zig_slice_size_0(comptime T: type, slice: []const T) usize {
-    return slice.len;
-}
-pub fn __zig_slice2ptr_0(comptime T: type, slice: []T) *T {
+pub fn __zig_slice2ptr(comptime T: type, slice: []T) *T {
     return @ptrCast(slice);
 }
-pub fn __zig_ptr2slice_0(comptime T: type, ptr: *T, size: usize) []T {
-    return ptr[0..size];
+pub fn __zig_ptr2slice(comptime T: type, ptr: *T, size: usize) []T {
+    return @as([*]T, @ptrCast(ptr))[0..size];
 }
+
+pub fn __zig_free_0(ptr: anytype) void {
+    debug_allocator.free(ptr);
+}
+pub fn __zig_slice_size_0(slice: anytype) usize {
+    return slice.len;
+}
+// pub fn __zig_slice2ptr_0(slice: anytype) *std.meta.Child(@TypeOf(slice)) {
+//     return @ptrCast(slice);
+// }
+// pub fn __zig_ptr2slice_0(ptr: anytype, size: usize) []std.meta.Child(@TypeOf(ptr)) {
+//     const T = std.meta.Child(@TypeOf(ptr));
+//     return @as([*]T, @ptrCast(ptr))[0..size];
+// }
 
 fn string_from_literal(comptime literal: []const u8) String_t {
     const buffer = debug_allocator.dupe(u8, literal) catch unreachable;

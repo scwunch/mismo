@@ -73,25 +73,23 @@ class CodeGenerator
   end
 
   def emit(type_def : TypeDefinition)
-    case type_def
-    when StructDef
-      if type_def.type_params.any?
-        emit_generic_type_def(type_def)
-      else
-        emit_struct_def(type_def)
-      end
-    when EnumDef
-      raise "TODO: emit enum"
+    if type_def.type_params.any?
+      emit_generic_type_def(type_def)
     else
-      raise "unhandled type def: #{type_def}"
+      emit_concrete_type_def(type_def)
     end
   end
 
-  def emit_struct_def(type_def : StructDef)
+  def emit_concrete_type_def(type_def : TypeDefinition)
     io << "pub const "
     type_name(type_def.name)
     io << " = "
-    emit_anonymous_struct_def(type_def)
+    case type_def
+    when StructDef
+      emit_anonymous_struct_def(type_def)
+    when EnumDef
+      emit_anonymous_enum_def(type_def)
+    end
     io << ';'
     newline
   end
@@ -107,7 +105,25 @@ class CodeGenerator
     end_block
   end
 
-  def emit_generic_type_def(type_def : StructDef)
+  def emit_anonymous_enum_def(type_def : EnumDef)
+    io << "union(enum)"
+    start_block
+    type_def.variants.each do |variant|
+      io << variant.name
+      io << ": struct {"
+      variant.fields.each_with_index do |field, i|
+        io << ", " unless i == 0
+        # ident(field.name)
+        # io << ": "
+        emit(field.type)
+      end
+      io << "},"
+      newline
+    end
+    end_block
+  end
+
+  def emit_generic_type_def(type_def : TypeDefinition)
     # generic types are implemented as comptime functions in Zig
     # they are instantiated as needed
     io << "pub fn "
@@ -119,7 +135,12 @@ class CodeGenerator
     io << ") type"
     start_block
     io << "return "
-    emit_anonymous_struct_def(type_def)
+    case type_def
+    when StructDef
+      emit_anonymous_struct_def(type_def)
+    when EnumDef
+      emit_anonymous_enum_def(type_def)
+    end
     io << ';'
     end_block
     newline
@@ -167,6 +188,7 @@ class CodeGenerator
       end
     end
     io << ") "
+    # io << '*' unless function.return_mode == Mode::Move
     if function.return_type == Type.nil
       io << "void"
     else
@@ -207,6 +229,7 @@ class CodeGenerator
   def emit(param : Parameter)
     ident(param.name)
     io << ": "
+    # io << '*' unless param.mode == Mode::Move
     emit(param.type)
   end
 
@@ -360,7 +383,7 @@ class CodeGenerator
       io << '.'
       emit_assign(expr.field.name, expr.value)
     when Hir::AccessField
-      io << "&" if expr.mutable?
+      # io << "&" if expr.mutable?
       emit(expr.object)
       io << '.'
       ident(expr.field.name)
@@ -414,11 +437,22 @@ class CodeGenerator
         call.args.size == 2 && 
         call.args.all? &.type.primitive? &&
         call.args[0].type == call.args[1].type
-      emit call.args[0]
+      emit call.args.first
       io << ' '
       io << call.function.name
       io << ' '
-      emit call.args[1]
+      emit call.args.last
+    elsif call.function.function_def.extern? && call.function.function_def.type_params.size > 0
+      io << call.function.name
+      call.function.type_args.each_with_index do |type_arg, i|
+        io << (i == 0 ? "(" : ", ")
+        emit(type_arg)
+      end
+      call.args.each do |arg|
+        io << ", "
+        emit(arg)
+      end
+      io << ")"
     else
       function_name(call.function.name, call.function.index)
       call.args.each_with_index do |arg, i|
@@ -496,68 +530,3 @@ class CodeGenerator
   end
 end
 
-
-BUILTIN_SYMBOLS = Set{
-  "print",
-  "+.0",
-  "*.0",
-  "-.0",
-  "/.0"
-}
-
-
-# module Zig
-#   abstract class Node
-#     abstract def to_s(io : IO)
-#   end
-
-#   abstract class Expression < Node
-#   end
-
-#   class FunctionDef < Node
-#     property name : String
-#     property params : Array<Param>
-#     property return_type : Expression
-#     property body : Expression
-
-#     def initialize(@name : String, @params : Array<Param>, @return_type : Expression, @body : Expression)
-#     end
-
-#     def to_s(io : IO)
-#       io << "fn #{name}() -> #{body.to_s(io)}"
-#     end
-#   end
-
-#   class Param < Node
-#     property name : String
-#     property type : Expression
-
-#     def initialize(@name : String, @type : Expression)
-#     end
-
-#     def to_s(io : IO)
-#       io << name << ": "
-#       type.to_s(io)
-#     end
-#   end
-
-#   class IntegerLiteral < Expression
-#     def initialize(@value : Int)
-#     end
-
-#     def to_s(io : IO)
-#       io << @value.to_s
-#     end
-#   end
-
-#   class FloatLiteral < Expression
-#     def initialize(@value : Float)
-#     end
-
-#     def to_s(io : IO)
-#       io << @value.to_s
-#     end
-#   end
-
-
-# end

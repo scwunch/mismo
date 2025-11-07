@@ -23,8 +23,8 @@ class TypeEnv
   property traits = {} of String => TraitDef
   property implementations : ::Hash(Trait, Implements) = {} of Trait => Implements
   property trait_claims = [] of TraitClaim
-  property ast_functions = {} of String => Array(Ast::Function)
-  property external_functions = [] of Ast::ExternalFunction
+  # property ast_functions = {} of String => Array(Ast::Function)
+  # property external_functions = [] of Ast::ExternalFunction
   property function_defs = {} of String => Array(FunctionDef)
   property functions = {} of String => Array(Function)
   property ready_to_validate_types = false
@@ -48,8 +48,8 @@ class TypeEnv
     # second pass: evaluate (without validating) all top-level type nodes; this
     # includes function signatures, collecting trait claims, and all type parameters.
     # This info will be used to check trait implementations
-    register_external_functions
-    register_functions
+    # register_external_functions
+    # register_functions
     eval_type_params_and_trait_claims(items)
 
     @ready_to_validate_types = true
@@ -82,7 +82,7 @@ class TypeEnv
   end
 
   def type_check_functions
-    mains = ast_functions["main"]?
+    mains = function_defs["main"]?
     unless mains
       log.error(Location.zero, "#{__FILE__}:#{__LINE__} no main function")
       return Hash(String, Array(Function)).new
@@ -107,13 +107,13 @@ class TypeEnv
         when Ast::Function
           # only collecting ast functions for now, `BaseFunction`s will be registered in 
           # next step, because parameter types require all types to be registered first.
-          if ast_funcs = ast_functions[item.name]?
-            ast_funcs << item
-          else
-            ast_functions[item.name] = [item]
-          end
+          # if ast_funcs = ast_functions[item.name]?
+          #   ast_funcs << item
+          # else
+          #   ast_functions[item.name] = [item]
+          # end
         when Ast::ExternalFunction
-          external_functions << item
+          # external_functions << item
         when Ast::Struct
           log.info(item.location, "register struct #{item.name}")
           if item.name.in?(type_defs)
@@ -197,8 +197,16 @@ class TypeEnv
       items.each do |item|
         log.debug_descend(item.location, "eval_type_params_and_trait_claims #{item}") do
           case item
-          when Ast::Function
+          when Ast::Function, Ast::ExternalFunction
             # type parameters already evaluated in `#register_functions`
+            function = new_function(item)
+            function.set_as_extern if item.is_a?(Ast::ExternalFunction)
+            if overloads = function_defs[item.name]?
+              overloads << function
+            else
+              function_defs[item.name] = [function]
+            end
+            
           when Ast::Struct, Ast::Enum
             context = TypeContext.new(self, item.type_params)
             log.debug(item.location, "context: #{context}")
@@ -292,6 +300,12 @@ class TypeEnv
   end
 
   def register_function(ast_func : Ast::Function | Ast::ExternalFunction, func_bases : Array(FunctionDef))
+    func = new_function(ast_func)
+    func_bases << func
+    func
+  end
+
+  def new_function(ast_func : Ast::Function | Ast::ExternalFunction)
     context = TypeContext.new(self, ast_func.type_params)
     log.debug_descend(ast_func.location, "register #{ast_func.name}#{ast_func.signature} (context=#{context})") do
       function = FunctionDef.new(
@@ -307,10 +321,10 @@ class TypeEnv
             context.eval(ret_type)
           else
             Type.nil
-          end
+          end,
+        body: ast_func.body? || Ast::Block.empty
       )
       log.debug(ast_func.location, "Function registered: #{function}")
-      func_bases << function
       function
     end
   end
@@ -388,10 +402,10 @@ class TypeEnv
           when Ast::Struct
             struct_base = type_defs[item.name].as(StructDef)
             this = Type::Adt.new(struct_base, context.type_args)
-            item.fields.each_with_index do |field, i|
+            item.fields.each_with_index do |ast_field, i|
               # evaluate field
-              field_type = context.eval(field.type)
-              field = Field.new(field.location, field.binding, field.name, field_type)
+              field_type = context.eval(ast_field.type)
+              field = Field.new(ast_field.location, ast_field.binding, ast_field.name, field_type)
               struct_base.fields << field
 
               # add field-access wrapper function
@@ -400,18 +414,21 @@ class TypeEnv
                 field.name, 
                 context.type_parameters, 
                 [Parameter.new(field.location, Mode::Let, "self", this)], 
+                Mode::Mut,
                 field_type,
-                body: [
-                  Hir.accessfield(
-                    field.location, 
-                    Cell.new(Hir.identifier(field.location, "self", Binding::Let, this)), 
-                    field
-                  )
-                ]
-                # ->(interpreter : Interpreter) {
-                #   interpreter.frame.variables["self"].data.as(Slice(Val))[i]
-                # }
+                body: Ast::FieldAccess.new(
+                  field.location, 
+                  Ast::Identifier.new(field.location, "self"), 
+                  field.name
+                )
               ))
+              #   body: 
+              #     Hir.accessfield(
+              #       field.location, 
+              #       Cell.new(Hir.identifier(field.location, "self", Binding::Let, this)), 
+              #       field
+              #     )
+              # ))
             end
             # generate constructor
             upsert(FunctionDef.new(
@@ -422,21 +439,24 @@ class TypeEnv
                 Parameter.new(field.location, field.binding.to_mode(Mode::Move), field.name, field.type)
               end,
               return_type: Type.adt(struct_base, context.type_args),
-              body: [
-                Hir.constructor(
-                  item.location,
-                  this,
-                  struct_base.fields.map do |field|
-                    Hir.identifier(field.location, field.name, field.binding, field.type)
-                  end
-                )
-              ]
-              # ->(interpreter : Interpreter) {
-              #   Val.new(Slice(Val).new(struct_base.fields.size) do |i|
-              #     interpreter.frame.variables[struct_base.fields[i].name]
-              #   end)
-              # }
+              body: Ast::Constructor.new(
+                item.location,
+                Ast::Type.new(item.location, item.name, Ast.to_type_args(item.type_params)),
+                struct_base.fields.map do |field|
+                  Ast::Identifier.new(field.location, field.name).as(Ast::Expr)
+                end
+              )
             ))
+            #   body: 
+            #     Hir.constructor(
+            #       item.location,
+            #       this,
+            #       struct_base.fields.map do |field|
+            #         Hir.identifier(field.location, field.name, field.binding, field.type)
+            #       end
+            #     )
+            #   )
+            # )
           when Ast::Enum
             enum_base = type_defs[item.name].as(EnumDef)
             item.variants.each do |variant|
@@ -449,16 +469,16 @@ class TypeEnv
               enum_base.variants << variant
 
               # generate constructor
-              constructor_args = [Hir.int(variant.location, enum_base.variants.size.to_i128)]
+              constructor_args = [Ast::Int.new(variant.location, enum_base.variants.size.to_i128).as(Ast::Expr)]
               variant.fields.each do |field|
-                constructor_args << Hir.identifier(field.location, field.name, field.binding, field.type)
+                constructor_args << Ast::Identifier.new(field.location, field.name)
               end
-              constructor_hir = Hir.constructor(
+              constructor_ast = Ast::Constructor.new(
                 variant.location,
-                Type::Adt.new(enum_base, context.type_args),
+                Ast::Type.new(variant.location, item.name, Ast.to_type_args(item.type_params)),
                 constructor_args
               )
-              log.debug(variant.location, "Constructor for #{item.name}.#{variant.name}: #{constructor_hir}")
+              log.debug(variant.location, "Constructor for #{item.name}.#{variant.name}: #{constructor_ast}")
               upsert(FunctionDef.new(
                 location: variant.location, 
                 name: "#{item.name}.#{variant.name}", 
@@ -467,7 +487,7 @@ class TypeEnv
                   Parameter.new(field.location, Mode::Move, field.name, field.type)
                 end || [] of Parameter,
                 return_type: Type.adt(enum_base, context.type_args),
-                body: [constructor_hir]
+                body: constructor_ast
               ))
               log.debug(variant.location, "Verify constructor function added: #{function_defs["#{item.name}.#{variant.name}"]}")
                 # if fields = variant.fields

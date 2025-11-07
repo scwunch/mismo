@@ -43,6 +43,20 @@ class Logger
     # @source_lines = source.split('\n')
   end
 
+  def print(obj)
+    @out << "\033[90m "
+    @out << " \u{2502}" * @indent
+    @out << obj
+    @out << "\033[0m\n"
+  end
+
+  def descend(&block)
+    @indent += 1
+    yield
+  ensure
+    @indent -= 1
+  end
+
   macro def_log(level)
     def {{level.id.downcase}}(loc : Location, msg : String)
       if @level <= Level::{{level}}
@@ -85,9 +99,13 @@ class Logger
     end
 
     def {{level.id.downcase}}_ascend
+      if @indent == 0
+        raise "Logger#ascend called when indent is 0"
+      end
       @indent -= 1 if @level <= Level::{{level}}
     end
 
+    @[Deprecated("Use `{{level.id.downcase}}_descend(loc : Location, msg : String, &block)` instead")]
     def {{level.id.downcase}}_descend(&block)
       {{level.id.downcase}}_descend
       yield
@@ -96,11 +114,12 @@ class Logger
     end
 
     def {{level.id.downcase}}_descend(loc : Location, msg : String, &block)
+      current_indent = @indent
       {{level.id.downcase}}(loc, msg)
       {{level.id.downcase}}_descend
       yield
     ensure
-      {{level.id.downcase}}_ascend
+      @indent = current_indent.not_nil!
     end
   end
 

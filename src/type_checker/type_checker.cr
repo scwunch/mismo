@@ -586,15 +586,26 @@ module TypeChecker
           right = infer(ast.right)
           function_call(ast.location, ast.operator.to_s, [left, right])
         end
+      when Ast::FieldAccess
+        field_access(ast)
       when Ast::Call
-        function_call(ast.location, ast.method, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
+        function_call(
+          ast.location, 
+          ast.method, 
+          ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir,
+          ast.type_args.map(&->eval(Ast::Type)))
       when Ast::Constructor
-        function_call(ast.location, ast.type.name, ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir)
+        function_call(
+          ast.location, 
+          ast.type.name, 
+          ast.args.try &.map(&->infer(Ast::Expr)) || [] of Hir,
+          ast.type_args.map(&->eval(Ast::Type)))
       when Ast::StaticCall
         function_call(
           ast.location, 
           "#{ast.type}.#{ast.call.method}", 
-          ast.call.args.try &.map(&->infer(Ast::Expr)) || [] of Hir
+          ast.call.args.try &.map(&->infer(Ast::Expr)) || [] of Hir,
+          ast.type_args.map(&->eval(Ast::Type))
         )
       when Ast::Var
         declare(Binding::Var, Hir::Var, ast.location, ast.name, ast.value)
@@ -643,7 +654,8 @@ module TypeChecker
       log.warning(loc, "We don't know what type to expect here (expected type: #{expected}); #{actual} may or may not be compatible.")
     else
       if actual != expected
-        emit_error TypeMismatchError.new(loc, expected, actual, source)
+        emit_error TypeMismatchError.new(loc, expected, actual, source, compiler_source: "#{__FILE__}:#{__LINE__}")
+        raise "TRACE ME"
         return false
       end
     end
@@ -701,7 +713,7 @@ module TypeChecker
     end
   end
 
-  def declare(binding : Binding, dec_type : Hir.class, loc : Location, name : ::String, value : Cell(Ast::Expr)? = nil) : Hir
+  def declare(binding : Binding, dec_type : Hir.class, loc : Location, name : String, value : Cell(Ast::Expr)? = nil) : Hir
     if value
       expr = infer(value.value)
       variable = Variable.new(loc, binding, name, expr.type)
@@ -713,19 +725,24 @@ module TypeChecker
     end
   end
 
-  def identifier(location : Location, name : ::String) : Hir
+  def identifier(location : Location, name : String) : Hir
     var = scope.get_var(location, name)
     Hir::Identifier.new(location, name, var.binding, var.type.as(Type))
   end
 
-  def function_call(location : Location, name : ::String, args : ::Array(Hir)) : Hir
+  def function_call(location : Location, name : String, args : Array(Hir), type_args : Slice(Type) = Slice(Type).empty) : Hir
     unless overloads = env.function_defs[name]?
       abort! MissingNameError.new(location, "function #{name} not found")
     end
     matches = [] of OverloadMatch
     errors = [] of Error
+    type_args = if type_args.empty?
+      nil
+    else
+      Array.from_slice(type_args)
+    end
     overloads.each_with_index do |func, i|
-      case res = try_function_call(location, i, func, args)
+      case res = try_function_call(location, i, func, type_args, args)
       when OverloadMatch
         matches << res
       when Error
@@ -736,8 +753,19 @@ module TypeChecker
       if overloads.size == 1 && errors.size == 1
         abort! errors.first
       end
-      errors.each { |e| emit_error e }
-      abort! MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:\n#{overloads.join("\n")}")
+      emit_error MissingOverloadError.new(location, "#{name}(#{args.each.map(&.type).join(",")}) does not match any of the overloads:")
+      log.descend do
+        errors.each_with_index { |e, i| 
+          # log.error(overloads[i].location, overloads[i].to_s)
+          log.print(overloads[i])
+          if i < errors.size - 1
+            emit_error e
+            log.print(' ')
+          else
+            abort! e
+          end
+        }
+      end
     end
     if matches.size > 1
       abort! AmbiguousFunctionCallError.new(location, "multiple overloads of function #{name} match:\n#{matches.join("\n")}")
@@ -752,20 +780,22 @@ module TypeChecker
     Hir::Call.new(location, function, args)
   end
 
-  def try_function_call(location, overload_index, func : FunctionDef, args : Array(Hir)) : OverloadMatch | Error
-    log.debug_descend(location, "TypeChecker#try_function_call(`#{func}`, [#{args.join(", ")})") do
+  def try_function_call(location, overload_index, func : FunctionDef, type_args : Array(Type)?, args : Array(Hir)) : OverloadMatch | Error
+    log.debug_descend(location, "TypeChecker#try_function_call(`#{func}`, args:[#{args.each.map{|a| "#{a}:#{a.type}"}.join(", ")}])") do
       if func.parameters.size != args.size
         return ArgumentMismatchError.new(location, "#{func.name} expected #{func.parameters.size} arguments, but got #{args.size}")
       end
       # type_args = func.type_params.size.times.each_with_object([] of Type) { |i, arr| arr << Type.var(i) }
-      type_args = Array(Type?).new(func.type_params.size, nil)
+      type_args ||= Array(Type?).new(func.type_params.size, nil)
       func.parameters.zip(args).each do |param, arg| 
         if error = unify(arg.location, param.type, arg.type, type_args, param.location)
           return error
         end
       end
-      # convert type_args to non-nilable Array(Type)
-      type_args = type_args.map { |t| t || return AmbiguousFunctionCallError.new(location, "Not all type arguments were matched.") }
+      if type_args.is_a?(Array(Type?))
+        # convert type_args to non-nilable Array(Type)
+        type_args = type_args.map { |t| t || return AmbiguousFunctionCallError.new(location, "Not all type arguments were matched: #{type_args}") }
+      end
       OverloadMatch.new(func, overload_index, type_args)
       # Hir::Call.new(location, overload_index, func, type_args, args, func.return_type)
     end
@@ -785,48 +815,34 @@ module TypeChecker
   # Types are considered compatible if they are equal, or if one is a variable
   # and the other satisfies the variable's constraints.
   # and collect type arguments along the way...
-  def unify(loc : Location, pattern : Type, arg : Type, type_args : Array(Type?), annotation_loc : Location) : Error?
-    log.debug_descend(loc, "TypeChecker#unify(#{pattern}, #{arg})") do
+  def unify(loc : Location, pattern : Type, arg : Type, type_args : Array(Type?) | Array(Type), annotation_loc : Location) : Error?
+    log.debug_descend(loc, "TypeChecker#unify(pattern: #{pattern}, arg: #{arg})") do
       return nil if arg.is_a? Type::Never
       case pattern
       when Type::Any
-        nil
+        log.debug(loc, "unify(#{pattern}, #{arg}) => success")
       when Type::Var
         if bound_type_arg = type_args[pattern.id]
           unless arg == bound_type_arg
             log.error(loc, "Cannot bind type variable #{pattern} to #{arg}; it is already bound to #{bound_type_arg}")
-            return TypeMismatchError.new(loc, actual: arg, expected: bound_type_arg, annotation: annotation_loc)
+            return TypeMismatchError.new(loc, actual: arg, expected: bound_type_arg, annotation: annotation_loc, compiler_source: "#{__FILE__}:#{__LINE__}")
           end
         else
-          log.warning(loc, "TODO: type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id]) ... or call it in TypeChecker#function_call")
+          log.warning(loc, "TODO: type_satisfies_constraints(#{loc}, #{arg}, func.type_params[t.id])")
           # unless type_satisfies_constraints(arg.location, arg.type, func.type_params[t.id])
           #   log.warning(arg.location, "Oh shoot, type #{arg.type} does not satisfy constraint #{func.type_params[t.id]}")
           #   raise "BREAKPOINT!"
           #   return TypeSatisfiesConstraintsError.new(loc, arg, func.type_params[t.id], annotation_loc)
           # end
+          type_args[pattern.id] = arg
+          log.debug(loc, "unify(#{pattern}, #{arg}) => bind #{pattern} to #{arg} (type_args: [#{type_args.join(", ")}])")
         end
-        type_args[pattern.id] = arg
       else
         if (pattern_args = pattern.type_args?) && (arg_args = arg.type_args?)
           if arg.base_or_class != pattern.base_or_class
             log.debug(loc, "arg.base_or_class (#{arg.base_or_class}) != pattern.base_or_class (#{pattern.base_or_class})")
-            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc, compiler_source: "#{__FILE__}:#{__LINE__}")
           end
-          # if arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt)
-          #   unless arg.base == pattern.base
-          #     log.debug(loc, "arg.base (#{arg.base}) != pattern.base (#{pattern.base})")
-          #     return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-          #   end
-          # end
-          # unless arg_args = arg.type_args?
-          #   log.debug(loc, "arg_args is nil")
-          #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-          # end
-          # if arg.class != pattern.class ||
-          #    (arg.is_a?(Type::Adt) && pattern.is_a?(Type::Adt) && arg.base != pattern.base)
-          #     raise "THIS SHOULD BE TEMPORARILY UNREACHABLE"
-          #   return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
-          # end
           arg_args.zip(pattern_args).each do |arg_type, param_type|
             if err = unify(loc, param_type, arg_type, type_args, annotation_loc)
               return err
@@ -835,12 +851,22 @@ module TypeChecker
         else
           log.debug(loc, "pattern (#{pattern}) is concrete and non-generic")
           unless arg == pattern
-            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc)
+            return TypeMismatchError.new(loc, actual: arg, expected: pattern, annotation: annotation_loc, compiler_source: "#{__FILE__}:#{__LINE__}")
           end
         end
+        log.debug(loc, "unify(pattern: #{pattern}, arg: #{arg}) => success")
       end
-      log.debug(loc, "unify(#{pattern}, #{arg}) => nil")
       nil
+    end
+  end
+
+  def field_access(ast : Ast::FieldAccess)
+    log.debug_descend(ast.location, "TypeChecker#field_access(#{ast})") do
+      obj = infer(ast.object)
+      unless field = obj.type.get_field?(ast.field)
+        abort! MissingNameError.new(ast.location, "#{obj.type} has no field #{ast.field}")
+      end
+      Hir::AccessField.new(ast.location, obj, field, type_args)
     end
   end
 
@@ -910,7 +936,7 @@ module TypeChecker
     # check for type consistency
     types = Type.union(steps.each.select { |t| !t.is_a?(Hir::BindTemp) }.map &.type)
     if types.is_a?(Type::Union)
-      emit_error TypeMismatchError.new(ast.last.location, types.types.first, types.types.last, ast.first.location)
+      emit_error TypeMismatchError.new(ast.last.location, types.types.first, types.types.last, ast.first.location, compiler_source: "#{__FILE__}:#{__LINE__}")
       # replace this error with a type error specifically designed for branching HIRs
     end
     steps
@@ -1048,6 +1074,21 @@ class TypeContext
   include ImplementationChecker
   include TypeChecker
   include CanError(AbortFunctionTypeChecking)
+
+  def type_check_function(function : Function)
+    log.info_descend(function.location, "Type checking function #{function}; type_args=[#{function.type_args.join(", ")}]") do
+      self.type_parameters = function.function_def.type_params
+      self.type_args = function.type_args
+      self.scope.clear
+      function.parameters.each do |param|
+        scope[param.name] = Variable.new(param.location, param.mode.to_binding, param.name, param.type)
+      end
+      ast_body = function.function_def.body
+      type_check(ast_body, function.return_type, function.location)
+    end
+  rescue AbortFunctionTypeChecking
+    nil
+  end
 
   def type_check_function(function : Function, type_parameters : Slice(TypeParameter), type_args : Slice(Type), body : Ast::Expr) : Hir?
     self.type_parameters = type_parameters

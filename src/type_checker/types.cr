@@ -6,6 +6,9 @@ abstract struct Type
   abstract def to_s(io : IO)
   abstract def mode : Mode
   abstract def substitute(type_args : ::Slice(Type)) : Type
+  def get_field?(field_name : ::String) : Field?
+    nil
+  end
   def primitive? : ::Bool; false end
   def copy_type? : ::Bool; false end
   def generic? : ::Bool
@@ -168,7 +171,8 @@ abstract struct Type
     end
     def mode : Mode ; Mode::Let end
     def to_s(io : IO)
-      io << "#{ {{ @type.name.stringify }} }[#{@element_type}]"
+      io << {{@type.name.stringify[6..]}}
+      io << "[#{@element_type.value}]"
     end
   end
 
@@ -274,6 +278,9 @@ abstract struct Type
     getter base : TypeDefinition
     getter type_args : ::Slice(Type)
     def initialize(@base : TypeDefinition, @type_args : ::Slice(Type))
+      if @base.type_params.size != @type_args.size
+        raise "#{base.location}: #{base.name} expects #{@base.type_params.size} type arguments, but got #{@type_args.size}!"
+      end
     end
     def Type.adt(base : TypeDefinition, type_args : ::Slice(Type) = ::Slice(Type).empty)
       Adt.new(base, type_args).as Type
@@ -303,7 +310,7 @@ abstract struct Type
       nil
     end
     def substitute(type_args : ::Slice(Type)) : Type
-      Adt.new(base, type_args.map { |ta| ta.substitute(type_args) })
+      Adt.new(base, @type_args.map { |ta| ta.substitute(type_args) })
     end
   end
 

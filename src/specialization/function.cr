@@ -13,6 +13,15 @@ class Function
   # def initialize(@location : Location, @name : String, @index : Int32, @parameters : ::Array(Parameter) = [] of Parameter, @return_mode : Mode = Mode::Move, @return_type : Type = Type.nil, @body : Hir = Hir::Block.empty)
   # end
   def initialize(@function_def : FunctionDef, @type_args : Slice(Type), @index : Int32, @body : Hir = Hir::Block.empty)
+    if @function_def.type_params.size != @type_args.size
+      raise "#{@function_def.location}: #{@function_def.name} expects #{@function_def.type_params.size} type arguments, but got #{@type_args.size}!"
+    end
+    begin
+      parameters
+      return_type
+    rescue e
+      raise "#{location}: Error for `#{function_def}`: type args [#{type_args.join(", ")}] are not compatible for #{name}[#{function_def.type_params.join(", ")}]; error message: #{e.message}"
+    end
   end
 
   def self.blank

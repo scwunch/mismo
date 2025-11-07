@@ -87,7 +87,8 @@ struct TypeMismatchError < TypeError
   property expected : Type
   property actual : Type
   @annotation : Location
-  def initialize(@location : Location, @expected : Type, @actual : Type, @annotation : Location)
+  property compiler_source : String
+  def initialize(@location : Location, @expected : Type, @actual : Type, @annotation : Location, @compiler_source : String)
   end
   def to_s(io : IO)
     super(io)
@@ -95,6 +96,7 @@ struct TypeMismatchError < TypeError
   end
 
   def print(prefix : String, io : IO = STDOUT)
+    io << prefix << compiler_source << "\n"
     io << prefix
     io << self.class << " from " << location << ": expected " << expected << ", got " << actual
     io << '\n'

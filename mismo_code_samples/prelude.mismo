@@ -36,11 +36,11 @@ extern def __zig_float2string(float: Float) String
 extern def __zig_string2int(string: String) Int
 extern def __zig_string2float(string: String) Float
 
-extern def __zig_alloc[T](size: Nat) Pointer[T]
-extern def __zig_free[T](slice: Slice[T])
-extern def __zig_slice_size[T](slice: Slice[T]) Nat
-extern def __zig_slice2ptr[T](slice: Slice[T]) Pointer[T]
-extern def __zig_ptr2slice[T](ptr: Pointer[T], size: Nat) Slice[T]
+extern def __zig_alloc[T](size: Nat) Slice[T]
+extern def __zig_free(slice: Any)
+extern def __zig_slice_size(slice: Any) Nat
+extern def __zig_slice2ptr[T](slice: Any) Pointer[T]
+extern def __zig_ptr2slice[T](ptr: Any, size: Nat) Slice[T]
 
 def bool(_ Nil) Bool: false
 
@@ -162,7 +162,6 @@ extend Nat
     def /(other Nat) Nat: .__zig_div_uint(other)
     def /(other Int) Int: .int.__zig_div_int(other)
         
-
 extend Int
     def bool Bool: self != 0
     def nat Nat: .__zig_int2nat
@@ -222,12 +221,9 @@ extend Float
     def /(other Float) Float: .__zig_div_float(other)
 
 
-extend Pointer[T]
+extend[T] Pointer[T]
     -- static alloc Pointer[T]:
-    --     __zig_alloc(1)
-
-    -- static alloc(size: Nat) Pointer[T]:
-    --     __zig_alloc(size)
+    --     __zig_alloc[T](1).pointer
 
     def free(size: Nat):
         __zig_free(self.slice(size))
@@ -236,9 +232,12 @@ extend Pointer[T]
         __zig_ptr2slice(self, size)
 
 
-extend Slice[T]
+extend[T] Slice[T]
     -- static alloc(size: Nat) Slice[T]:
     --     __zig_alloc(size)
+
+    def pointer Pointer[T]:
+        .__zig_slice2ptr
 
     def free:
         .__zig_free
@@ -247,8 +246,11 @@ extend Slice[T]
         .__zig_slice_size
 
 
-def print(str: String):
-    __zig_print(str)
+-- def print(str: String):
+--    __zig_print(str)
+
+def print[T Stringable](val: T):
+    __zig_print(val.string)
 
 def panic(str: String) -> Never:
     __zig_panic(str)
@@ -259,13 +261,17 @@ struct String
     def ==(other String) Bool: 
         .bytes == other.bytes
     
+    def string String: self
 
     def drop: 
-        .bytes.drop
+        .bytes.drop[Byte]
 
 struct Array[T]
     var buffer: Slice[T]
     var size: Nat
+
+    -- static new(size: Nat) Array[T]:
+    --     Array[T](__zig_alloc[T](size), 0)
 
     def drop: 
         .buffer.free
@@ -273,14 +279,16 @@ struct Array[T]
 trait Stringable
     def string String
 
-trait Intable
-    def int Int
-
-trait Floatable
-    def float Float
-
+extend Nil is Stringable
+    def string String: "nil"
 extend Bool is Stringable
-
+extend Nat is Stringable
 extend Int is Stringable
+extend Float is Stringable
+extend String is Stringable
 
-extend Int is Floatable
+enum Option[T]
+    Some(T)
+    None
+
+    

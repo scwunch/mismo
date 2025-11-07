@@ -24,7 +24,8 @@ describe Compiler do
         let nat = 1.nat
         let int = -2
         let float = 3.14
-        -- "drop me".drop
+        generic("IT WORKED!!!").print
+        "drop me".drop
 
         string(bool + nat).print
         string(nat - int).print
@@ -34,8 +35,17 @@ describe Compiler do
         string(int / nat).print
         string(int / int).print
         string(float / float).print
+
+        let slice = __zig_alloc[String](10.nat)
+        slice.size.print
+        slice.free
         
+        var opt = Option.Some(5)
+
+        "done".print
         
+      def generic[T](t T) T:
+        t
         
 
         
@@ -48,7 +58,7 @@ describe Compiler do
       file_path: __FILE__,
       starting_line: 7, 
       input: program,
-      log_level: Logger::Level::Debug,
+      log_level: Logger::Level::Info,
     ).run
     result.should eq "1234\nHello World\n1\n"
   end

@@ -296,14 +296,14 @@ module Ast
     property location : Location
     property method : ::String
     property type_args : Slice(Type)
-    property args : Args?
+    property args : Args
     def initialize(
       @location : Location, 
       @method : ::String, 
       @type_args : Slice(Type), 
-      @args : Args?)
+      @args : Args)
     end
-    def initialize(@location : Location, @method : ::String, @args : Args? = nil, @type_args : Slice(Type) = Slice(Type).empty)
+    def initialize(@location : Location, @method : ::String, @args : Args = [] of Expr, @type_args : Slice(Type) = Slice(Type).empty)
     end
     # def initialize(@location : Location, @method : ::String, args : ::Array(Expr), @type_args : Slice(Type) = Slice(Type).empty)
     #   @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
@@ -312,8 +312,9 @@ module Ast
     #   @args = args.map { |arg| {nil.as(Convention), arg.as(Expr)} }
     # end
     def initialize(@location : Location, @method : ::String, @type_args : Slice(Type) = Slice(Type).empty)
+      @args = [] of Expr
     end
-    def initialize(@method : ::String, @args : Args? = nil, @type_args : Slice(Type) = Slice(Type).empty)
+    def initialize(@method : ::String, @args : Args, @type_args : Slice(Type) = Slice(Type).empty)
       if @type_args && @type_args.size > 0
         @location = @type_args[0].location -(@method.size + 1)
       elsif @args && @args.size > 0
@@ -351,6 +352,9 @@ module Ast
     property args : Args
     def initialize(@location : Location, @type : Type, @args : Args)
     end
+    def type_args
+      type.type_args
+    end
     def to_s(io : IO)
       io << "#{type}"
       io << "(#{args.join(", ")})"
@@ -362,6 +366,9 @@ module Ast
     property type : Type
     property call : Call
     def initialize(@location : Location, @type : Type, @call : Call)
+    end
+    def type_args
+      type.type_args
     end
     def to_s(io : IO)
       io << "#{type}."
@@ -421,6 +428,20 @@ module Ast
       io << "while #{condition}\n#{body}\nend"
     end
   end
+  struct FieldAccess < Expr
+    property location : Location
+    property object : Cell(Expr)
+    property field : ::String
+    def initialize(@location : Location, @object : Cell(Expr), @field : ::String)
+    end
+    def initialize(@location : Location, object : Expr, field : ::String)
+      @object = Cell.new(object.as(Expr))
+      @field = field
+    end
+    def to_s(io : IO)
+      io << "#{object.value}.#{field}"
+    end
+  end
   struct Return < Expr
     property location : Location
     property value : Cell(Expr)
@@ -430,7 +451,7 @@ module Ast
       @value = Cell.new(value.as(Expr))
     end
     def to_s(io : IO)
-      io << "return #{value}"
+      io << "return #{value.value}"
     end
   end
   struct Break < Expr
@@ -748,6 +769,13 @@ module Ast
     def return_convention
       signature.return_convention
     end
+    def body?
+      if self.responds_to?(:body)
+        self.body
+      else
+        nil
+      end
+    end
   end
 
   struct ExternalFunction < TopLevelItem
@@ -862,10 +890,24 @@ module Ast
       new(excludes: Slice[trait])
     end
     def +(trait : Type)
-      new(@includes.push(trait), @excludes)
+      incl = Slice(Type).new(
+        Pointer(Type).malloc(@includes.size + 1), 
+        @includes.size + 1)
+      incl.copy_from(@includes)
+      incl[@includes.size] = trait
+      @includes = incl
+      self
+      # new(@includes.push(trait), @excludes)
     end
     def -(trait : Type)
-      new(@includes, @excludes.push(trait))
+      excl = Slice(Type).new(
+        Pointer(Type).malloc(@excludes.size + 1), 
+        @excludes.size + 1)
+      excl.copy_from(@excludes)
+      excl[@excludes.size] = trait
+      @excludes = excl
+      self
+      # new(@includes, @excludes.push(trait))
     end
     def empty?
       includes.empty? && excludes.empty?

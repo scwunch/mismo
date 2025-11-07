@@ -124,18 +124,18 @@ class FunctionDef
   property parameters : ::Array(Parameter) = [] of Parameter
   property return_mode : Mode = Mode::Move
   property return_type : Type = Type.nil
-  property body : ::Array(Hir) = [] of Hir
+  property body : Ast::Expr = Ast::Block.empty
   @external_implementation : Bool = false
-  def body=(body : ::Array(Hir)) ; @body = body ; end
-  def body=(body : Hir) 
-    case body
-    when Hir::Block
-      @body = body.statements
-    else
-      @body = [body]
-    end
-  end
-  def initialize(@location : Location, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @parameters : ::Array(Parameter) = [] of Parameter, @return_type : Type = Type.nil, @body = [] of Hir)
+  # def body=(body : ::Array(Ast::Expr)) ; @body = body ; end
+  # def body=(body : Ast::Expr) 
+  #   case body
+  #   when Ast::Block
+  #     @body = body.statements
+  #   else
+  #     @body = [body]
+  #   end
+  # end
+  def initialize(@location : Location, @name : String, @type_params : ::Slice(TypeParameter) = ::Slice(TypeParameter).empty, @parameters : ::Array(Parameter) = [] of Parameter, @return_mode : Mode = Mode::Move, @return_type : Type = Type.nil, @body : Ast::Expr = Ast::Block.empty)
   end
 
   def to_s(io : IO)

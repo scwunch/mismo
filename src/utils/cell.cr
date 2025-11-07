@@ -36,21 +36,21 @@ end
 #   self == other.value
 
 
-struct Slice(T)
-  def push!(value)
-    @pointer = @pointer.realloc(@size + 1)
-    @pointer[@size] = value
-    @size += 1
-    self
-  end
-  def push(value)
-    ptr = Pointer(T).malloc(@size + 1)
-    copy = self.class.new(ptr, @size + 1)
-    copy.copy_from(self)
-    copy[@size] = value
-    copy
-  end
-end
+# struct Slice(T)
+#   def push!(value)
+#     @pointer = @pointer.realloc(@size + 1)
+#     @pointer[@size] = value
+#     @size += 1
+#     self
+#   end
+#   def push(value)
+#     ptr = Pointer(T).malloc(@size + 1)
+#     copy = self.class.new(ptr, @size + 1)
+#     copy.copy_from(self)
+#     copy[@size] = value
+#     copy
+#   end
+# end
 
 macro push!(slice, value)
   ptr = {{slice}}.@pointer.realloc({{slice}}.@size + 1)
@@ -65,6 +65,17 @@ end
 # end
 
 class Array(T)
+  def self.from_slice(slice : Slice(T), capacity : Int = slice.size)
+    # new(slice.size, capacity, slice.@pointer)
+    new(slice, capacity)
+  end
+
+  def initialize(slice : Slice(T), capacity : Int = slice.size)
+    @buffer = slice.@pointer
+    @size = slice.size
+    @capacity = capacity
+  end
+
   # publicize the #to_unsafe_slice private defs
   def to_unsafe_slice
     Slice.new(@buffer, size)
@@ -74,4 +85,5 @@ class Array(T)
     start, count = normalize_start_and_count(start, count)
     Slice.new(@buffer + start, count)
   end
+
 end

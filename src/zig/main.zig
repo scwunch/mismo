@@ -116,21 +116,29 @@ pub fn __zig_string2float_0(string: []const u8) f64 {
 }
 
 /// Pointer/Slice Allocation
-pub fn __zig_alloc_0(comptime T: type, size: usize) []T {
+pub fn __zig_alloc(comptime T: type, size: usize) []T {
     return debug_allocator.alloc(T, size) catch unreachable;
 }
-pub fn __zig_free_0(comptime T: type, ptr: []T) void {
-    debug_allocator.free(ptr);
-}
-pub fn __zig_slice_size_0(comptime T: type, slice: []const T) usize {
-    return slice.len;
-}
-pub fn __zig_slice2ptr_0(comptime T: type, slice: []T) *T {
+pub fn __zig_slice2ptr(comptime T: type, slice: []T) *T {
     return @ptrCast(slice);
 }
-pub fn __zig_ptr2slice_0(comptime T: type, ptr: *T, size: usize) []T {
-    return ptr[0..size];
+pub fn __zig_ptr2slice(comptime T: type, ptr: *T, size: usize) []T {
+    return @as([*]T, @ptrCast(ptr))[0..size];
 }
+
+pub fn __zig_free_0(ptr: anytype) void {
+    debug_allocator.free(ptr);
+}
+pub fn __zig_slice_size_0(slice: anytype) usize {
+    return slice.len;
+}
+// pub fn __zig_slice2ptr_0(slice: anytype) *std.meta.Child(@TypeOf(slice)) {
+//     return @ptrCast(slice);
+// }
+// pub fn __zig_ptr2slice_0(ptr: anytype, size: usize) []std.meta.Child(@TypeOf(ptr)) {
+//     const T = std.meta.Child(@TypeOf(ptr));
+//     return @as([*]T, @ptrCast(ptr))[0..size];
+// }
 
 fn string_from_literal(comptime literal: []const u8) String_t {
     const buffer = debug_allocator.dupe(u8, literal) catch unreachable;
@@ -159,6 +167,13 @@ pub fn Array_t(comptime T0: type) type {
     size: usize
   };
 }
+pub fn Option_t(comptime T0: type) type {
+  return union(enum) {
+    Some: struct {T0},
+    None: struct {},
+    
+  };
+}
 
 pub fn main_0() void {
   return @"block$1":  {
@@ -181,6 +196,8 @@ pub fn main_0() void {
     var nat: usize = undefined; nat = nat_0(1);
     var int: isize = undefined; int = -2;
     var float: f64 = undefined; float = 3.14;
+    print_0(generic_0(string_from_literal("IT WORKED!!!")));
+    drop_0(string_from_literal("drop me"));
     print_0(string_1(@"+_1"(@"bool", nat)));
     print_0(string_0(@"-_0"(nat, int)));
     print_0(string_0(@"/_0"(int, @"bool")));
@@ -188,7 +205,12 @@ pub fn main_0() void {
     print_0(string_0(@"/_2"(nat, int)));
     print_0(string_0(@"/_3"(int, nat)));
     print_0(string_0(@"/_4"(int, int)));
-    break :@"block$1" print_0(string_2(@"/_5"(float, float)));
+    print_0(string_2(@"/_5"(float, float)));
+    var slice: []String_t = undefined; slice = __zig_alloc(String_t, nat_0(10));
+    print_1(size_0(slice));
+    free_0(slice);
+    var opt: Option_t(isize) = undefined; opt = @"Option.Some_0"(5);
+    break :@"block$1" print_0(string_from_literal("done"));
   };
 }
 pub fn string_0(self: isize) String_t {
@@ -200,8 +222,14 @@ pub fn string_1(self: usize) String_t {
 pub fn string_2(self: f64) String_t {
   return __zig_float2string_0(self);
 }
-pub fn print_0(str: String_t) void {
-  return __zig_print_0(str);
+pub fn string_3(self: String_t) String_t {
+  return self;
+}
+pub fn print_0(val: String_t) void {
+  return __zig_print_0(string_3(val));
+}
+pub fn print_1(val: usize) void {
+  return __zig_print_0(string_1(val));
 }
 pub fn @"<_0"(self: isize, other: isize) bool {
   return __zig_lt_0(self, other);
@@ -220,6 +248,15 @@ pub fn nat_1(self: bool) usize {
     if (self) break :@"block$1" 1;
     break :@"block$1" 0;
   });
+}
+pub fn generic_0(t: String_t) String_t {
+  return t;
+}
+pub fn drop_0(self: String_t) void {
+  return drop_1(bytes_0(self));
+}
+pub fn drop_1(self: Array_t(u8)) void {
+  return free_1(buffer_0(self));
 }
 pub fn @"-_0"(self: usize, other: isize) isize {
   return __zig_sub_int_0(int_0(self), other);
@@ -242,6 +279,23 @@ pub fn @"/_4"(self: isize, other: isize) isize {
 pub fn @"/_5"(self: f64, other: f64) f64 {
   return __zig_div_float_0(self, other);
 }
+pub fn size_0(self: []String_t) usize {
+  return __zig_slice_size_0(self);
+}
+pub fn free_0(self: []String_t) void {
+  return __zig_free_0(self);
+}
+pub fn free_1(self: []u8) void {
+  return __zig_free_0(self);
+}
+pub fn @"Option.Some_0"(@"0": isize) Option_t(isize) {
+  return @"block$1":  {
+    
+  };
+}
+pub fn bytes_0(self: String_t) Array_t(u8) {
+  return self.bytes;
+}
 pub fn int_0(self: usize) isize {
   return __zig_nat2int_0(self);
 }
@@ -250,4 +304,7 @@ pub fn int_1(self: bool) isize {
     if (self) break :@"block$1" 1;
     break :@"block$1" 0;
   };
+}
+pub fn buffer_0(self: Array_t(u8)) []u8 {
+  return self.buffer;
 }
