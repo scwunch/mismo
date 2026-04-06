@@ -1,0 +1,27 @@
+pub enum TokenKind {
+  Identifier,
+  IntLiteral,
+  FloatLiteral,
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  Comma,
+  Semicolon,
+  Plus,
+  Minus,
+  Star,
+  Slash,
+  Equals,
+  EOF,
+}
+
+pub struct Token {
+  kind: TokenKind,
+  lexeme: string,
+}
+
+pub fn lex(_source: string) -> Slice<Token> {
+  let tokens: Slice<Token> = []
+  tokens
+}

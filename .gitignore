@@ -1,0 +1,8 @@
+# Dependencies
+target/
+
+# IDE
+.cursor/
+
+# Project-specific
+AGENTS.md

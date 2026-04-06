@@ -1,0 +1,5 @@
+import "error"
+
+pub fn lower_ast() -> bool {
+  true
+}

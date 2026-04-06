@@ -1,0 +1,32 @@
+import "go:fmt"
+import "go:os"
+
+import "lexer"
+import "parser"
+
+fn main() {
+  if os.Args.length() < 2 {
+    fmt.Println("Usage: mismo <input_file>")
+    return
+  }
+
+  let arg = os.Args.get(1)
+  match arg {
+    Some(path) => {
+      let data = os.ReadFile(path)
+      match data {
+        Ok(file_data) => {
+          let source_str = file_data as string
+          let tokens = lexer.lex(source_str)
+          fmt.Println(f"Lexed {tokens.length()} tokens")
+
+          let ast = parser.parse(tokens)
+          fmt.Println(f"Parsed {ast}")
+          fmt.Println("Compilation successful (placeholder)")
+        },
+        Err(_) => fmt.Println("Error: could not read file"),
+      }
+    },
+    None => fmt.Println("Error: no input file"),
+  }
+}

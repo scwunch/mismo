@@ -1,0 +1,5 @@
+import "lexer"
+
+pub fn parse(tokens: Slice<lexer.Token>) -> int {
+  tokens.length()
+}

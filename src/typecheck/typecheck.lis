@@ -1,0 +1,5 @@
+import "error"
+
+pub fn typecheck() -> bool {
+  true
+}
