@@ -1,8 +1,8 @@
-# Dependencies
+# output
 target/
 
 # IDE
 .cursor/
 
-# Project-specific
+# Personal
 AGENTS.md

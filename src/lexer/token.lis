@@ -1,0 +1,38 @@
+pub enum Token {
+  Identifier(string),
+  IntLiteral(int),
+  FloatLiteral(float64),
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  Comma,
+  Semicolon,
+  Plus,
+  Minus,
+  Star,
+  Slash,
+  Equals,
+  EOF,
+}
+// impl Token {
+//   pub fn to_string(self) -> string {
+//     match self {
+//       Token.Identifier(ident) => ident,
+//       Token.IntLiteral(i) => f"{i}",
+//       Token.FloatLiteral(f) => f"{f}",
+//       Token.LeftParen => "(",
+//       Token.RightParen => ")",
+//       Token.LeftBrace => "{",
+//       Token.RightBrace => "}",
+//       Token.Comma => ",",
+//       Token.Semicolon => ";",
+//       Token.Plus => "+",
+//       Token.Minus => "-",
+//       Token.Star => "*",
+//       Token.Slash => "/",
+//       Token.Equals => "=",
+//       Token.EOF => "EOF",
+//     }
+//   }
+// }

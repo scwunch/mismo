@@ -1,32 +1,56 @@
 import "go:fmt"
 import "go:os"
 
-import "lexer"
-import "parser"
+import "lexer" 
+// import "parser"
+
+
+// fn dbg<T>(x: T) -> T {
+//   fmt.Println(x)
+//   x
+// }
 
 fn main() {
-  if os.Args.length() < 2 {
-    fmt.Println("Usage: mismo <input_file>")
-    return
-  }
-
-  let arg = os.Args.get(1)
-  match arg {
-    Some(path) => {
+  match os.Args {
+    [_] => {
+      fmt.Println("Usage: mismo <input_file>")
+      return
+    },
+    [_, "--test", ..rest] => {
+      fmt.Println("Running tests...")
+      run_tests(rest)
+      return
+    },
+    [_, path] => {
       let data = os.ReadFile(path)
       match data {
         Ok(file_data) => {
           let source_str = file_data as string
           let tokens = lexer.lex(source_str)
           fmt.Println(f"Lexed {tokens.length()} tokens")
-
-          let ast = parser.parse(tokens)
-          fmt.Println(f"Parsed {ast}")
-          fmt.Println("Compilation successful (placeholder)")
         },
-        Err(_) => fmt.Println("Error: could not read file"),
+        Err(e) => fmt.Println(e),
       }
     },
-    None => fmt.Println("Error: no input file"),
+    _ => fmt.Println("Error: no input file provided"),
+  }
+}
+
+fn run_tests(tests: Slice<string>) {
+  let test_dict = Map.from([
+    ("lexer", lexer.test),
+  ])
+
+  if tests.is_empty() {
+    for (_, test_fn) in test_dict {
+      test_fn()
+    }
+  } else {
+    for test in tests {
+      match test_dict.get(test) {
+        Some(test_fn) => test_fn(),
+        None => fmt.Println(f"Test '{test}' not found"),
+      }
+    }
   }
 }
