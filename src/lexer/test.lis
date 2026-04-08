@@ -2,16 +2,9 @@ import "go:fmt"
 
 pub fn test() {
   fmt.Println("Lexer tests...")
-  let tests = [
-    "1 + 1",
-    "1 + 2 * 3",
-    "1 + 2 * 3 + 4",
-    "1 + 2 * 3 + 4 + 5",
-    "1 + 2 * 3 + 4 + 5 + 6",
-    "1 + 2 * 3 + 4 + 5 + 6 + 7",
-    "1 + 2 * 3 + 4 + 5 + 6 + 7 + 8",
-    "1 + 2 * 3 + 4 + 5 + 6 + 7 + 8 + 9",
-    "1 + 2 * 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10",
-  ]
-  fmt.Println(tests.join(", "))
+  let mut lexer = Lexer.new("this, is a test")
+  for i in 0..10 {
+    fmt.Println(lexer.next().kind)
+    
+  }
 }

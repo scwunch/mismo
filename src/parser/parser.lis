@@ -1,5 +1,11 @@
 import "lexer"
+type Lexer = lexer.Lexer
+type Token = lexer.Token
+type Span = lexer.Span
 
-pub fn parse(tokens: Slice<lexer.Token>) -> int {
-  tokens.length()
+pub struct Parser {
+  lexer: Lexer
+}
+impl Parser {
+  
 }

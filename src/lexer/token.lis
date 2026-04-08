@@ -1,38 +1,301 @@
-pub enum Token {
-  Identifier(string),
+pub struct Token {
+  span: Span,
+  kind: TokenKind,
+}
+
+pub struct Span {
+  start: uint32,
+  end: uint32,
+}
+
+pub enum TokenKind {
+  BeginFile,
+  Nil,
+  Bool(bool),
   IntLiteral(int),
   FloatLiteral(float64),
+  StringLiteral(string),
+  Identifier(string),
   LeftParen,
   RightParen,
   LeftBrace,
   RightBrace,
+  LeftBracket,
+  RightBracket,
+  Dot,
   Comma,
+  Colon,
   Semicolon,
+  Newline {indent: uint32},
+  Keyword(Keyword),
+  Tilde,
+  Bang,
+  At,
+  Hashtag,
+  Dollarsign,
+  Percent,
+  Caret,
+  Ampersand,
+  Star,
   Plus,
   Minus,
-  Star,
-  Slash,
   Equals,
+  Pipe,
+  Backslash,
+  LessThan,
+  GreaterThan,
+  Question,
+  Slash,
   EOF,
 }
-// impl Token {
-//   pub fn to_string(self) -> string {
-//     match self {
-//       Token.Identifier(ident) => ident,
-//       Token.IntLiteral(i) => f"{i}",
-//       Token.FloatLiteral(f) => f"{f}",
-//       Token.LeftParen => "(",
-//       Token.RightParen => ")",
-//       Token.LeftBrace => "{",
-//       Token.RightBrace => "}",
-//       Token.Comma => ",",
-//       Token.Semicolon => ";",
-//       Token.Plus => "+",
-//       Token.Minus => "-",
-//       Token.Star => "*",
-//       Token.Slash => "/",
-//       Token.Equals => "=",
-//       Token.EOF => "EOF",
-//     }
-//   }
-// }
+
+pub enum Keyword {
+  And,
+  Or,
+  Not,
+  In,
+  Is,
+  IsNot,
+  NotIn,
+  If,
+  Else,
+  For,
+  Break,
+  Continue,
+  Return,
+}
+impl Keyword {
+  pub fn string(self) -> string {
+    match self {
+      Keyword.And => "and",
+      Keyword.Or => "or",
+      Keyword.Not => "not",
+      Keyword.In => "in",
+      Keyword.Is => "is",
+      Keyword.IsNot => "is not",
+      Keyword.NotIn => "not in",
+      Keyword.If => "if",
+      Keyword.Else => "else",
+      Keyword.For => "for",
+      Keyword.Break => "break",
+      Keyword.Continue => "continue",
+      Keyword.Return => "return",
+    }
+  }
+}
+
+impl TokenKind {
+  pub fn string(self) -> string {
+    match self {
+      TokenKind.BeginFile => "<begin_file>",
+      TokenKind.Nil => "nil",
+      TokenKind.Bool(b) => f"{b}",
+      TokenKind.IntLiteral(i) => f"{i}",
+      TokenKind.FloatLiteral(f) => f"{f}",
+      TokenKind.StringLiteral(s) => s,
+      TokenKind.Identifier(ident) => ident,
+      TokenKind.LeftParen => "(",
+      TokenKind.RightParen => ")",
+      TokenKind.LeftBrace => "{",
+      TokenKind.RightBrace => "}",
+      TokenKind.LeftBracket => "[",
+      TokenKind.RightBracket => "]",
+      TokenKind.Dot => ".",
+      TokenKind.Comma => ",",
+      TokenKind.Colon => ":",
+      TokenKind.Semicolon => ";",
+      TokenKind.Newline{indent} => f"\\n({indent})",
+      TokenKind.Keyword(keyword) => f"{keyword}",
+      TokenKind.Tilde => "~",
+      TokenKind.Bang => "!",
+      TokenKind.At => "@",
+      TokenKind.Hashtag => "#",
+      TokenKind.Dollarsign => "$",
+      TokenKind.Percent => "%",
+      TokenKind.Caret => "^",
+      TokenKind.Ampersand => "&",
+      TokenKind.Star => "*",
+      TokenKind.Plus => "+",
+      TokenKind.Minus => "-",
+      TokenKind.Equals => "=",
+      TokenKind.Pipe => "|",
+      TokenKind.Backslash => "\\",
+      TokenKind.LessThan => "<",
+      TokenKind.GreaterThan => ">",
+      TokenKind.Question => "?",
+      TokenKind.Slash => "/",
+      TokenKind.EOF => "EOF",
+    }
+  }
+}
+
+impl Span {
+  pub fn string(self) -> string {
+    f"{self.start}:{self.end}"
+  }
+}
+
+impl Token {
+  pub fn new(span: Span, kind: TokenKind) -> Token {
+    Token { span, kind }
+  }
+
+  pub fn string(self) -> string {
+    f"Token({self.span} {self.kind})"
+  }
+
+  // ===============
+  //  constructors
+  // ===============
+  pub fn begin_file() -> Token { 
+    Token.new(Span { start: 0, end: 0 }, TokenKind.BeginFile)
+  }
+
+  pub fn nil(start: uint32, end: uint32) -> Token {
+    Token.new(Span{ start, end }, TokenKind.Nil)
+  }
+
+  pub fn bool(start: uint32, end: uint32, val: bool) -> Token {
+    Token.new(Span { start, end }, TokenKind.Bool(val))
+  }
+
+  pub fn int(start: uint32, end: uint32, val: int) -> Token {
+    Token.new(Span { start, end }, TokenKind.IntLiteral(val))
+  }
+
+  pub fn float(start: uint32, end: uint32, val: float64) -> Token {
+    Token.new(Span { start, end }, TokenKind.FloatLiteral(val))
+  }
+
+  pub fn identifier(start: uint32, end: uint32, val: string) -> Token {
+    Token.new(Span { start, end }, TokenKind.Identifier(val))
+  }
+
+  pub fn left_paren(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.LeftParen)
+  }
+
+  pub fn right_paren(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.RightParen)
+  }
+
+  pub fn left_brace(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.LeftBrace)
+  }
+
+  pub fn right_brace(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.RightBrace)
+  }
+
+  pub fn left_bracket(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.LeftBracket)
+  }
+
+  pub fn right_bracket(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.RightBracket)
+  }
+
+  pub fn dot(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Dot)
+  }
+
+  pub fn comma(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Comma)
+  }
+
+  pub fn semicolon(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Semicolon)
+  }
+
+  pub fn plus(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Plus)
+  }
+
+  pub fn minus(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Minus)
+  }
+
+  pub fn star(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Star)
+  }
+
+  pub fn slash(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Slash)
+  }
+
+  pub fn equals(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Equals)
+  }
+
+  pub fn eof(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.EOF)
+  }
+
+  pub fn string_literal(start: uint32, end: uint32, val: string) -> Token {
+    Token.new(Span { start, end }, TokenKind.StringLiteral(val))
+  }
+
+  pub fn colon(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Colon)
+  }
+
+  pub fn newline(start: uint32, indent: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Newline { indent })
+  }
+
+  pub fn tilde(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Tilde)
+  }
+
+  pub fn bang(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Bang)
+  }
+
+  pub fn at(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.At)
+  }
+
+  pub fn hashtag(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Hashtag)
+  }
+
+  pub fn dollar(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Dollarsign)
+  }
+
+  pub fn percent(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Percent)
+  }
+
+  pub fn caret(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Caret)
+  }
+
+  pub fn ampersand(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Ampersand)
+  }
+
+  pub fn pipe(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Pipe)
+  }
+
+  pub fn backslash(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Backslash)
+  }
+
+  pub fn less_than(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.LessThan)
+  }
+
+  pub fn greater_than(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.GreaterThan)
+  }
+
+  pub fn question(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 1 }, TokenKind.Question)
+  }
+
+  pub fn keyword(start: uint32, end: uint32, kw: Keyword) -> Token {
+    Token.new(Span { start, end }, TokenKind.Keyword(kw))
+  }
+}

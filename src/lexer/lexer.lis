@@ -1,17 +1,53 @@
+import "go:fmt"
 
-
-pub fn lex(_source: string) -> Slice<Token> {
-  let tokens: Slice<Token> = []
-  tokens
+fn dbg<T>(x: T) -> T {
+  fmt.Println(x)
+  x
 }
 
 pub struct Lexer {
-  pub source: string,
-  pub tokens: Slice<Token>,
+  pub source: Slice<byte>,
+  pub index: uint32,
+  current_token: Token
 }
-
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    Lexer { source: source, tokens: [] }
+    Lexer { 
+      source: source as Slice<byte>, 
+      index: 0,
+      current_token: Token.begin_file(),
+     }
   }
+
+  pub fn next(self: Ref<Lexer>) -> Token {
+    let tok = self.current_token
+    match self.source[self.index as int] {
+      '\n' => dbg('\n'),
+      ',' => self.current_token = Token.comma(self.index),
+      '.' => self.current_token = Token.dot(self.index),
+      c if is_whitespace(c as rune) => {
+        self.index += 1
+        return self.next()
+      },
+      c if is_alphanumeric(c as rune) => {
+        self.current_token = Token.identifier(self.index, self.index + 1, [c] as string)
+      },
+      c => {
+        dbg(f"Unhandled character: {c as rune}")
+      }
+    }
+    self.index += 1
+    return tok
+  }
+}
+
+fn is_whitespace(c: rune) -> bool {
+  c == ' ' || c == '\t'
+}
+
+fn is_alphanumeric(c: rune) -> bool {
+  return c == '_' || 
+    (c >= 'a' && c <= 'z') || 
+    (c >= 'A' && c <= 'Z') || 
+    (c >= '0' && c <= '9')
 }
