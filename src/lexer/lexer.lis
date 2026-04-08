@@ -1,53 +1,302 @@
 import "go:fmt"
 
-fn dbg<T>(x: T) -> T {
-  fmt.Println(x)
-  x
+pub struct Lexer {
+  pub source: Slice<rune>,
+  pub index: uint32,
+  current_token: Token,
 }
 
-pub struct Lexer {
-  pub source: Slice<byte>,
-  pub index: uint32,
-  current_token: Token
-}
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    Lexer { 
-      source: source as Slice<byte>, 
+    let lexer = Lexer { 
+      source: source as Slice<rune>, 
       index: 0,
       current_token: Token.begin_file(),
-     }
+    }
+    lexer
+  }
+
+  pub fn peek(self: Ref<Lexer>) -> Token {
+    self.current_token
   }
 
   pub fn next(self: Ref<Lexer>) -> Token {
     let tok = self.current_token
-    match self.source[self.index as int] {
-      '\n' => dbg('\n'),
-      ',' => self.current_token = Token.comma(self.index),
-      '.' => self.current_token = Token.dot(self.index),
-      c if is_whitespace(c as rune) => {
+    
+    let c = self.peek_char()
+    
+    match c {
+      0 => self.current_token = Token.eof(self.index),
+      '\n' => {
+        self.index += 1
+        let indent = self.count_indent()
+        self.current_token = Token.newline(self.index - 1, indent)
+      },
+      ' ' | '\t' => {
         self.index += 1
         return self.next()
       },
-      c if is_alphanumeric(c as rune) => {
-        self.current_token = Token.identifier(self.index, self.index + 1, [c] as string)
+      ',' => {
+        self.index += 1
+        self.current_token = Token.comma(self.index - 1)
       },
-      c => {
-        dbg(f"Unhandled character: {c as rune}")
+      '.' => {
+        self.index += 1
+        self.current_token = Token.dot(self.index - 1)
+      },
+      '(' => {
+        self.index += 1
+        self.current_token = Token.left_paren(self.index - 1)
+      },
+      ')' => {
+        self.index += 1
+        self.current_token = Token.right_paren(self.index - 1)
+      },
+      '{' => {
+        self.index += 1
+        self.current_token = Token.left_brace(self.index - 1)
+      },
+      '}' => {
+        self.index += 1
+        self.current_token = Token.right_brace(self.index - 1)
+      },
+      '[' => {
+        self.index += 1
+        self.current_token = Token.left_bracket(self.index - 1)
+      },
+      ']' => {
+        self.index += 1
+        self.current_token = Token.right_bracket(self.index - 1)
+      },
+      ':' => {
+        self.index += 1
+        self.current_token = Token.colon(self.index - 1)
+      },
+      ';' => {
+        self.index += 1
+        self.current_token = Token.semicolon(self.index - 1)
+      },
+      '"' | '\'' => {
+        self.current_token = self.read_string(self.index)
+      },
+      c if is_digit(c) => {
+        self.current_token = self.read_number(self.index)
+      },
+      c if is_identifier_start(c) => {
+        self.current_token = self.read_word(self.index)
+      },
+      _ => {
+        self.index += 1
+        self.current_token = self.token_for_operator(self.index - 1)
+      },
+    }
+
+    tok
+  }
+
+  fn peek_char(self: Ref<Lexer>) -> rune {
+    if self.index >= self.source.length() as uint32 {
+      return 0
+    }
+    self.source[self.index as int]
+  }
+
+  fn peek_char_at(self: Ref<Lexer>, offset: uint32) -> rune {
+    let pos = self.index + offset
+    if pos >= self.source.length() as uint32 {
+      return 0
+    }
+    self.source[pos as int]
+  }
+
+  fn count_indent(self: Ref<Lexer>) -> uint32 {
+    let mut indent: uint32 = 0
+    while true {
+      let c = self.peek_char()
+      match c {
+        ' ' => {
+          indent += 1
+          self.index += 1
+        },
+        '\t' => {
+          indent += 1
+          self.index += 1
+        },
+        '-' => {
+          if self.peek_char_at(1) == '-' {
+            while true {
+              let nc = self.peek_char()
+              if nc == 0 || nc == '\n' {
+                break
+              }
+              self.index += 1
+            }
+          } else {
+            break
+          }
+        },
+        '\n' => {
+          self.index += 1
+        },
+        0 => {
+          break
+        },
+        _ => {
+          break
+        },
       }
     }
+    indent
+  }
+
+  fn read_word(self: Ref<Lexer>, start: uint32) -> Token {
+    while true {
+      let c = self.peek_char()
+      if is_alphanumeric(c) {
+        self.index += 1
+      } else {
+        break
+      }
+    }
+    let word = self.source[start as int..self.index as int] as string
+    
+    match parse_keyword(word) {
+      Some(kw) => Token.keyword(start, self.index, kw),
+      None => Token.identifier(start, self.index, word),
+    }
+  }
+
+  fn read_number(self: Ref<Lexer>, start: uint32) -> Token {
+    let mut is_float = false
+    let mut int_part: int = 0
+    
+    while true {
+      let c = self.peek_char()
+      if is_digit(c) {
+        int_part = int_part * 10 + (c as int - '0' as int)
+        self.index += 1
+      } else if c == '_' {
+        self.index += 1
+      } else if c == '.' {
+        if is_digit(self.peek_char_at(1)) {
+          is_float = true
+          self.index += 1
+          break
+        } else {
+          break
+        }
+      } else {
+        break
+      }
+    }
+
+    if is_float {
+      let mut float_part: float64 = 0.0
+      let mut decimal_places: float64 = 1.0
+      while true {
+        let c = self.peek_char()
+        if is_digit(c) {
+          decimal_places = decimal_places * 10.0
+          float_part = float_part + (c as float64 - '0' as float64) / decimal_places
+          self.index += 1
+        } else if c == '_' {
+          self.index += 1
+        } else {
+          break
+        }
+      }
+      let val = int_part as float64 + float_part
+      Token.float(start, self.index, val)
+    } else {
+      Token.int(start, self.index, int_part)
+    }
+  }
+
+  fn read_string(self: Ref<Lexer>, start: uint32) -> Token {
+    let quote = self.source[self.index as int]
     self.index += 1
-    return tok
+    let mut quote_width = 1
+    
+    while self.peek_char() == quote {
+      quote_width += 1
+      self.index += 1
+    }
+
+    if quote_width == 2 {
+      return Token.string_literal(start, self.index, "")
+    }
+
+    let mut result = ""
+    while true {
+      let c = self.peek_char()
+      match c {
+        0 | '\n' => break,
+        _ if c == quote => {
+          self.index += 1
+          break
+        },
+        '\\' => {
+          self.index += 1
+          let ec = self.peek_char()
+          match ec {
+            'n' => { result = result + "\n"; self.index += 1; },
+            't' => { result = result + "\t"; self.index += 1; },
+            'r' => { result = result + "\r"; self.index += 1; },
+            '\\' => { result = result + "\\"; self.index += 1; },
+            '"' => { result = result + "\""; self.index += 1; },
+            '\'' => { result = result + "'"; self.index += 1; },
+            _ => { result = result + [ec] as string; self.index += 1; },
+          }
+        },
+        _ => {
+          result = result + [c] as string
+          self.index += 1
+        },
+      }
+    }
+
+    Token.string_literal(start, self.index, result)
+  }
+
+  fn token_for_operator(self: Ref<Lexer>, start: uint32) -> Token {
+    let c = self.source[start as int]
+    match c {
+      '~' => Token.tilde(start),
+      '!' => Token.bang(start),
+      '@' => Token.at(start),
+      '#' => Token.hashtag(start),
+      '$' => Token.dollar(start),
+      '%' => Token.percent(start),
+      '^' => Token.caret(start),
+      '&' => Token.ampersand(start),
+      '*' => Token.star(start),
+      '+' => Token.plus(start),
+      '-' => Token.minus(start),
+      '=' => Token.equals(start),
+      '|' => Token.pipe(start),
+      '\\' => Token.backslash(start),
+      '<' => Token.less_than(start),
+      '>' => Token.greater_than(start),
+      '?' => Token.question(start),
+      '/' => Token.slash(start),
+      _ => Token.identifier(start, start + 1, [c] as string),
+    }
   }
 }
 
-fn is_whitespace(c: rune) -> bool {
-  c == ' ' || c == '\t'
+fn is_digit(c: rune) -> bool {
+  c >= '0' && c <= '9'
 }
 
 fn is_alphanumeric(c: rune) -> bool {
-  return c == '_' || 
+  c == '_' || 
     (c >= 'a' && c <= 'z') || 
     (c >= 'A' && c <= 'Z') || 
     (c >= '0' && c <= '9')
+}
+
+fn is_identifier_start(c: rune) -> bool {
+  c == '_' || 
+    (c >= 'a' && c <= 'z') || 
+    (c >= 'A' && c <= 'Z')
 }
