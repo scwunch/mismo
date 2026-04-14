@@ -259,8 +259,8 @@ impl Token {
     Token.new(Span { start, end: start + 1 }, TokenKind.Colon)
   }
 
-  pub fn newline(start: uint32, indent: uint32) -> Token {
-    Token.new(Span { start, end: start + 1 }, TokenKind.Newline { indent })
+  pub fn newline(start: uint32, end: uint32, indent: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Newline { indent })
   }
 
   pub fn tilde(start: uint32) -> Token {

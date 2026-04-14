@@ -2,7 +2,6 @@ import "go:fmt"
 import "go:os"
 
 import "lexer" 
-// import "parser"
 
 
 // fn dbg<T>(x: T) -> T {

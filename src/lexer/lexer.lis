@@ -5,15 +5,13 @@ pub struct Lexer {
   pub index: uint32,
   current_token: Token,
 }
-
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    let lexer = Lexer { 
+    Lexer { 
       source: source as Slice<rune>, 
       index: 0,
       current_token: Token.begin_file(),
     }
-    lexer
   }
 
   pub fn peek(self: Ref<Lexer>) -> Token {
@@ -22,15 +20,17 @@ impl Lexer {
 
   pub fn next(self: Ref<Lexer>) -> Token {
     let tok = self.current_token
+    let pos = self.index
     
-    let c = self.peek_char()
-    
-    match c {
-      0 => self.current_token = Token.eof(self.index),
+    match self.peek_char() {
+      0 => self.current_token = Token.eof(pos),
       '\n' => {
-        self.index += 1
         let indent = self.count_indent()
-        self.current_token = Token.newline(self.index - 1, indent)
+        self.current_token = Token.newline(pos, self.index, indent)
+      },
+      '-' if self.peek_char_at(1) == '-' => {
+        let indent = self.count_indent()
+        self.current_token = Token.newline(pos, self.index, indent)
       },
       ' ' | '\t' => {
         self.index += 1
@@ -38,43 +38,43 @@ impl Lexer {
       },
       ',' => {
         self.index += 1
-        self.current_token = Token.comma(self.index - 1)
+        self.current_token = Token.comma(pos)
       },
       '.' => {
         self.index += 1
-        self.current_token = Token.dot(self.index - 1)
+        self.current_token = Token.dot(pos)
       },
       '(' => {
         self.index += 1
-        self.current_token = Token.left_paren(self.index - 1)
+        self.current_token = Token.left_paren(pos)
       },
       ')' => {
         self.index += 1
-        self.current_token = Token.right_paren(self.index - 1)
+        self.current_token = Token.right_paren(pos)
       },
       '{' => {
         self.index += 1
-        self.current_token = Token.left_brace(self.index - 1)
+        self.current_token = Token.left_brace(pos)
       },
       '}' => {
         self.index += 1
-        self.current_token = Token.right_brace(self.index - 1)
+        self.current_token = Token.right_brace(pos)
       },
       '[' => {
         self.index += 1
-        self.current_token = Token.left_bracket(self.index - 1)
+        self.current_token = Token.left_bracket(pos)
       },
       ']' => {
         self.index += 1
-        self.current_token = Token.right_bracket(self.index - 1)
+        self.current_token = Token.right_bracket(pos)
       },
       ':' => {
         self.index += 1
-        self.current_token = Token.colon(self.index - 1)
+        self.current_token = Token.colon(pos)
       },
       ';' => {
         self.index += 1
-        self.current_token = Token.semicolon(self.index - 1)
+        self.current_token = Token.semicolon(pos)
       },
       '"' | '\'' => {
         self.current_token = self.read_string(self.index)
@@ -94,59 +94,49 @@ impl Lexer {
     tok
   }
 
-  fn peek_char(self: Ref<Lexer>) -> rune {
-    if self.index >= self.source.length() as uint32 {
-      return 0
-    }
-    self.source[self.index as int]
+  fn peek_char(self) -> rune {
+    self.source.get(self.index as int).unwrap_or(0)
   }
 
-  fn peek_char_at(self: Ref<Lexer>, offset: uint32) -> rune {
-    let pos = self.index + offset
-    if pos >= self.source.length() as uint32 {
-      return 0
-    }
-    self.source[pos as int]
+  fn peek_char_at(self, offset: int) -> rune {
+    self.source.get(
+      self.index as int + offset
+    ).unwrap_or(0)
   }
 
   fn count_indent(self: Ref<Lexer>) -> uint32 {
+    // advance to next line
+    loop {
+      match self.peek_char() {
+        '\n' => break,
+        0 => return 0,
+        _ => self.index += 1,
+      }
+    }
+
     let mut indent: uint32 = 0
-    while true {
-      let c = self.peek_char()
-      match c {
-        ' ' => {
+
+    loop {
+      match self.peek_char() {
+        ' ' | '\t' => {
           indent += 1
           self.index += 1
         },
-        '\t' => {
-          indent += 1
-          self.index += 1
-        },
-        '-' => {
-          if self.peek_char_at(1) == '-' {
-            while true {
-              let nc = self.peek_char()
-              if nc == 0 || nc == '\n' {
-                break
-              }
-              self.index += 1
-            }
-          } else {
-            break
-          }
+        '-' if self.peek_char_at(1) == '-' => {
+          return self.count_indent()
         },
         '\n' => {
           self.index += 1
+          indent = 0
         },
         0 => {
-          break
+          return 0
         },
         _ => {
-          break
+          return indent
         },
       }
     }
-    indent
   }
 
   fn read_word(self: Ref<Lexer>, start: uint32) -> Token {
@@ -167,49 +157,38 @@ impl Lexer {
   }
 
   fn read_number(self: Ref<Lexer>, start: uint32) -> Token {
-    let mut is_float = false
     let mut int_part: int = 0
     
-    while true {
-      let c = self.peek_char()
-      if is_digit(c) {
-        int_part = int_part * 10 + (c as int - '0' as int)
-        self.index += 1
-      } else if c == '_' {
-        self.index += 1
-      } else if c == '.' {
-        if is_digit(self.peek_char_at(1)) {
-          is_float = true
+    loop {
+      match self.peek_char() {
+        c if is_digit(c) => {
+          int_part = int_part * 10 + (c as int - '0' as int)
+          self.index += 1
+        },
+        '_' => self.index += 1,
+        '.' if is_digit(self.peek_char_at(1)) => {
           self.index += 1
           break
-        } else {
-          break
-        }
-      } else {
-        break
+        },
+        _ => return Token.int(start, self.index, int_part),
       }
     }
 
-    if is_float {
-      let mut float_part: float64 = 0.0
-      let mut decimal_places: float64 = 1.0
-      while true {
-        let c = self.peek_char()
-        if is_digit(c) {
-          decimal_places = decimal_places * 10.0
-          float_part = float_part + (c as float64 - '0' as float64) / decimal_places
+    // parse float
+    let mut float_val = int_part as float64
+    let mut decimal_places: float64 = 1.0
+    loop {
+      match self.peek_char() {
+        '_' => self.index += 1,
+        c if is_digit(c) => {
+          decimal_places *= 10.0
+          float_val += (c - '0') as float64 / decimal_places
           self.index += 1
-        } else if c == '_' {
-          self.index += 1
-        } else {
-          break
-        }
+        },
+        _ => break,
       }
-      let val = int_part as float64 + float_part
-      Token.float(start, self.index, val)
-    } else {
-      Token.int(start, self.index, int_part)
     }
+    Token.float(start, self.index, float_val)
   }
 
   fn read_string(self: Ref<Lexer>, start: uint32) -> Token {
