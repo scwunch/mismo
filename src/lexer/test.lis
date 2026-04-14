@@ -1,4 +1,3 @@
-import "go:fmt"
 import "testing"
 
 pub fn test() {
@@ -13,7 +12,6 @@ pub fn test() {
   ])
 }
 
-// impl Equatable
 impl Span      { pub fn eq(self, other: Span) -> bool { self == other } }
 impl TokenKind { pub fn eq(self, other: TokenKind) -> bool { self == other } }
 impl Token     { pub fn eq(self, other: Token) -> bool { self == other } }
@@ -28,5 +26,142 @@ fn test_token_equality(t: Ref<testing.TestRunner>) {
   t.should_eq(Token.left_brace(0), Token.left_brace(0))
   t.shouldnt_eq(Token.left_brace(0), Token.right_brace(0))
   t.shouldnt_eq(Token.left_brace(0), Token.left_brace(99))
-  // FAIL: t.should_eq(Token.left_brace(0), Token.left_brace(99))
+}
+
+fn test_span_merge(t: Ref<testing.TestRunner>) {
+  let s1 = Span { start: 0, end: 5 }
+  let s2 = Span { start: 3, end: 10 }
+  let merged = s1.merge(s2)
+  let expected = Span { start: 0, end: 10 }
+  t.should_eq(merged, expected)
+
+  let s3 = Span { start: 10, end: 20 }
+  let s4 = Span { start: 5, end: 15 }
+  let merged2 = s3.merge(s4)
+  let expected2 = Span { start: 5, end: 20}
+  t.should_eq(merged2, expected2)
+}
+
+fn test_peek_next_char(tr: Ref<testing.TestRunner>) {
+  let lex = Lexer.new_no_init("hello")
+  let mut t = tr.*
+  t.should_be_true(lex.peek_char() == 'h', f"expected 'h', got {lex.peek_char()}")
+  let c2 = lex.peek_char_at(1)
+  t.should_be_true(c2 == 'e', f"expected 'e', got {c2}")
+  let c3 = lex.peek_char_at(5)
+  t.should_be_true(c3 == 0 as rune, f"expected 0, got {c3}")
+}
+
+fn test_read_word(t: Ref<testing.TestRunner>) {
+  let mut lex = Lexer.new("let x = 5")
+  let tok = lex.next()
+  t.should_eq(tok.kind, TokenKind.Keyword(Keyword.Let))
+
+  let tok2 = lex.next()
+  match tok2.kind {
+    TokenKind.Identifier(name) => {
+      if name != "x" {
+        t.fail(f"expected 'x', got '{name}'")
+      }
+    },
+    _ => t.fail(f"expected identifier, got {tok2.kind}"),
+  }
+
+  let tok3 = lex.next()
+  t.should_eq(tok3.kind, TokenKind.Equals)
+}
+
+fn test_read_number(t: Ref<testing.TestRunner>) {
+  let mut lex = Lexer.new("42")
+  let tok = lex.next()
+  match tok.kind {
+    TokenKind.IntLiteral(n) => {
+      if n != 42 {
+        t.fail(f"expected 42, got {n}")
+      }
+    },
+    _ => t.fail(f"expected int, got {tok.kind}"),
+  }
+
+  let mut lex2 = Lexer.new("3.14")
+  let tok2 = lex2.next()
+  match tok2.kind {
+    TokenKind.FloatLiteral(f) => {
+      if f != 3.14 {
+        t.fail(f"expected 3.14, got {f}")
+      }
+    },
+    _ => t.fail(f"expected float, got {tok2.kind}"),
+  }
+
+  let mut lex3 = Lexer.new("42_000")
+  let tok3 = lex3.next()
+  match tok3.kind {
+    TokenKind.IntLiteral(n) => {
+      if n != 42000 {
+        t.fail(f"expected 42000, got {n}")
+      }
+    },
+    _ => t.fail(f"expected int, got {tok3.kind}"),
+  }
+}
+
+fn test_read_string(t: Ref<testing.TestRunner>) {
+  let mut lex = Lexer.new("\"hello\"")
+  let tok = lex.next()
+  match tok.kind {
+    TokenKind.StringLiteral(s) => {
+      if s != "hello" {
+        t.fail(f"expected 'hello', got '{s}'")
+      }
+    },
+    _ => t.fail(f"expected string, got {tok.kind}"),
+  }
+
+  let mut lex2 = Lexer.new("\"escaped\\ntab\\t\"")
+  let tok2 = lex2.next()
+  match tok2.kind {
+    TokenKind.StringLiteral(s) => {
+      if s != "escaped\ntab\t" {
+        t.fail(f"expected 'escaped\\ntab\\t', got '{s}'")
+      }
+    },
+    _ => t.fail(f"expected string, got {tok2.kind}"),
+  }
+
+  let mut lex3 = Lexer.new("''")
+  let tok3 = lex3.next()
+  match tok3.kind {
+    TokenKind.StringLiteral(s) => {
+      if s != "" {
+        t.fail(f"expected empty string, got '{s}'")
+      }
+    },
+    _ => t.fail(f"expected empty string, got {tok3.kind}"),
+  }
+}
+
+fn test_newlines(t: Ref<testing.TestRunner>) {
+  let mut lex = Lexer.new("\n")
+  let tok = lex.next()
+  match tok.kind {
+    TokenKind.Newline{indent} => {
+      if indent != 0 {
+        t.fail(f"expected indent 0, got {indent}")
+      }
+    },
+    _ => t.fail(f"expected newline, got {tok.kind}"),
+  }
+
+  let mut lex2 = Lexer.new("  \n  x")
+  let _ = lex2.next()
+  let tok2 = lex2.next()
+  match tok2.kind {
+    TokenKind.Identifier(name) => {
+      if name != "x" {
+        t.fail(f"expected 'x', got '{name}'")
+      }
+    },
+    _ => t.fail(f"expected identifier, got {tok2.kind}"),
+  }
 }

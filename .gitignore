@@ -3,6 +3,8 @@ target/
 
 # IDE
 .cursor/
+mismo-in-lisette.code-workspace
+prelude.d.lis
 
 # Personal
 AGENTS.md

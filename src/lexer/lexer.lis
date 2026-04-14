@@ -1,4 +1,4 @@
-import "go:fmt"
+
 
 pub struct Lexer {
   pub source: Slice<rune>,
@@ -7,10 +7,20 @@ pub struct Lexer {
 }
 impl Lexer {
   pub fn new(source: string) -> Lexer {
+    let mut lex = Lexer { 
+      source: source as Slice<rune>, 
+      index: 0,
+      current_token: Token.error(0, 0, "Lexer not initialized."),
+    }
+    let _ = lex.next()  // purge error token and prime the pump
+    lex
+  }
+
+  pub fn new_no_init(source: string) -> Lexer {
     Lexer { 
       source: source as Slice<rune>, 
       index: 0,
-      current_token: Token.begin_file(),
+      current_token: Token.error(0, 0, "Lexer not initialized."),
     }
   }
 

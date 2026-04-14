@@ -4,11 +4,6 @@ import "go:os"
 import "lexer" 
 
 
-// fn dbg<T>(x: T) -> T {
-//   fmt.Println(x)
-//   x
-// }
-
 fn main() {
   match os.Args {
     [_] => {
@@ -41,6 +36,7 @@ fn run_tests(tests: Slice<string>) {
   ])
 
   if tests.is_empty() {
+    // run all tests by default if none specified
     for (_, test_fn) in test_dict {
       test_fn()
     }

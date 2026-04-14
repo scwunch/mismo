@@ -48,14 +48,25 @@ impl TestRunner {
   pub fn should_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
       self: Ref<TestRunner>, val: A, expected: B) {
     if !val.eq(expected) {
-      self.fail(f"Expected {val} to be {expected}")
+      self.fail(f"Expected {expected}, got {val}")
     }
   }
 
   pub fn shouldnt_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
       self: Ref<TestRunner>, val: A, expected: B) {
     if val.eq(expected) {
-      self.fail(f"Expected {val} to not be {expected}")
+      self.fail(f"Expected valueto not be {expected}")
+    }
+  }
+
+  pub fn should_be_true(self: Ref<TestRunner>, cond: bool, error_msg: string) {
+    if !cond  {
+      self.fail(error_msg)
+    }
+  }
+  pub fn should_be_false(self: Ref<TestRunner>, cond: bool, error_msg: string) {
+    if cond  {
+      self.fail(error_msg)
     }
   }
 }
