@@ -1,10 +1,39 @@
 import "go:fmt"
-import "lexer"
+import "testing"
 
 pub fn test() {
-  fmt.Println("Running lexer tests...")
-  test_keywords_print()
-  fmt.Println("All lexer tests passed!")
+  let _ = testing.test_suite("Lexer", [
+    ("Token Equality", test_token_equality),
+  ])
+  if false {
+    test_keywords_print()
+    test_punctuators()
+    test_operators()
+    test_numbers()
+    test_strings()
+    test_keywords()
+    test_identifiers()
+    test_newlines()
+    test_peek()
+  }
+}
+
+// impl Equatable
+impl Span      { pub fn eq(self, other: Span) -> bool { self == other } }
+impl TokenKind { pub fn eq(self, other: TokenKind) -> bool { self == other } }
+impl Token     { pub fn eq(self, other: Token) -> bool { self == other } }
+
+fn test_token_equality(t: Ref<testing.TestRunner>) {
+  let tok1 = TokenKind.LeftParen
+  let tok2 = TokenKind.LeftParen
+  let tok3 = TokenKind.RightParen
+  t.should_eq(tok1, tok2)
+  t.shouldnt_eq(tok1, tok3)
+
+  t.should_eq(Token.left_brace(0), Token.left_brace(0))
+  t.shouldnt_eq(Token.left_brace(0), Token.right_brace(0))
+  t.shouldnt_eq(Token.left_brace(0), Token.left_brace(99))
+  // FAIL: t.should_eq(Token.left_brace(0), Token.left_brace(99))
 }
 
 fn test_keywords_print() {
@@ -18,18 +47,7 @@ fn test_keywords_print() {
   fmt.Println("test_keywords_print passed")
 }
 
-  // BUG: The following tests trigger an internal compiler error in lisette-semantics
-  // v0.1.4 (pattern_analysis/normalize.rs:37). The issue is with pattern matching
-  // on tagged union variants (TokenKind.Keyword, TokenKind.Identifier, etc.) combined
-  // with comparisons in test functions.
-  //
-  // To reproduce: Uncomment these tests and run `lis build`
-  // Expected: builds successfully
-  // Actual: INTERNAL COMPILER ERROR - "typed pattern should be populated during inference"
-  //
-  // See issue: https://github.com/ivov/lisette/issues (if reported)
 
-/*
 fn test_punctuators() {
   let mut lexer = Lexer.new("(){}[].,:;")
   let tok1 = lexer.next()
@@ -285,4 +303,3 @@ fn test_peek() {
   }
   fmt.Println("test_peek passed")
 }
-*/

@@ -1,0 +1,69 @@
+import "go:fmt"
+
+pub fn test(test_name: string, test_fn: fn(Ref<TestRunner>)) -> TestRunner {
+  let t = TestRunner.new(test_name)
+  test_fn(&t)
+  t
+}
+
+pub fn test_suite(suite_name: string, tests: Slice<(string, fn(Ref<TestRunner>))>) -> bool {
+  fmt.Println(f"Test suite: {suite_name}")
+  let num_tests = tests.length()
+  let mut suite: Slice<TestRunner> = []
+  for (name, test_fn) in tests {
+    suite = suite.append(test(name, test_fn))
+  }
+  let mut passed = 0
+  for t in suite {
+    if t.passed() {
+      passed += 1
+    }
+  }
+  if passed == num_tests {
+    fmt.Println(f"All {num_tests} tests passed!")
+    true
+  } else {
+    fmt.Println(f"{passed} out of {num_tests} tests passed.")
+    false
+  }
+  false
+}
+
+pub struct TestRunner {
+  test_name: string,
+  status: bool,
+}
+impl TestRunner {
+  pub fn new(test_name: string) -> TestRunner { 
+    TestRunner{test_name, status: true} 
+  }
+
+  pub fn passed(self) -> bool { self.status }
+
+  pub fn fail(self: Ref<TestRunner>, msg: string) {
+    self.status = false
+    fmt.Println(f"{self.test_name} failed: {msg}")
+  }
+  
+  pub fn should_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
+      self: Ref<TestRunner>, val: A, expected: B) {
+    if !val.eq(expected) {
+      self.fail(f"Expected {val} to be {expected}")
+    }
+  }
+
+  pub fn shouldnt_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
+      self: Ref<TestRunner>, val: A, expected: B) {
+    if val.eq(expected) {
+      self.fail(f"Expected {val} to not be {expected}")
+    }
+  }
+}
+
+pub interface Equatable<Self: Equatable<Self, Other>, Other: Equatable<Other, Self>> {
+  fn eq(self, other: Other) -> bool
+}
+
+pub interface Testable<Self> {
+  fn should_eq(self, expected: Self, t: TestRunner)
+}
