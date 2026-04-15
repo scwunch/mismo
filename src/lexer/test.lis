@@ -53,22 +53,19 @@ fn test_peek_next_char(tr: Ref<testing.TestRunner>) {
 }
 
 fn test_read_word(t: Ref<testing.TestRunner>) {
-  let mut lex = Lexer.new("let x = 5")
-  let tok = lex.next()
+  let mut lex = Lexer.new_no_init("let x = 5")
+  let tok = lex.read_word()
   t.should_eq(tok.kind, TokenKind.Keyword(Keyword.Let))
+  t.should_eq(tok.span, Span.new(0, 3))
 
-  let tok2 = lex.next()
-  match tok2.kind {
-    TokenKind.Identifier(name) => {
-      if name != "x" {
-        t.fail(f"expected 'x', got '{name}'")
-      }
-    },
-    _ => t.fail(f"expected identifier, got {tok2.kind}"),
-  }
+  t.should_be_true(lex.peek_char() == ' ', "expected space after `let`")
+  lex.index += 1
 
-  let tok3 = lex.next()
-  t.should_eq(tok3.kind, TokenKind.Equals)
+  let tok2 = lex.read_word()
+  t.should_eq(tok2, Token.identifier(4, 5, "x"))
+
+  t.should_be_true(lex.peek_char() == ' ', "expected space after `x`")
+  lex.index += 1
 }
 
 fn test_read_number(t: Ref<testing.TestRunner>) {

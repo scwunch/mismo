@@ -1,5 +1,3 @@
-
-
 pub struct Lexer {
   pub source: Slice<rune>,
   pub index: uint32,
@@ -32,74 +30,38 @@ impl Lexer {
     let tok = self.current_token
     let pos = self.index
     
-    match self.peek_char() {
-      0 => self.current_token = Token.eof(pos),
+    self.current_token = match self.peek_char() {
+      ',' => Token.comma(pos),
+      '.' => Token.dot(pos),
+      ':' => Token.colon(pos),
+      ';' => Token.semicolon(pos),
+      '(' => Token.left_paren(pos),
+      ')' => Token.right_paren(pos),
+      '{' => Token.left_brace(pos),
+      '}' => Token.right_brace(pos),
+      '[' => Token.left_bracket(pos),
+      ']' => Token.right_bracket(pos),
+      '"' | '\'' | '`' => self.read_string(),
       '\n' => {
         let indent = self.count_indent()
-        self.current_token = Token.newline(pos, self.index, indent)
+        Token.newline(pos, self.index, indent)
       },
       '-' if self.peek_char_at(1) == '-' => {
         let indent = self.count_indent()
-        self.current_token = Token.newline(pos, self.index, indent)
+        Token.newline(pos, self.index, indent)
       },
       ' ' | '\t' => {
         self.index += 1
         return self.next()
       },
-      ',' => {
-        self.index += 1
-        self.current_token = Token.comma(pos)
-      },
-      '.' => {
-        self.index += 1
-        self.current_token = Token.dot(pos)
-      },
-      '(' => {
-        self.index += 1
-        self.current_token = Token.left_paren(pos)
-      },
-      ')' => {
-        self.index += 1
-        self.current_token = Token.right_paren(pos)
-      },
-      '{' => {
-        self.index += 1
-        self.current_token = Token.left_brace(pos)
-      },
-      '}' => {
-        self.index += 1
-        self.current_token = Token.right_brace(pos)
-      },
-      '[' => {
-        self.index += 1
-        self.current_token = Token.left_bracket(pos)
-      },
-      ']' => {
-        self.index += 1
-        self.current_token = Token.right_bracket(pos)
-      },
-      ':' => {
-        self.index += 1
-        self.current_token = Token.colon(pos)
-      },
-      ';' => {
-        self.index += 1
-        self.current_token = Token.semicolon(pos)
-      },
-      '"' | '\'' => {
-        self.current_token = self.read_string(self.index)
-      },
-      c if is_digit(c) => {
-        self.current_token = self.read_number(self.index)
-      },
-      c if is_identifier_start(c) => {
-        self.current_token = self.read_word(self.index)
-      },
-      _ => {
-        self.index += 1
-        self.current_token = self.token_for_operator(self.index - 1)
-      },
+      0 => Token.eof(pos),
+      c if is_digit(c) => self.read_number(),
+      c if is_identifier_start(c) => self.read_word(),
+      c if is_operator(c) => self.read_operator(),
+      c => Token.error(pos, self.index, f"Unhandled character: '{c}'")
     }
+
+    self.index = self.current_token.span.end
 
     tok
   }
@@ -149,8 +111,9 @@ impl Lexer {
     }
   }
 
-  fn read_word(self: Ref<Lexer>, start: uint32) -> Token {
-    while true {
+  fn read_word(self: Ref<Lexer>) -> Token {
+    let start = self.index
+    loop {
       let c = self.peek_char()
       if is_alphanumeric(c) {
         self.index += 1
@@ -160,13 +123,25 @@ impl Lexer {
     }
     let word = self.source[start as int..self.index as int] as string
     
-    match parse_keyword(word) {
+    match Keyword.parse(word) {
+      Some(Keyword.Mut) if self.peek_char_at(1) == '!' => {
+        self.index += 1
+        Token.keyword(start, self.index, Keyword.MutBang)
+      },
       Some(kw) => Token.keyword(start, self.index, kw),
-      None => Token.identifier(start, self.index, word),
+      None => match word {
+        "and" => Token.operator(start, self.index, Operator.And),
+        "or"  => Token.operator(start, self.index, Operator.Or),
+        "not" => Token.operator(start, self.index, Operator.Not),
+        "is"  => Token.operator(start, self.index, Operator.Is),
+        "in"  => Token.operator(start, self.index, Operator.In),
+        _ => Token.identifier(start, self.index, word)
+      },
     }
   }
 
-  fn read_number(self: Ref<Lexer>, start: uint32) -> Token {
+  fn read_number(self: Ref<Lexer>) -> Token {
+    let start = self.index
     let mut int_part: int = 0
     
     loop {
@@ -175,11 +150,11 @@ impl Lexer {
           int_part = int_part * 10 + (c as int - '0' as int)
           self.index += 1
         },
-        '_' => self.index += 1,
         '.' if is_digit(self.peek_char_at(1)) => {
           self.index += 1
           break
         },
+        '_' => self.index += 1,
         _ => return Token.int(start, self.index, int_part),
       }
     }
@@ -189,20 +164,21 @@ impl Lexer {
     let mut decimal_places: float64 = 1.0
     loop {
       match self.peek_char() {
-        '_' => self.index += 1,
         c if is_digit(c) => {
           decimal_places *= 10.0
           float_val += (c - '0') as float64 / decimal_places
           self.index += 1
         },
+        '_' => self.index += 1,
         _ => break,
       }
     }
     Token.float(start, self.index, float_val)
   }
 
-  fn read_string(self: Ref<Lexer>, start: uint32) -> Token {
-    let quote = self.source[self.index as int]
+  fn read_string(self: Ref<Lexer>) -> Token {
+    let start = self.index
+    let quote = self.source[start as int]
     self.index += 1
     let mut quote_width = 1
     
@@ -247,31 +223,46 @@ impl Lexer {
     Token.string_literal(start, self.index, result)
   }
 
-  fn token_for_operator(self: Ref<Lexer>, start: uint32) -> Token {
-    let c = self.source[start as int]
-    match c {
-      '~' => Token.tilde(start),
-      '!' => Token.bang(start),
-      '@' => Token.at(start),
-      '#' => Token.hashtag(start),
-      '$' => Token.dollar(start),
-      '%' => Token.percent(start),
-      '^' => Token.caret(start),
-      '&' => Token.ampersand(start),
-      '*' => Token.star(start),
-      '+' => Token.plus(start),
-      '-' => Token.minus(start),
-      '=' => Token.equals(start),
-      '|' => Token.pipe(start),
-      '\\' => Token.backslash(start),
-      '<' => Token.less_than(start),
-      '>' => Token.greater_than(start),
-      '?' => Token.question(start),
-      '/' => Token.slash(start),
-      _ => Token.identifier(start, start + 1, [c] as string),
+  fn read_operator(self: Ref<Lexer>) -> Token {
+    let start = self.index
+    let op = if self.peek_char_at(1) == '=' {
+      self.index += 2
+      match self.peek_char() {
+        '+' => Operator.AddAssign,
+        '-' => Operator.SubAssign,
+        '*' => Operator.MulAssign,
+        '/' => Operator.DivAssign,
+        '%' => Operator.ModAssign,
+        '^' => Operator.PowAssign,
+        '&' => Operator.AndAssign,
+        '|' => Operator.OrAssign,
+        '=' => Operator.Eq,
+        '!' => Operator.Neq,
+        '<' => Operator.Lte,
+        '>' => Operator.Gte,
+        c => return Token.error(start, self.index, "Invalid operator: {c}=")
+      }
+    } else {
+      self.index += 1
+      match self.peek_char() {
+        '+' => Operator.Add,
+        '-' => Operator.Sub,
+        '*' => Operator.Mul,
+        '/' => Operator.Div,
+        '%' => Operator.Mod,
+        '^' => Operator.Pow,
+        '&' => Operator.And,
+        '|' => Operator.Or,
+        '!' => Operator.Not,
+        '~' => Operator.Not,
+        '=' => Operator.Assign,
+        c => return Token.error(start, self.index, f"Unrecognized operator: {c}")
+      }
     }
+    Token.operator(start, self.index, op)
   }
 }
+
 
 fn is_digit(c: rune) -> bool {
   c >= '0' && c <= '9'
@@ -288,4 +279,8 @@ fn is_identifier_start(c: rune) -> bool {
   c == '_' || 
     (c >= 'a' && c <= 'z') || 
     (c >= 'A' && c <= 'Z')
+}
+
+fn is_operator(c: rune) -> bool {
+  "+-*/%^<>=&|!~".contains([c] as string)
 }

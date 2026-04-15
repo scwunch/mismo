@@ -1,0 +1,81 @@
+pub enum Operator {
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Pow,
+  Not,
+  And,
+  Or,
+  Eq,
+  Neq,
+  Lt,
+  Gt,
+  Lte,
+  Gte,
+  Is,
+  In,
+  IsNot,
+  NotIn,
+
+  Assign,
+  AddAssign,
+  SubAssign,
+  MulAssign,
+  DivAssign,
+  ModAssign,
+  PowAssign,
+  AndAssign,
+  OrAssign,
+}
+
+impl Operator {
+  fn parse(str: string) -> Option<Operator> {
+    let op = match str {
+      "+" => Operator.Add,
+      "-" => Operator.Sub,
+      "*" => Operator.Mul,
+      _ => return None
+    }
+    Some(op)
+  }
+
+  fn string(self) -> string {
+    self.sigil()
+  }
+
+  fn sigil(self) -> string {
+    match self {
+      Operator.Add => "+",
+      Operator.Sub => "-",
+      Operator.Mul => "*",
+      Operator.Div => "/",
+      Operator.Mod => "%",
+      Operator.Pow => "^",
+      Operator.Not => "not",
+      Operator.And => "and",
+      Operator.Or => "or",
+      Operator.Eq => "==",
+      Operator.Neq => "!=",
+      Operator.Lt => "<",
+      Operator.Gt => ">",
+      Operator.Lte => "<=",
+      Operator.Gte => ">=",
+      Operator.Is => "is",
+      Operator.In => "in",
+      Operator.IsNot => "is not",
+      Operator.NotIn => "not in",
+
+      Operator.Assign => "=",
+      Operator.AddAssign => "+=",
+      Operator.SubAssign => "-=",
+      Operator.MulAssign => "*=",
+      Operator.DivAssign => "/=",
+      Operator.ModAssign => "%=",
+      Operator.PowAssign => "^=",
+      Operator.AndAssign => "&=",
+      Operator.OrAssign => "|=",
+    }
+  }
+}

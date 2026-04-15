@@ -1,3 +1,7 @@
+import "operator"
+type Operator = operator.Operator
+
+
 pub struct Token {
   span: Span,
   kind: TokenKind,
@@ -27,6 +31,7 @@ pub enum TokenKind {
   Semicolon,
   Newline {indent: uint32},
   Keyword(Keyword),
+  Operator(Operator),
   Tilde,
   Bang,
   At,
@@ -50,21 +55,20 @@ pub enum TokenKind {
 }
 
 pub enum Keyword {
-  Import,
-  Extern,
-  Struct,
-  Enum,
-  Extend,
-  Trait,
-  Field,
-  Constructor,
-  Static,
-  Fn,
+  // Import,
+  // Extern,
+  // Struct,
+  // Enum,
+  // Extend,
+  // Trait,
+  // Field,
+  // Constructor,
+  // Static,
+  // Fn,
   Let,
   Var,
   Mut,
-  Box,
-  Ref,
+  MutBang,
   Move,
   Const,
   If,
@@ -77,21 +81,20 @@ pub enum Keyword {
 impl Keyword {
   pub fn string(self) -> string {
     match self {
-      Keyword.Import => "import",
-      Keyword.Extern => "extern",
-      Keyword.Struct => "struct",
-      Keyword.Enum => "enum",
-      Keyword.Extend => "extend",
-      Keyword.Trait => "trait",
-      Keyword.Field => "field",
-      Keyword.Constructor => "constructor",
-      Keyword.Static => "static",
-      Keyword.Fn => "fn",
+      // Keyword.Import => "import",
+      // Keyword.Extern => "extern",
+      // Keyword.Struct => "struct",
+      // Keyword.Enum => "enum",
+      // Keyword.Extend => "extend",
+      // Keyword.Trait => "trait",
+      // Keyword.Field => "field",
+      // Keyword.Constructor => "constructor",
+      // Keyword.Static => "static",
+      // Keyword.Fn => "fn",
       Keyword.Let => "let",
       Keyword.Var => "var",
       Keyword.Mut => "mut",
-      Keyword.Box => "box",
-      Keyword.Ref => "ref",
+      Keyword.MutBang => "mut!",
       Keyword.Move => "move",
       Keyword.Const => "const",
       Keyword.If => "if",
@@ -101,6 +104,34 @@ impl Keyword {
       Keyword.Continue => "continue",
       Keyword.Return => "return",
     }
+  }
+
+  pub fn parse(s: string) -> Option<Keyword> {
+    let kw = match s {
+      // "import" => Keyword.Import,
+      // "extern" => Keyword.Extern,
+      // "struct" => Keyword.Struct,
+      // "enum" => Keyword.Enum,
+      // "impl" => Keyword.Impl,
+      // "trait" => Keyword.Trait,
+      // "field" => Keyword.Field,
+      // "constructor" => Keyword.Constructor,
+      // "static" => Keyword.Static,
+      // "fn" => Keyword.Fn,
+      "let" => Keyword.Let,
+      "var" => Keyword.Var,
+      "mut" => Keyword.Mut,
+      "mut!" => Keyword.MutBang,
+      "move" => Keyword.Move,
+      "if" => Keyword.If,
+      "for" => Keyword.For,
+      "while" => Keyword.While,
+      "break" => Keyword.Break,
+      "continue" => Keyword.Continue,
+      "return" => Keyword.Return,
+      _ => return None,
+    }
+    Some(kw)
   }
 }
 
@@ -125,6 +156,7 @@ impl TokenKind {
       TokenKind.Semicolon => ";",
       TokenKind.Newline{indent} => f"\\n({indent})",
       TokenKind.Keyword(keyword) => f"{keyword}",
+      TokenKind.Operator(op) => f"{op}",
       TokenKind.Tilde => "~",
       TokenKind.Bang => "!",
       TokenKind.At => "@",
@@ -150,6 +182,10 @@ impl TokenKind {
 }
 
 impl Span {
+  pub fn new(start: uint32, end: uint32) -> Span {
+    Span { start, end }
+  }
+
   pub fn string(self) -> string {
     f"{self.start}:{self.end}"
   }
@@ -235,6 +271,10 @@ impl Token {
 
   pub fn semicolon(start: uint32) -> Token {
     Token.new(Span { start, end: start + 1 }, TokenKind.Semicolon)
+  }
+
+  pub fn operator(start: uint32, end: uint32, operator: Operator) -> Token {
+    Token.new(Span { start, end }, TokenKind.Operator(operator))
   }
 
   pub fn plus(start: uint32) -> Token {
@@ -331,34 +371,5 @@ impl Token {
 
   pub fn error(start: uint32, end: uint32, msg: string) -> Token {
     Token.new(Span { start, end }, TokenKind.Error(msg))
-  }
-}
-
-pub fn parse_keyword(s: string) -> Option<Keyword> {
-  match s {
-    "import" => Some(Keyword.Import),
-    "extern" => Some(Keyword.Extern),
-    "struct" => Some(Keyword.Struct),
-    "enum" => Some(Keyword.Enum),
-    "extend" => Some(Keyword.Extend),
-    "trait" => Some(Keyword.Trait),
-    "field" => Some(Keyword.Field),
-    "constructor" => Some(Keyword.Constructor),
-    "static" => Some(Keyword.Static),
-    "fn" => Some(Keyword.Fn),
-    "let" => Some(Keyword.Let),
-    "var" => Some(Keyword.Var),
-    "mut" => Some(Keyword.Mut),
-    "box" => Some(Keyword.Box),
-    "ref" => Some(Keyword.Ref),
-    "move" => Some(Keyword.Move),
-    "const" => Some(Keyword.Const),
-    "if" => Some(Keyword.If),
-    "for" => Some(Keyword.For),
-    "while" => Some(Keyword.While),
-    "break" => Some(Keyword.Break),
-    "continue" => Some(Keyword.Continue),
-    "return" => Some(Keyword.Return),
-    _ => None,
   }
 }
