@@ -2,13 +2,13 @@ import "testing"
 
 pub fn test() {
   let _ = testing.test_suite("Lexer", [
-    ("Token Equality", test_token_equality),
-    ("Span Merging", test_span_merge),
-    ("Lexer Peek/Next Char", test_peek_next_char),
-    ("Lexer Read Word", test_read_word),
-    ("Lexer Read Number", test_read_number),
-    ("Lexer String Literals", test_read_string),
-    ("Lexer Newline", test_newlines),
+    test_token_equality,
+    test_span_merge,
+    test_peek_next_char,
+    test_read_word,
+    test_read_number,
+    test_read_string,
+    test_newlines,
   ])
 }
 
@@ -17,6 +17,7 @@ impl TokenKind { pub fn eq(self, other: TokenKind) -> bool { self == other } }
 impl Token     { pub fn eq(self, other: Token) -> bool { self == other } }
 
 fn test_token_equality(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Token Equality"
   let tok1 = TokenKind.LeftParen
   let tok2 = TokenKind.LeftParen
   let tok3 = TokenKind.RightParen
@@ -29,6 +30,7 @@ fn test_token_equality(t: Ref<testing.TestRunner>) {
 }
 
 fn test_span_merge(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Span Merging"
   let s1 = Span { start: 0, end: 5 }
   let s2 = Span { start: 3, end: 10 }
   let merged = s1.merge(s2)
@@ -42,9 +44,9 @@ fn test_span_merge(t: Ref<testing.TestRunner>) {
   t.should_eq(merged2, expected2)
 }
 
-fn test_peek_next_char(tr: Ref<testing.TestRunner>) {
+fn test_peek_next_char(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Peek/Next Char"
   let lex = Lexer.new_no_init("hello")
-  let mut t = tr.*
   t.should_be_true(lex.peek_char() == 'h', f"expected 'h', got {lex.peek_char()}")
   let c2 = lex.peek_char_at(1)
   t.should_be_true(c2 == 'e', f"expected 'e', got {c2}")
@@ -53,6 +55,7 @@ fn test_peek_next_char(tr: Ref<testing.TestRunner>) {
 }
 
 fn test_read_word(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Read Word"
   let mut lex = Lexer.new_no_init("let x = 5")
   let tok = lex.read_word()
   t.should_eq(tok.kind, TokenKind.Keyword(Keyword.Let))
@@ -69,6 +72,7 @@ fn test_read_word(t: Ref<testing.TestRunner>) {
 }
 
 fn test_read_number(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Read Number"
   let mut lex = Lexer.new("42")
   let tok = lex.next()
   match tok.kind {
@@ -104,6 +108,7 @@ fn test_read_number(t: Ref<testing.TestRunner>) {
 }
 
 fn test_read_string(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer String Literals"
   let mut lex = Lexer.new("\"hello\"")
   let tok = lex.next()
   match tok.kind {
@@ -139,6 +144,7 @@ fn test_read_string(t: Ref<testing.TestRunner>) {
 }
 
 fn test_newlines(t: Ref<testing.TestRunner>) {
+  t.test_name = "Lexer Newline"
   let mut lex = Lexer.new("\n")
   let tok = lex.next()
   match tok.kind {

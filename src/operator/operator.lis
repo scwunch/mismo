@@ -31,11 +31,11 @@ pub enum Operator {
 }
 
 impl Operator {
-  fn string(self) -> string {
+  pub fn string(self) -> string {
     self.sigil()
   }
 
-  fn sigil(self) -> string {
+  pub fn sigil(self) -> string {
     match self {
       Operator.Add => "+",
       Operator.Sub => "-",

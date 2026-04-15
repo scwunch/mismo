@@ -6,12 +6,14 @@ pub fn test(test_name: string, test_fn: fn(Ref<TestRunner>)) -> TestRunner {
   t
 }
 
-pub fn test_suite(suite_name: string, tests: Slice<(string, fn(Ref<TestRunner>))>) -> bool {
+pub fn test_suite(suite_name: string, tests: Slice<fn(Ref<TestRunner>)>) -> bool {
   fmt.Println(f"Test suite: {suite_name}")
   let num_tests = tests.length()
   let mut suite: Slice<TestRunner> = []
-  for (name, test_fn) in tests {
-    suite = suite.append(test(name, test_fn))
+  for test_fn in tests {
+    let t = TestRunner.new("")
+    test_fn(&t)
+    suite = suite.append(t)
   }
   let mut passed = 0
   for t in suite {
@@ -30,7 +32,7 @@ pub fn test_suite(suite_name: string, tests: Slice<(string, fn(Ref<TestRunner>))
 }
 
 pub struct TestRunner {
-  test_name: string,
+  pub test_name: string,
   status: bool,
 }
 impl TestRunner {
@@ -49,6 +51,15 @@ impl TestRunner {
       self: Ref<TestRunner>, val: A, expected: B) {
     if !val.eq(expected) {
       self.fail(f"Expected {expected}, got {val}")
+    }
+  }
+
+  pub fn should_contain<A: Contains<B>, B>(
+      self: Ref<TestRunner>, 
+      val:  A,  
+      expected: B) {
+    if !val.contains(expected) {
+      self.fail(f"Expected \"{expected}\" to be in \"{val}\"")
     }
   }
 
@@ -77,4 +88,8 @@ pub interface Equatable<Self: Equatable<Self, Other>, Other: Equatable<Other, Se
 
 pub interface Testable<Self> {
   fn should_eq(self, expected: Self, t: TestRunner)
+}
+
+pub interface Contains<T> {
+  fn contains(self, needle: T) -> bool
 }
