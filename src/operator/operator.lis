@@ -31,16 +31,6 @@ pub enum Operator {
 }
 
 impl Operator {
-  fn parse(str: string) -> Option<Operator> {
-    let op = match str {
-      "+" => Operator.Add,
-      "-" => Operator.Sub,
-      "*" => Operator.Mul,
-      _ => return None
-    }
-    Some(op)
-  }
-
   fn string(self) -> string {
     self.sigil()
   }
