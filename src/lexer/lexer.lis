@@ -1,36 +1,19 @@
 pub struct Lexer {
   pub source: Slice<rune>,
   pub index: uint32,
-  current_token: Token,
 }
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    let mut lex = Lexer { 
-      source: source as Slice<rune>, 
-      index: 0,
-      current_token: Token.error(0, 0, "Lexer not initialized."),
-    }
-    let _ = lex.next()  // purge error token and prime the pump
-    lex
-  }
-
-  pub fn new_no_init(source: string) -> Lexer {
     Lexer { 
       source: source as Slice<rune>, 
       index: 0,
-      current_token: Token.error(0, 0, "Lexer not initialized."),
     }
   }
 
-  pub fn peek(self: Ref<Lexer>) -> Token {
-    self.current_token
-  }
-
   pub fn next(self: Ref<Lexer>) -> Token {
-    let tok = self.current_token
     let pos = self.index
     
-    self.current_token = match self.peek_char() {
+    let tok = match self.peek_char() {
       ',' => Token.comma(pos),
       '.' => Token.dot(pos),
       ':' => Token.colon(pos),
@@ -61,7 +44,7 @@ impl Lexer {
       c => Token.error(pos, self.index, f"Unhandled character: '{c}'")
     }
 
-    self.index = self.current_token.span.end
+    self.index = tok.span.end
 
     tok
   }

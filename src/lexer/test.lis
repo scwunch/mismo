@@ -46,7 +46,7 @@ fn test_span_merge(t: Ref<testing.TestRunner>) {
 
 fn test_peek_next_char(t: Ref<testing.TestRunner>) {
   t.test_name = "Lexer Peek/Next Char"
-  let lex = Lexer.new_no_init("hello")
+  let lex = Lexer.new("hello")
   t.should_be_true(lex.peek_char() == 'h', f"expected 'h', got {lex.peek_char()}")
   let c2 = lex.peek_char_at(1)
   t.should_be_true(c2 == 'e', f"expected 'e', got {c2}")
@@ -56,7 +56,7 @@ fn test_peek_next_char(t: Ref<testing.TestRunner>) {
 
 fn test_read_word(t: Ref<testing.TestRunner>) {
   t.test_name = "Lexer Read Word"
-  let mut lex = Lexer.new_no_init("let x = 5")
+  let mut lex = Lexer.new("let x = 5")
   let tok = lex.read_word()
   t.should_eq(tok.kind, TokenKind.Keyword(Keyword.Let))
   t.should_eq(tok.span, Span.new(0, 3))
