@@ -144,15 +144,14 @@ impl Lexer {
     let mut float_val = int_part as float64
     let mut decimal_places: float64 = 1.0
     loop {
-      match self.peek_char() {
-        c if is_digit(c) => {
-          decimal_places *= 10.0
-          float_val += (c - '0') as float64 / decimal_places
-          self.index += 1
-        },
-        '_' => self.index += 1,
-        _ => break,
+      let d = self.peek_char()
+      if is_digit(d) {
+        decimal_places *= 10.0
+        float_val += (d - '0') as float64 / decimal_places
+      } else if d != '_' {
+        break
       }
+      self.index += 1
     }
     Token.float(start, self.index, float_val)
   }

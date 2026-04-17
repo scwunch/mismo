@@ -35,6 +35,10 @@ impl Operator {
     self.sigil()
   }
 
+  pub fn eq(self, other: Operator) -> bool { 
+    self == other 
+  }
+
   pub fn sigil(self) -> string {
     match self {
       Operator.Add => "+",
