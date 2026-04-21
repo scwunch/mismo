@@ -204,9 +204,10 @@ impl Lexer {
   /// Reads an operator (e.g., +, -, ==, !=, +=, <=, etc.).
   fn read_operator(self: Ref<Lexer>) -> Token {
     let start = self.index
+    let op_char = self.peek_char()
     let op = if self.peek_char_at(1) == '=' {
       self.index += 2
-      match self.peek_char() {
+      match op_char {
         '+' => Operator.AddAssign,
         '-' => Operator.SubAssign,
         '*' => Operator.MulAssign,
@@ -223,7 +224,7 @@ impl Lexer {
       }
     } else {
       self.index += 1
-      match self.peek_char() {
+      match op_char {
         '+' => Operator.Add,
         '-' => Operator.Sub,
         '*' => Operator.Mul,

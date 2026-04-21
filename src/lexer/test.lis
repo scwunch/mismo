@@ -125,48 +125,30 @@ fn test_read_number(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_operators(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Operators"
-  let mut lex = Lexer.new("+")
-  let tok = lex.next()
-  match tok.kind {
-    TokenKind.Operator(Operator.Add) => (),
-    _ => t.fail(f"expected + operator, got {tok.kind}")?,
-  }
+  t.should_eq(
+    Lexer.new("+").read_operator().kind,
+    TokenKind.Operator(Operator.Add)
+  )?
 
-  let mut lex2 = Lexer.new("+=")
-  let tok2 = lex2.next()
-  match tok2.kind {
-    TokenKind.Operator(Operator.AddAssign) => (),
-    _ => t.fail(f"expected += operator, got {tok2.kind}")?,
-  }
+  t.should_eq(
+    Lexer.new("+=").read_operator().kind,
+    TokenKind.Operator(Operator.AddAssign)
+  )?
 
-  let mut lex3 = Lexer.new("*=")
-  let tok3 = lex3.next()
-  match tok3.kind {
-    TokenKind.Operator(Operator.MulAssign) => (),
-    _ => t.fail(f"expected *= operator, got {tok3.kind}")?,
-  }
+  t.should_eq(
+    Lexer.new("*=").read_operator().kind,
+    TokenKind.Operator(Operator.MulAssign)
+  )?
 
-  let mut lex4 = Lexer.new(":=")
-  let tok4 = lex4.next()
-  match tok4.kind {
-    TokenKind.Operator(Operator.Assign) => (),
-    _ => t.fail(f"expected := operator, got {tok4.kind}")?,
-  }
+  t.should_eq(
+    Lexer.new("=").read_operator().kind,
+    TokenKind.Operator(Operator.Assign)
+  )?
 
-  let mut lex5 = Lexer.new("and")
-  let tok5 = lex5.next()
-  match tok5.kind {
-    TokenKind.Operator(Operator.And) => (),
-    _ => t.fail(f"expected and operator, got {tok5.kind}")?,
-  }
-
-  let mut lex6 = Lexer.new("&")
-  let tok6 = lex6.next()
-  match tok6.kind {
-    TokenKind.Operator(Operator.And) => (),
-    _ => t.fail(f"expected & operator, got {tok6.kind}")?,
-  }
-  Ok(())
+  t.should_eq(
+    Lexer.new("&").read_operator().kind,
+    TokenKind.Operator(Operator.And)
+  )
 }
 
 fn test_keywords_and_operators(t: Ref<testing.TestRunner>) -> Result<(), string> {
