@@ -90,12 +90,12 @@ fn test_read_number(t: Ref<testing.TestRunner>) -> Result<(), string> {
     _ => t.fail(f"expected int, got {tok.kind}")?,
   }
 
-  let mut lex2 = Lexer.new("3.14")
+  let mut lex2 = Lexer.new("0.0001")
   let tok2 = lex2.next()
   match tok2.kind {
     TokenKind.FloatLiteral(f) => {
-      if f != 3.14 {
-        t.fail(f"expected 3.14, got {f}")?
+      if f != 0.0001 {
+        t.fail(f"expected 0.0001, got {f}")?
       }
     },
     _ => t.fail(f"expected float, got {tok2.kind}")?,

@@ -1,3 +1,5 @@
+import "go:math"
+
 pub struct Lexer {
   pub source: Slice<rune>,
   pub index: uint32,
@@ -123,37 +125,33 @@ impl Lexer {
   /// Reads an integer or float literal (e.g., 42, 3.14, 1_000).
   fn read_number(self: Ref<Lexer>) -> Token {
     let start = self.index
-    let mut int_part: int = 0
-    
+    let (int_part, _) = self.read_int()
+    if self.peek_char() == '.' && is_digit(self.peek_char_at(1)) {
+      // read float
+      self.index += 1
+      let (frac_part, num_digits) = self.read_int()
+      let divisor = math.Pow10(num_digits)
+      let float_val = int_part as float64 + frac_part as float64 / divisor
+      Token.float(start, self.index, float_val)
+    } else {
+      Token.int(start, self.index, int_part as int)
+    }
+  }
+
+  fn read_int(self: Ref<Lexer>) -> (uint64, int) {
+    let mut acc: uint64 = 0
+    let mut num_digits = 0
     loop {
       match self.peek_char() {
         c if is_digit(c) => {
-          int_part = int_part * 10 + (c as int - '0' as int)
-          self.index += 1
+          acc = acc * 10 + ((c - '0') as uint64)
+          num_digits += 1
         },
-        '.' if is_digit(self.peek_char_at(1)) => {
-          self.index += 1
-          break
-        },
-        '_' => self.index += 1,
-        _ => return Token.int(start, self.index, int_part),
-      }
-    }
-
-    // parse float
-    let mut float_val = int_part as float64
-    let mut decimal_places: float64 = 1.0
-    loop {
-      let d = self.peek_char()
-      if is_digit(d) {
-        decimal_places *= 10.0
-        float_val += (d - '0') as float64 / decimal_places
-      } else if d != '_' {
-        break
+        '_' => (),
+        _ => return (acc, num_digits)
       }
       self.index += 1
     }
-    Token.float(start, self.index, float_val)
   }
 
   /// Reads a quoted string, handling escapes like \n, \t, \", etc.

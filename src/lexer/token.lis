@@ -1,5 +1,5 @@
 import "operator"
-type Operator = operator.Operator
+pub type Operator = operator.Operator
 
 
 pub struct Token {
