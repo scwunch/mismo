@@ -7,12 +7,13 @@ pub fn test() {
     test_peek_next_char,
     test_read_word,
     test_read_number,
-    test_read_string,
+    test_read_single_line_string,
+    test_read_multiline_string,
     test_operators,
     test_keywords_and_operators,
     test_comments,
-    test_full_program,
     test_newlines,
+    test_full_program,
   ])
 }
 
@@ -203,85 +204,146 @@ fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut lex = Lexer.new("function greet(name String):\n  print(\"hello, \" + name)")
   let toks = [
     Token.identifier(0, 8, "function"),
-    Token.identifier(9, 13, "greet"),
-    Token.left_paren(13),
-    Token.identifier(14, 18, "name"),
-    Token.left_paren(19),
-    Token.identifier(19, 25, "String"),
-    Token.right_paren(25),
-    Token.colon(26),
-    Token.newline(27, 28, 2),
-    Token.identifier(30, 34, "print"),
-    Token.left_paren(34),
-    Token.string_literal(35, 44, "hello, "),
-    Token.operator(45, 46, Operator.Add),
-    Token.identifier(47, 51, "name"),
-    Token.right_paren(51),
-    Token.newline(52, 53, 0),
-    Token.eof(53),
+    Token.identifier(9, 14, "greet"),
+    Token.left_paren(14),
+    Token.identifier(15, 19, "name"),
+    Token.identifier(20, 26, "String"),
+    Token.right_paren(26),
+    Token.colon(27),
+    Token.newline(28, 31, 2),
+    Token.identifier(31, 36, "print"),
+    Token.left_paren(36),
+    Token.string_literal(37, 46, "hello, "),
+    Token.operator(47, 48, Operator.Add),
+    Token.identifier(49, 53, "name"),
+    Token.right_paren(53),
+    Token.newline(54, 55, 0),
+    Token.eof(55),
   ]
 
   for expected in toks {
-    let tok = lex.next()
-    if tok.kind != expected.kind {
-      t.fail(f"[{tok.span}] expected kind {expected.kind}, got {tok.kind}")?
-    }
+    t.should_eq(lex.next(), expected)?
   }
   Ok(())
 }
 
-fn test_read_string(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "Lexer String Literals"
-  let mut lex = Lexer.new("\"hello\"")
-  let tok = lex.next()
-  match tok.kind {
-    TokenKind.StringLiteral(s) => {
-      if s != "hello" {
-        t.fail(f"expected 'hello', got '{s}'")?
-      }
-    },
-    _ => t.fail(f"expected string, got {tok.kind}")?,
-  }
+fn test_read_single_line_string(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Lexer String Literals (single-line)"
+  // empty strings
+  let mut tok = Lexer.new("\"\" + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 2, "")
+  )?
+  tok = Lexer.new("'' + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 2, "")
+  )?
+  tok = Lexer.new("`` + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 2, "")
+  )?
 
-  let mut lex2 = Lexer.new("\"escaped\\ntab\\t\"")
-  let tok2 = lex2.next()
-  match tok2.kind {
-    TokenKind.StringLiteral(s) => {
-      if s != "escaped\ntab\t" {
-        t.fail(f"expected 'escaped\\ntab\\t', got '{s}'")?
-      }
-    },
-    _ => t.fail(f"expected string, got {tok2.kind}")?,
-  }
+  // normal strings
+  tok = Lexer.new("\"hello\" + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 7, "hello")
+  )?
+  tok = Lexer.new("'hello' + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 7, "hello")
+  )?
+  tok = Lexer.new("`hello` + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 7, "hello")
+  )?
+  
+  // with escapes
+  tok = Lexer.new("\"say \\\"hello\\\"\" + other content").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 15, "say \"hello\"")
+  )?
+  tok = Lexer.new("'\\n\\t\\\\'").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 8, "\n\t\\")
+  )?
 
-  let mut lex3 = Lexer.new("''")
-  let tok3 = lex3.next()
-  match tok3.kind {
-    TokenKind.StringLiteral(s) => {
-      if s != "" {
-        t.fail(f"expected empty string, got '{s}'")?
-      }
-    },
-    _ => t.fail(f"expected empty string, got {tok3.kind}")?,
-  }
+  // raw strings
+  tok = Lexer.new("`\"\\w\"+\\s*\\`").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 11, "\"\\w\"+\\s*\\")
+  )?
+  Ok(())
+}
 
-  let mut lex4 = Lexer.new("`backticks`")
-  let tok4 = lex4.next()
-  match tok4.kind {
-    TokenKind.StringLiteral(s) => {
-      if s != "backticks" { t.fail(f"expected 'backticks', got '{s}'")? }
-    },
-    _ => t.fail(f"expected backtick string, got {tok4.kind}")?,
-  }
+fn test_read_multiline_string(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Lexer String Literals (multiline)"
 
-  let mut lex5 = Lexer.new("``double backticks``")
-  let tok5 = lex5.next()
-  match tok5.kind {
-    TokenKind.StringLiteral(s) => {
-      if s != "double backticks" { t.fail(f"expected 'double backticks', got '{s}'")? }
-    },
-    _ => t.fail(f"expected double backticks string, got {tok5.kind}")?,
+  // validate open quote
+  let mut lex = Lexer.new("'''  \t  \nhello\n'''")
+  lex.index = 3
+  t.should_be_true(
+    lex.validate_open_quote(0).is_ok(),
+    "expected whitespace validation to succeed"
+  )?
+  lex = Lexer.new("'''  multline string on one line '''")
+  lex.index = 3
+  t.should_eq(
+    lex.validate_open_quote(0).err().unwrap_or(Token.error(0, 0, "this is not the droid you're looking for")),
+    Token.error(0, 5, "Multiline string literals start on line after opening quote.")
+  )?
+  lex.index = 0
+  t.should_eq(
+    lex.next(),
+    Token.error(0, 5, "Multiline string literals start on line after opening quote.")
+  )?
+  
+  // get_string_lines
+  lex = Lexer.new("'''\n   unterminated''")
+  t.should_eq(
+    lex.next(),
+    Token.error(0, 21, "unterminated string literal")
+  )?
+  lex = Lexer.new("'''\n  mali'''")
+  lex.index = 4
+  t.should_eq(
+    lex.get_string_lines(0, '\'', 3).err().unwrap_or(Token.error(0, 0, "this is not the droid you're looking for")),
+    Token.error(4, 13, "Only whitespace is allowed before the endquote of a multiline string literal.")
+  )?
+  lex = Lexer.new("'''\n   line1\n   line2\n   '''")
+  lex.index = 4
+  let (lines, indent) = match lex.get_string_lines(0, '\'', 3) {
+    Ok((lines, indent)) => (lines.map(|line| line as string), indent),
+    Err(_) => (["failed to read lines"], -1),
   }
+  t.should_be_true(
+    lines[0] == "   line1" && lines[1] == "   line2",
+    f"Expected [\"   line1\", \"   line2\"], got {lines}"
+  )?
+  t.should_be_true(
+    indent == 3,
+    f"Expected indent==3, got indent=={indent}"
+  )?
+
+  // test some multiline strings
+  let mut tok = Lexer.new("'''\nhello\n'''").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 13, "hello")
+  )?
+  tok = Lexer.new("'''\n   hello\n   '''").read_string()
+  t.should_eq(
+    tok,
+    Token.string_literal(0, 19, "hello")
+  )?
   Ok(())
 }
 

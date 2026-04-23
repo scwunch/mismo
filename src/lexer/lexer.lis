@@ -58,6 +58,15 @@ impl Lexer {
     ).unwrap_or(0)
   }
 
+  /// get a bounds-checked sub-slice of self.source
+  fn slice(self, start: uint32, end: uint32) -> Slice<rune> {
+    if end as int >= self.source.length() {
+      self.source[start as int ..]
+    } else {
+      self.source[start as int .. end as int]
+    }
+  }
+
   /// Advances to next significant line (non-whitespace, non-comment) and 
   /// counts the indentation (spaces/tabs) until the first significant 
   /// character.  Returns newline token.
@@ -154,7 +163,6 @@ impl Lexer {
     }
   }
 
-  /// Reads a quoted string, handling escapes like \n, \t, \", etc.
   fn read_string(self: Ref<Lexer>) -> Token {
     let start = self.index
     let quote = self.source[start as int]
@@ -166,39 +174,143 @@ impl Lexer {
       self.index += 1
     }
 
-    if quote_width == 2 {
-      return Token.string_literal(start, self.index, "")
+    match quote_width {
+      1 => self.read_single_line_string(start, quote),
+      2 => Token.string_literal(start, self.index, ""),
+      _ => self.read_multiline_string(start, quote, quote_width),
     }
+  }
 
-    let mut str_value: Slice<rune> = []
+  fn read_single_line_string(self: Ref<Lexer>, start: uint32, quote: rune) -> Token {
+    if quote == '`' {
+      loop {
+        match self.peek_char() {
+          '`' => break,
+          0 | '\n' => return Token.error(start, self.index, "unterminated string literal"),
+          _ => self.index += 1
+        }
+      }
+      // let str = self.source[(start + 1) as int..self.index as int] as string
+      let str = self.slice(start + 1, self.index) as string
+      self.index += 1
+      Token.string_literal(start, self.index, str)
+    } else {
+      let mut chars: Slice<rune> = []
+      loop {
+        match self.peek_char() {
+          0 | '\n' => break,
+          c if c == quote => {
+            self.index += 1
+            break
+          },
+          '\\' => {
+            self.index += 1
+            chars = match self.peek_char() {
+              'n'  => chars.append('\n'),
+              't' => chars.append('\t'),
+              'r' => chars.append('\r'),
+              '\\' => chars.append('\\'),
+              '"' => chars.append('"'),
+              '\'' => chars.append('\''),
+              ec => {
+                self.index += 1
+                return Token.error(self.index - 2, self.index, f"Invalid escape sequence: \\{ec}")
+              },
+            }
+          },
+          c => chars = chars.append(c),
+        }
+        self.index += 1
+      }
+      Token.string_literal(start, self.index, chars as string)
+    }
+  }
+
+  /// call immediately after consuming open quote
+  fn read_multiline_string(
+    self: Ref<Lexer>, 
+    start: uint32, 
+    quote: rune, 
+    quote_width: int
+  ) -> Token {
+    let result = try {
+      self.validate_open_quote(start)?
+      let (lines, indent) = self.get_string_lines(start, quote, quote_width)?
+      parse_lines(start, lines, indent)?
+    }
+    match result {
+      Err(tok) => tok,
+      Ok(content) => Token.string_literal(start, self.index, content),
+    }
+  }
+
+  /// verify only whitespace on the line after the open quote
+  /// precondition: self.index immediately after open quote
+  /// postcondition: self.index immediately after '\n'
+  fn validate_open_quote(self: Ref<Lexer>, start: uint32) -> Result<(), Token> {
+    while self.peek_char() == ' ' || self.peek_char() == '\t' {
+      self.index += 1
+    }
+    if self.peek_char() == '\n' {
+      self.index += 1
+      Ok(())
+    } else {
+      Err(Token.error(
+        start,
+        self.index,
+        "Multiline string literals start on line after opening quote."
+      ))
+    }
+  }
+
+  /// Called when lexer is on the first column of the line after 
+  /// consuming the starting quote of a multiline string.
+  /// Return the a slice of subslices of the source, not including 
+  /// the opening or closing quotes.  Also return the indent of the end
+  /// quote.  
+  fn get_string_lines(
+    self: Ref<Lexer>, 
+    start: uint32,
+    quote: rune, 
+    quote_width: int,
+  ) -> Result<(Slice<Slice<rune>>, int), Token> {
+    let mut lines = []
+    let mut line_start = self.index
+    let mut count = 0
     loop {
       match self.peek_char() {
-        0 | '\n' => break,
-        c if c == quote => {
-          self.index += 1
-          break
+        0 => return Err(Token.error(
+          start, 
+          self.index,"unterminated string literal"
+        )),
+        '\n' => {
+          let line = self.slice(line_start, self.index)
+          lines = lines.append(line)
+          line_start = self.index + 1
         },
-        '\\' => {
-          self.index += 1
-          str_value = match self.peek_char() {
-            'n'  => str_value.append('\n'),
-            't' => str_value.append('\t'),
-            'r' => str_value.append('\r'),
-            '\\' => str_value.append('\\'),
-            '"' => str_value.append('"'),
-            '\'' => str_value.append('\''),
-            ec => {
-              self.index += 1
-              return Token.error(self.index - 2, self.index, f"Invalid escape sequence: \\{ec}")
-            },
+        q if q == quote => {
+          count += 1
+          if count == quote_width {
+            self.index += 1
+            if self.slice(line_start, self.index - count as uint32).any(|c| {
+              c != ' ' && c != '\t'
+            }) {
+              return Err(Token.error(
+                line_start,
+                self.index,
+                "Only whitespace is allowed before the endquote of a multiline string literal."
+              ))
+            } else {
+              let indent = self.index as int - count - line_start as int
+              if indent < 0 { panic("compiler bug... negative indent detected") }
+              return Ok((lines, indent))
+            }
           }
         },
-        c => str_value = str_value.append(c),
+        _ => count = 0
       }
       self.index += 1
     }
-
-    Token.string_literal(start, self.index, str_value as string)
   }
 
   /// Reads an operator (e.g., +, -, ==, !=, +=, <=, etc.).
@@ -263,4 +375,47 @@ fn is_identifier_start(c: rune) -> bool {
 
 fn is_operator(c: rune) -> bool {
   "+-*/%^<>=&|!~".contains([c] as string)
+}
+
+fn parse_lines(start: uint32, lines: Slice<Slice<rune>>, indent: int) -> Result<string, Token> {
+  let mut contents: Slice<string> = []
+  let mut i = start
+  for line in lines {
+    if line[..indent].any(|r| {
+      i += 1
+      r != ' ' && r != '\t'
+    }) {
+      return Err(Token.error(i, i+1, "content found in indentation space of multiline string"))
+    }
+    let line = line[indent..]
+    contents = contents.append(parse_string(i, line)?)
+    i += line.length() as uint32 + 1
+  }
+  Ok(contents.join("\n"))
+}
+
+fn parse_string(start: uint32, runes: Slice<rune>) -> Result<string, Token> {
+  let mut parsed: Slice<rune> = []
+  let mut i = 0
+  loop {
+    match runes.get(i) {
+      Some('\\') => {
+        i += 1
+        let c = match runes[i] {
+          '0' => '\0',
+          'n' => '\n',
+          't' => '\t',
+          c => {
+            let i = start + i as uint32
+            return Err(Token.error(i, i + 1, "invalid escape sequence"))
+          }
+        }
+        parsed = parsed.append(c)
+      },
+      Some(c) => parsed = parsed.append(c),
+      None => break
+    }
+    i += 1
+  }
+  Ok(parsed as string)
 }
