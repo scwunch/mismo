@@ -1,11 +1,70 @@
 import "lexer"
+import "ast"
 type Lexer = lexer.Lexer
-type Token = lexer.Token
-type Span = lexer.Span
+pub type Token = lexer.Token
+pub type Span = lexer.Span
+pub type TokenKind = lexer.TokenKind
 
 pub struct Parser {
-  lexer: Lexer
+  lexer: Lexer,
+  peeked: Token,
+  defs: Ref<ast.Definitions>
 }
 impl Parser {
-  
+  pub fn new(source: string) -> Parser {
+    let mut lexer = Lexer.new(source)
+    Parser{
+      lexer,
+      peeked: lexer.next(),
+      defs: &ast.Definitions.new(),
+    }
+  }
+
+  pub fn peek(self: Ref<Parser>) -> Token {
+    self.peeked
+  }
+
+  pub fn next(self: Ref<Parser>) -> Token {
+    let tok = self.peeked
+    self.peeked = self.lexer.next()
+    tok
+  }
+
+  pub fn parse(self: Ref<Parser>) {
+    loop {
+      let tok = self.next()
+      match tok.kind {
+        TokenKind.Identifier("import") => self.parse_import(),
+        _ => self.error("Expected top-level definition (fn, import, struct, enum, interface)")
+      }
+    }
+  }
+
+  fn parse_import(self: Ref<Parser>) {
+    match self.peek().kind {
+      TokenKind.StringLiteral(path) => panic("parse_import not implemented"),
+      _ => panic("parse_import not implemented")
+    }
+  }
+
+  /// emit an error
+  fn error(self: Ref<Parser>, msg: string) {
+    // save the error somewhere
+    let _ = msg
+
+    self.recover_to_next_def()
+  }
+
+  /// recover parser to the next top-level statement (ie, indent=0)
+  fn recover_to_next_def(self: Ref<Parser>) {
+    if self.peek().kind == lexer.TokenKind.Newline(0) {
+      return
+    }
+    loop {
+      let tok = self.next().kind
+      if tok == lexer.TokenKind.Newline(0) || tok == lexer.TokenKind.EOF {
+        return
+      }
+    }
+  }
 }

@@ -1,0 +1,5 @@
+import "ast"
+
+pub struct Compiler {
+  ast_defs: ast.Definitions,
+}

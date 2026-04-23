@@ -2,7 +2,7 @@ import "go:fmt"
 import "go:os"
 
 import "lexer" 
-
+import "parser"
 
 fn main() {
   match os.Args {
@@ -33,6 +33,7 @@ fn main() {
 fn run_tests(tests: Slice<string>) {
   let test_dict = Map.from([
     ("lexer", lexer.test),
+    ("parser", parser.test)
   ])
 
   if tests.is_empty() {

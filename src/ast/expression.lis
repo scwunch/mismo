@@ -1,0 +1,67 @@
+import "span"
+import "mode"
+import "operator"
+pub type Span = span.Span
+pub type Operator = operator.Operator
+pub type Mode = mode.Mode
+
+
+pub enum Expression {
+  Nil(Span),
+  Bool(Span, bool),
+  IntLiteral(Span, int),
+  FloatLiteral(Span, float64),
+  StringLiteral(Span, string),
+  ArrayLiteral(Span, Slice<Expression>),
+  TupleLiteral(Span, Slice<Expression>),
+  Identifier(Span, string),
+  Binding(Mode, Ref<Expression>),
+  Binop{left: Ref<Expression>, op: Operator, right: Ref<Expression>},
+  Assign{pattern: Ref<Expression>, value: Option<Ref<Expression>>},
+  Call{span: Span, fn_name: string, type_args: Slice<Type>, args: Slice<Expression>},
+  If(Span, Conditional),
+  While(Span, Conditional),
+  For{span: Span, binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression>},
+  Block(Slice<Expression>),
+}
+
+pub enum Conditional {
+  Binary{subject: Ref<Expression>, ops: Slice<Comparison>},
+  Unary{expr: Ref<Expression>, consequent: Ref<Expression>},
+  Multi(Slice<Conditional>),
+  Else{consequent: Ref<Expression>}
+}
+
+pub struct Comparison {
+  pub op: Operator,
+  pub objects: Slice<Branch>,
+}
+
+pub struct Branch {
+  pub object: Ref<Expression>,
+  pub then: Consequent,
+}
+
+pub enum Consequent {
+  And(Conditional),
+  Or(Conditional),
+  Do(Ref<Expression>),
+}
+
+
+// struct PatternExpr {
+//   span: Span,
+//   pattern: Pattern,
+// }
+
+// enum Pattern {
+//   Any,
+//   Binding(string),
+//   NewBinding(Mode, string),
+//   Constructor(string, Ref<Pattern>),
+//   IntLiteral(int),
+//   FloatLiteral(float64),
+//   StringLiteral(string),
+//   Slice(Slice<Pattern>),
+//   Rest(string),
+// }

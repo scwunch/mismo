@@ -1,0 +1,16 @@
+import "testing"
+
+pub fn test() {
+  let _ = testing.test_suite("Parser", [
+    test_dummy,
+  ])
+}
+
+// impl TokenKind { pub fn eq(self, other: TokenKind) -> bool { self == other } }
+// impl Token     { pub fn eq(self, other: Token) -> bool { self == other } }
+// impl Keyword     { pub fn eq(self, other: Keyword) -> bool { self == other } }
+
+fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parser Dummy"
+  Ok(())
+}

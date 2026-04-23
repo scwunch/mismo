@@ -1,0 +1,26 @@
+pub enum Mode {
+  Let,
+  Mut,
+  MutBang,
+  Var,
+}
+impl Mode {
+  pub fn string(self) {
+    match self {
+      Mode.Let => "let",
+      Mode.Mut => "mut",
+      Mode.MutBang => "mut!",
+      Mode.Var => "var",
+    }
+  }
+}
+
+pub fn parse(str: string) -> Option<Mode> {
+  match str {
+    "let" =>  Some(Mode.Let),
+    "mut" =>  Some(Mode.Mut),
+    "mut!" => Some(Mode.MutBang),
+    "var" =>  Some(Mode.Var),
+    _ => None
+  }
+}

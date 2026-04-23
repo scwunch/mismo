@@ -1,0 +1,32 @@
+pub struct Span {
+  pub start: uint32,
+  pub end: uint32,
+}
+
+impl Span {
+  pub fn new(start: uint32, end: uint32) -> Span {
+    Span { start, end }
+  }
+
+  pub fn eq(self, other: Span) -> bool {
+    self == other
+  }
+
+  pub fn string(self) -> string {
+    f"{self.start}..{self.end}"
+  }
+
+  pub fn before(self, other: Span) -> bool {
+    self.start < other.start
+  }
+
+  pub fn after(self, other: Span) -> bool {
+    self.start > other.start
+  }
+
+  pub fn merge(self, other: Span) -> Span {
+    let start = if self.start < other.start { self.start } else { other.start }
+    let end = if self.end > other.end { self.end } else { other.end }
+    Span { start, end }
+  }
+}

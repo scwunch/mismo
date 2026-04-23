@@ -1,0 +1,10 @@
+pub struct Type {
+  pub span: Span,
+  pub name: string,
+  pub type_args: Slice<Type>,
+}
+impl Type {
+  pub fn new(span: Span, name: string, type_args: Slice<Type>) -> Type {
+    Type { span, name, type_args }
+  }
+}

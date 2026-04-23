@@ -1,0 +1,84 @@
+/// a container for definitions collected from a module
+pub struct Definitions {
+  pub imports: Slice<Import>,
+  pub structs: Slice<StructDef>,
+  pub enums: Slice<EnumDef>,
+  pub interfaces: Slice<InterfaceDef>,
+  pub functions: Slice<FunctionDef>,
+}
+
+pub struct Import {
+  pub path: string,
+  pub alias: Option<string>,
+}
+
+pub struct StructDef {
+  pub span: Span,
+  pub name: string,
+  pub type_parameters: Slice<string>,
+  pub fields: Slice<Field>,
+}
+
+pub struct Field {
+  pub span: Span,
+  pub name: string,
+  pub typ: Type,
+}
+
+pub struct EnumDef {
+  pub span: Span,
+  pub name: string,
+  pub type_parameters: Slice<string>,
+  pub variants: Slice<Variant>,
+}
+
+pub struct Variant {
+  pub span: Span,
+  pub name: string,
+  pub payload: Slice<Type>
+}
+
+pub struct InterfaceDef {
+  pub span: Span,
+  pub name: string,
+  pub type_parameters: Slice<string>,
+  pub parents: Slice<Type>,
+  pub methods: Slice<MethodDef>,
+}
+
+pub struct FunctionDef {
+  pub sig: Signature,
+  pub body: Expression,
+}
+
+pub struct MethodDef {
+  pub sig: Signature,
+  pub body: Option<Expression>,
+}
+
+pub struct Signature {
+  pub span: Span,
+  pub name: string,
+  pub type_parameters: Slice<string>,
+  pub parameters: Slice<Parameter>,
+}
+
+pub struct Parameter {
+  pub span: Span,
+  pub mode: Mode,
+  pub name: string,
+  pub typ:  Type,
+}
+
+
+impl Definitions {
+  pub fn new() -> Definitions {
+    Definitions{
+      imports: [],
+      structs: [],
+      enums: [],
+      interfaces: [],
+      functions: [],
+    }
+  }
+}

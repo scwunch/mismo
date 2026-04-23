@@ -1,15 +1,12 @@
 import "operator"
+import "span"
 pub type Operator = operator.Operator
+pub type Span = span.Span
 
 
 pub struct Token {
-  span: Span,
-  kind: TokenKind,
-}
-
-pub struct Span {
-  start: uint32,
-  end: uint32,
+  pub span: Span,
+  pub kind: TokenKind,
 }
 
 pub enum TokenKind {
@@ -29,7 +26,7 @@ pub enum TokenKind {
   Comma,
   Colon,
   Semicolon,
-  Newline {indent: uint32},
+  Newline(uint32),
   Keyword(Keyword),
   Operator(Operator),
   Tilde,
@@ -154,7 +151,7 @@ impl TokenKind {
       TokenKind.Comma => ",",
       TokenKind.Colon => ":",
       TokenKind.Semicolon => ";",
-      TokenKind.Newline{indent} => f"\\n({indent})",
+      TokenKind.Newline(indent) => f"\\n({indent})",
       TokenKind.Keyword(keyword) => f"{keyword}",
       TokenKind.Operator(op) => f"{op}",
       TokenKind.Tilde => "~",
@@ -178,30 +175,6 @@ impl TokenKind {
       TokenKind.EOF => "EOF",
       TokenKind.Error(err) => f"Error({err})"
     }
-  }
-}
-
-impl Span {
-  pub fn new(start: uint32, end: uint32) -> Span {
-    Span { start, end }
-  }
-
-  pub fn string(self) -> string {
-    f"{self.start}:{self.end}"
-  }
-
-  pub fn before(self, other: Span) -> bool {
-    self.start < other.start
-  }
-
-  pub fn after(self, other: Span) -> bool {
-    self.start > other.start
-  }
-
-  pub fn merge(self, other: Span) -> Span {
-    let start = if self.start < other.start { self.start } else { other.start }
-    let end = if self.end > other.end { self.end } else { other.end }
-    Span { start, end }
   }
 }
 
@@ -310,7 +283,7 @@ impl Token {
   }
 
   pub fn newline(start: uint32, end: uint32, indent: uint32) -> Token {
-    Token.new(Span { start, end }, TokenKind.Newline { indent })
+    Token.new(Span { start, end }, TokenKind.Newline(indent))
   }
 
   pub fn tilde(start: uint32) -> Token {
