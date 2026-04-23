@@ -298,7 +298,7 @@ impl Token {
   }
 
   pub fn eof(start: uint32) -> Token {
-    Token.new(Span { start, end: start + 1 }, TokenKind.EOF)
+    Token.new(Span { start, end: start }, TokenKind.EOF)
   }
 
   pub fn string_literal(start: uint32, end: uint32, val: string) -> Token {

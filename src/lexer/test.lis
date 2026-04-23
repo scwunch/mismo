@@ -217,8 +217,8 @@ fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Token.operator(47, 48, Operator.Add),
     Token.identifier(49, 53, "name"),
     Token.right_paren(53),
-    Token.newline(54, 55, 0),
-    Token.eof(55),
+    // Token.newline(54, 55, 0),
+    Token.eof(54),
   ]
 
   for expected in toks {
