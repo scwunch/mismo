@@ -61,9 +61,11 @@ impl Parser {
       return
     }
     loop {
-      let tok = self.next().kind
-      if tok == lexer.TokenKind.Newline(0) || tok == lexer.TokenKind.EOF {
-        return
+      match self.next().kind {
+        TokenKind.Newline(0) | TokenKind.EOF => {
+          return
+        },
+        _ => ()
       }
     }
   }

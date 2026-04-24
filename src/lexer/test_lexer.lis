@@ -1,9 +1,9 @@
 import "testing"
+import "span"
 
 pub fn test() {
   let _ = testing.test_suite("Lexer", [
     test_token_equality,
-    test_span_merge,
     test_peek_next_char,
     test_read_word,
     test_read_number,
@@ -32,21 +32,6 @@ fn test_token_equality(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.should_eq(Token.left_brace(0), Token.left_brace(0))?
   t.shouldnt_eq(Token.left_brace(0), Token.right_brace(0))?
   t.shouldnt_eq(Token.left_brace(0), Token.left_brace(99))
-}
-
-fn test_span_merge(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "Lexer Span Merging"
-  let s1 = Span { start: 0, end: 5 }
-  let s2 = Span { start: 3, end: 10 }
-  let merged = s1.merge(s2)
-  let expected = Span { start: 0, end: 10 }
-  t.should_eq(merged, expected)?
-
-  let s3 = Span { start: 10, end: 20 }
-  let s4 = Span { start: 5, end: 15 }
-  let merged2 = s3.merge(s4)
-  let expected2 = Span { start: 5, end: 20}
-  t.should_eq(merged2, expected2)
 }
 
 fn test_peek_next_char(t: Ref<testing.TestRunner>) -> Result<(), string> {

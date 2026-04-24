@@ -5,6 +5,7 @@ pub struct Definitions {
   pub enums: Slice<EnumDef>,
   pub interfaces: Slice<InterfaceDef>,
   pub functions: Slice<FunctionDef>,
+  pub errors: Slice<error>,
 }
 
 pub struct Import {
@@ -79,6 +80,7 @@ impl Definitions {
       enums: [],
       interfaces: [],
       functions: [],
+      errors: [],
     }
   }
 }

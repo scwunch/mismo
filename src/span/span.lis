@@ -3,6 +3,11 @@ pub struct Span {
   pub end: uint32,
 }
 
+pub struct Location {
+  pub line: uint32,
+  pub col: uint32,
+}
+
 impl Span {
   pub fn new(start: uint32, end: uint32) -> Span {
     Span { start, end }
@@ -28,5 +33,39 @@ impl Span {
     let start = if self.start < other.start { self.start } else { other.start }
     let end = if self.end > other.end { self.end } else { other.end }
     Span { start, end }
+  }
+
+  pub fn location(self, source: Slice<rune>) -> Location {
+    let mut i = self.start as int - 1
+    loop {
+      if i <= 0 {
+        return Location{line: 1, col: self.start + 1}
+      } else if source[i] == '\n' {
+        break
+      }
+      i -= 1
+    }
+    let col = self.start - (i as uint32)
+    let mut line: uint32 = 1
+    while i >= 0 {
+      if source[i] == '\n' {
+        line += 1
+      }
+      i -= 1
+    }
+    Location { line, col }
+  }
+}
+
+/// this one doesn't work for some reason
+pub fn loc_rec(source: Slice<rune>, i: uint32, line: uint32, col: uint32) -> Location {
+  if i > 1 {
+    match source {
+      ['\n', ..rest] => loc_rec(rest, i-1, line+1, 0),
+      [_, ..rest] => loc_rec(rest, i-1, line, col+1),
+      [] => panic("ran out of runes")
+    }
+  } else {
+    Location{line, col: col + i}
   }
 }

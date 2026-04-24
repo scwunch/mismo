@@ -1,6 +1,7 @@
 import "go:fmt"
 import "go:os"
 
+import "span"
 import "lexer" 
 import "parser"
 
@@ -8,12 +9,10 @@ fn main() {
   match os.Args {
     [_] => {
       fmt.Println("Usage: mismo <input_file>")
-      return
     },
     [_, "--test", ..rest] => {
       fmt.Println("Running tests...")
       run_tests(rest)
-      return
     },
     [_, path] => {
       let data = os.ReadFile(path)
@@ -32,8 +31,9 @@ fn main() {
 
 fn run_tests(tests: Slice<string>) {
   let test_dict = Map.from([
+    ("span", span.test),
     ("lexer", lexer.test),
-    ("parser", parser.test)
+    ("parser", parser.test),
   ])
 
   if tests.is_empty() {
