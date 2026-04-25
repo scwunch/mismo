@@ -1,27 +1,27 @@
 import "span"
 import "mode"
 import "operator"
-pub type Span = span.Span
+// type Span = span.Span
 pub type Operator = operator.Operator
 pub type Mode = mode.Mode
 
 
 pub enum Expression {
-  Nil(Span),
-  Bool(Span, bool),
-  IntLiteral(Span, int),
-  FloatLiteral(Span, float64),
-  StringLiteral(Span, string),
-  ArrayLiteral(Span, Slice<Expression>),
-  TupleLiteral(Span, Slice<Expression>),
-  Identifier(Span, string),
+  Nil(span.Span),
+  Bool(span.Span, bool),
+  IntLiteral(span.Span, int),
+  FloatLiteral(span.Span, float64),
+  StringLiteral(span.Span, string),
+  ArrayLiteral(span.Span, Slice<Expression>),
+  TupleLiteral(span.Span, Slice<Expression>),
+  Identifier(span.Span, string),
   Binding(Mode, Ref<Expression>),
   Binop{left: Ref<Expression>, op: Operator, right: Ref<Expression>},
   Assign{pattern: Ref<Expression>, value: Option<Ref<Expression>>},
-  Call{span: Span, fn_name: string, type_args: Slice<Type>, args: Slice<Expression>},
-  If(Span, Conditional),
-  While(Span, Conditional),
-  For{span: Span, binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression>},
+  Call{span: span.Span, fn_name: string, type_args: Slice<Type>, args: Slice<Expression>},
+  If(span.Span, Conditional),
+  While(span.Span, Conditional),
+  For{span: span.Span, binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression>},
   Block(Slice<Expression>),
 }
 

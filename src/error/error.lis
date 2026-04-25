@@ -1,7 +1,0 @@
-pub interface Error {
-  fn Error(self) -> string
-}
-
-pub interface SyntaxError {
-  fn location(self, source: Slice<rune>) -> Location
-}

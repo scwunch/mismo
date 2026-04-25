@@ -1,3 +1,6 @@
+import "errors"
+import "span"
+
 /// a container for definitions collected from a module
 pub struct Definitions {
   pub imports: Slice<Import>,
@@ -5,7 +8,7 @@ pub struct Definitions {
   pub enums: Slice<EnumDef>,
   pub interfaces: Slice<InterfaceDef>,
   pub functions: Slice<FunctionDef>,
-  pub errors: Slice<error>,
+  pub errors: Slice<errors.SyntaxError>,
 }
 
 pub struct Import {
@@ -14,33 +17,33 @@ pub struct Import {
 }
 
 pub struct StructDef {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<string>,
   pub fields: Slice<Field>,
 }
 
 pub struct Field {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub typ: Type,
 }
 
 pub struct EnumDef {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<string>,
   pub variants: Slice<Variant>,
 }
 
 pub struct Variant {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub payload: Slice<Type>
 }
 
 pub struct InterfaceDef {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<string>,
   pub parents: Slice<Type>,
@@ -58,14 +61,14 @@ pub struct MethodDef {
 }
 
 pub struct Signature {
-  pub span: Span,
+  pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<string>,
   pub parameters: Slice<Parameter>,
 }
 
 pub struct Parameter {
-  pub span: Span,
+  pub span: span.Span,
   pub mode: Mode,
   pub name: string,
   pub typ:  Type,

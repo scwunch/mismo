@@ -73,6 +73,18 @@ impl TestRunner {
     } 
   }
 
+  pub fn should_eq_repr<A, B>(
+    self: Ref<TestRunner>, 
+    val: A, 
+    expected: B
+  ) -> Result<(), string> {
+    if f"{val}" == f"{expected}" {
+      Ok(())
+    } else {
+      self.fail(f"Expected {expected}, got {val}")
+    }
+  }
+
   pub fn should_contain<A: Contains<B>, B>(
         self: Ref<TestRunner>, 
         val:  A,  

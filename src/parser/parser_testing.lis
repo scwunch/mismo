@@ -1,0 +1,29 @@
+import "testing"
+
+pub fn test() {
+  let _ = testing.test_suite("Parser", [
+    test_dummy,
+    test_parse_type_params,
+  ])
+}
+
+// impl TokenKind { pub fn eq(self, other: TokenKind) -> bool { self == other } }
+// impl Token     { pub fn eq(self, other: Token) -> bool { self == other } }
+// impl Keyword     { pub fn eq(self, other: Keyword) -> bool { self == other } }
+
+fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parser Dummy"
+  Ok(())
+}
+
+fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parse Type Params"
+  let mut parser = Parser.new_with_defs("[T, U]")
+  match parser.parse_type_params() {
+    // Ok(type_params) if type_params == ["T", "U"] => (),
+    Ok(type_params) => // t.fail(f"Expected [T, U]; got {type_params}")?,
+      t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+  Ok(())
+}

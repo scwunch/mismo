@@ -1,0 +1,23 @@
+import "span"
+
+pub interface Error {
+  fn Error(self) -> string
+}
+
+pub interface SyntaxError {
+  impl error
+  fn location(self, source: Slice<rune>) -> span.Location
+}
+
+pub struct ParseError {
+  pub span: span.Span,
+  pub msg: string,
+}
+impl ParseError {
+  pub fn location(self, source: Slice<rune>) -> span.Location {
+    self.span.location(source)
+  }
+  pub fn Error(self) -> string {
+    self.msg
+  }
+}
