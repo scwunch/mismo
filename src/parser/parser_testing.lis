@@ -1,9 +1,13 @@
 import "testing"
+import "lexer"
+import "span"
 
 pub fn test() {
   let _ = testing.test_suite("Parser", [
     test_dummy,
+    test_consume,
     test_parse_type_params,
+    test_parse_fields,
   ])
 }
 
@@ -16,14 +20,92 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
+fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parser Consume"
+  let mut parser = Parser.new_with_defs("[[[[[")
+  match parser.consume(lexer.TokenKind.LeftBracket) {
+    Ok(s) => t.should_eq(s, span.Span.new(0, 1))?,
+    Err(e) => t.fail(f"Expected `[`; got {e}")?,
+  }
+  match parser.consume(lexer.TokenKind.RightBracket) {
+    Ok(s) => t.fail("Did not expect `]`")?,
+    Err(e) => t.should_eq(e, lexer.Token.left_bracket(1))?
+  }
+  Ok(())
+}
+
 fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parse Type Params"
   let mut parser = Parser.new_with_defs("[T, U]")
   match parser.parse_type_params() {
-    // Ok(type_params) if type_params == ["T", "U"] => (),
-    Ok(type_params) => // t.fail(f"Expected [T, U]; got {type_params}")?,
-      t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
     Err(err) => t.fail(err.Error())?,
+  }
+
+  // trailing comma
+  parser = Parser.new_with_defs("[T, U,]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // space-separated
+  parser = Parser.new_with_defs("[T U]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // newline-separated, newline at beginning and end
+  parser = Parser.new_with_defs("[\n T\n U\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // comma-newline-separated, newline at end
+  parser = Parser.new_with_defs("[T,\n U,\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // empty list
+  parser = Parser.new_with_defs("[ ]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // empty list with newline (indent>0)
+  parser = Parser.new_with_defs("[\n  ]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // empty list with newline (indent=0)
+  parser = Parser.new_with_defs("[  \n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.Error())?,
+  }
+
+  // failure to indent item
+  parser = Parser.new_with_defs("[\nT\nU\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.fail("expected error")?, //t.should_eq_repr(type_params, ["T", "U"])?,
+    Err(err) => t.should_eq_repr(err, "list items must be indented deeper than line of list start")? // t.fail(err.Error())?,
+  }
+  Ok(())
+}
+
+fn test_parse_fields(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Struct Fields"
+  let mut parser = Parser.new_with_defs("\n  field: Type\n  field: Type\n")
+  match parser.parse_fields() {
+    Ok(fields) => t.should_eq_repr(fields, [])?,
+    Err(e) => t.fail(e.Error())?
   }
   Ok(())
 }

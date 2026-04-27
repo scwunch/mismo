@@ -1,0 +1,6 @@
+import "go:fmt"
+
+pub fn dbg<A>(a: A) -> A {
+  fmt.Println(a)
+  a
+}

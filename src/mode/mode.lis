@@ -5,7 +5,7 @@ pub enum Mode {
   Var,
 }
 impl Mode {
-  pub fn string(self) {
+  pub fn string(self) -> string {
     match self {
       Mode.Let => "let",
       Mode.Mut => "mut",
