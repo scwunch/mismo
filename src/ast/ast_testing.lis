@@ -1,16 +1,21 @@
 import "utils/slice"
 
-impl Type { 
-  pub fn eq(self, other: Type) -> bool { 
-    self.span == other.span
-    && self.name == other.name
-    && slice.compare(self.type_args, other.type_args, Type.eq)
+impl Type {
+  pub fn eq(self, other: Type) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.type_args, other.type_args, Type.eq)
   }
 }
+
 impl Field {
   pub fn eq(self, other: Field) -> bool {
-    self.span == other.span
-    && self.name == other.name
-    && self.typ.eq(other.typ)
+    self.span == other.span && self.name == other.name && self.typ.eq(other.typ)
+  }
+}
+
+impl StructDef {
+  pub fn eq(self, other: StructDef) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.fields, other.fields, Field.eq)
   }
 }
