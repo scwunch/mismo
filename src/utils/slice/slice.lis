@@ -1,0 +1,16 @@
+pub fn compare<T>(s1: Slice<T>, s2: Slice<T>, pred: fn(T, T)->bool) -> bool {
+  s1.length() == s2.length() &&
+    zip(s1, s2).all(|(v1, v2)| pred(v1, v2))
+}
+
+pub fn zip<T>(s1: Slice<T>, s2: Slice<T>) -> Slice<(T, T)> {
+  if s1.length() <= s2.length() {
+    s1.enumerate().map(|(i, v)| {
+      (v, s2[i])
+    })
+  } else {
+    s2.enumerate().map(|(i, v)| {
+      (v, s1[i])
+    })
+  }
+}

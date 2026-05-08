@@ -39,8 +39,8 @@ pub struct Field {
   pub typ: Type,
 }
 impl Field {
-  pub fn new(span: span.Span, name: string, typ: Type) -> Field {
-    Field { span, name, typ }
+  pub fn new(start: uint32, end: uint32, name: string, typ: Type) -> Field {
+    Field { span: span.Span{start, end}, name, typ }
   }
 }
 

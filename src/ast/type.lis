@@ -10,3 +10,7 @@ impl Type {
     Type { span, name, type_args }
   }
 }
+
+pub fn typ(start: uint32, end: uint32, name: string, type_args: Slice<Type>) -> Type {
+  Type.new(span.Span{start, end}, name, type_args)
+}

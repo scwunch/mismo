@@ -112,7 +112,7 @@ impl Lexer {
         break
       }
     }
-    let word = self.source[start as int..self.index as int] as string
+    let word = self.slice(start, self.index) as string
     
     match Keyword.parse(word) {
       Some(Keyword.Mut) if self.peek_char_at(1) == '!' => {
@@ -190,7 +190,6 @@ impl Lexer {
           _ => self.index += 1
         }
       }
-      // let str = self.source[(start + 1) as int..self.index as int] as string
       let str = self.slice(start + 1, self.index) as string
       self.index += 1
       Token.string_literal(start, self.index, str)

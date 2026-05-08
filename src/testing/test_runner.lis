@@ -69,7 +69,7 @@ impl TestRunner {
     if val.eq(expected) {
       Ok(())
     } else {
-      self.fail(f"Expected {expected}, got {val}")
+      self.fail(f"Expected {expected}; got {val}")
     } 
   }
 
@@ -81,7 +81,7 @@ impl TestRunner {
     if f"{val}" == f"{expected}" {
       Ok(())
     } else {
-      self.fail(f"Expected {expected}, got {val}")
+      self.fail(f"Expected \"{expected}\"; got \"{val}\"")
     }
   }
 
