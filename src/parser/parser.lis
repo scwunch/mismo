@@ -45,14 +45,14 @@ impl Parser {
 
   pub fn parse(self: Ref<Parser>) {
     loop {
-      let tok = self.next()
-      let result: Result<(), ParseError> = match tok.kind {
+      // let tok = self.next()
+      let result: Result<(), ParseError> = match self.peek().kind {
         TokenKind.Identifier("import") => self.parse_import(),
         TokenKind.Identifier("struct") => self.parse_struct(),
         TokenKind.Identifier("enum") => self.parse_enum(),
         TokenKind.Identifier("fn") => self.parse_function(),
         _ => Err(self.error(
-          tok.span,
+          self.peek().span,
           "Expected top-level definition (fn, import, struct, enum, interface)",
         )),
       }
@@ -71,7 +71,8 @@ impl Parser {
   }
 
   fn parse_struct(self: Ref<Parser>) -> Result<(), ParseError> {
-    let mut span = self.peek().span
+    let mut span = self.next().span
+    // consume the "struct" keyword
     let name = self.consume_identifier()?
     let mut type_params = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
@@ -136,19 +137,17 @@ impl Parser {
           continue
         } else {
           // syntax error, unless the closing token follows this newline
-          if i == indent &&
-          self
-            .try_or_backtrack(|| {
-              let _ = self.next()
-              if self.peek().kind == end { Ok(()) } else { Err(()) }
-            })
-            .is_ok() {
-            break
+          let found_end_token = self.try_or_backtrack(|| {
+            let _ = self.consume(lexer.TokenKind.Newline(indent))?
+            if self.peek().kind == end { Ok(()) } else { Err(self.peek()) }
+          })
+          match found_end_token {
+            Ok(_) => break,
+            Err(tok) => return Err(self.error(
+              tok.span,
+              "list items must be indented deeper than line of list start",
+            )),
           }
-          return Err(self.error(
-            self.peek().span,
-            "list items must be indented deeper than line of list start",
-          ))
         }
       }
 

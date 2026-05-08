@@ -111,7 +111,7 @@ fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(type_params) => t.fail("expected error")?,
     Err(err) => t.should_eq_repr(
       err,
-      "0..1: list items must be indented deeper than line of list start",
+      "1..2: list items must be indented deeper than line of list start",
     )?,
   }
   Ok(())
@@ -182,78 +182,6 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_parse_fields(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Struct Fields"
-
-  // let mut self = Parser.new_with_defs("\n  field: Type\n  field: Type\n")
-  // let mut items = []
-  // let end = lexer.TokenKind.Newline(0)
-  // let indent = 0 as uint32
-  // testing.dbg("ROUND 1")
-  // if let TokenKind.Newline(i) = self.peek().kind {
-  //   if i <= indent {
-  //     if i == indent && self.try_or_backtrack(|| {
-  //       let _ = self.next()
-  //       if self.peek().kind == end { Ok(()) } else { Err(()) }
-  //     }).is_ok() {
-  //       testing.dbg("break!")
-  //     }
-  //     testing.dbg("      return Err(self.error(        self.peek().span,         \"list items must be indented deeper than line of list start\"      ))")
-  //   } else {
-  //     self.next()
-  //     ""
-  //   }
-  // }
-  // if self.peek().kind == end || self.peek().kind == lexer.TokenKind.EOF {
-  //   testing.dbg("break!")
-  // }
-  // items = items.append(self.parse_field())
-  // // optional comma
-  // let _ = self.consume(lexer.TokenKind.Comma)
-  // testing.dbg(items)
-  // testing.dbg("ROUND 2")
-  // if let TokenKind.Newline(i) = self.peek().kind {
-  //   if i <= indent {
-  //     if i == indent && self.try_or_backtrack(|| {
-  //       let _ = self.next()
-  //       if self.peek().kind == end { Ok(()) } else { Err(()) }
-  //     }).is_ok() {
-  //       testing.dbg("break!")
-  //     }
-  //     testing.dbg("      return Err(self.error(        self.peek().span,         \"list items must be indented deeper than line of list start\"      ))")
-  //   } else {
-  //     self.next()
-  //     ""
-  //   }
-  // }
-  // if self.peek().kind == end || self.peek().kind == lexer.TokenKind.EOF {
-  //   testing.dbg("break!")
-  // }
-  // items = items.append(self.parse_field())
-  // // optional comma
-  // let _ = self.consume(lexer.TokenKind.Comma)
-  // testing.dbg(items)
-  // testing.dbg("ROUND 3")
-  // if let TokenKind.Newline(i) = self.peek().kind {
-  //   testing.dbg(f"i={i}")
-  //   if i <= indent {
-  //     if i == indent && self.try_or_backtrack(|| {
-  //       let _ = self.next()
-  //       if self.peek().kind == end { Ok(()) } else { Err(()) }
-  //     }).is_ok() {
-  //       testing.dbg("break!")
-  //     }
-  //     testing.dbg("      return Err(self.error(        self.peek().span,         \"list items must be indented deeper than line of list start\"      ))")
-  //   } else {
-  //     self.next()
-  //     ""
-  //   }
-  // }
-  // if self.peek().kind == end || self.peek().kind == lexer.TokenKind.EOF {
-  //   testing.dbg("break!")
-  // }
-  // items = items.append(self.parse_field())
-  // // optional comma
-  // let _ = self.consume(lexer.TokenKind.Comma)
-  // testing.dbg(items)
   let mut parser = Parser.new_with_defs("\n  field: Type\n  field: Type\n")
   match parser.parse_fields() {
     Ok(fields) => t.should_eq_repr(
@@ -269,23 +197,63 @@ fn test_parse_fields(t: Ref<testing.TestRunner>) -> Result<(), string> {
 }
 
 fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  let mut parser = Parser.new_with_defs(
-    "struct Name \n  field: Type\n  field: Type\n",
-  )
+  t.test_name = "Parsing Struct"
+  let mut parser = Parser.new_with_defs("struct Point \n  x: Int\n  y: Int\n")
+
   match parser.parse_struct() {
     Ok(_) => (),
     Err(e) => t.fail(e.Error())?,
   }
+  let s = parser.defs.structs.get(0).ok_or("no struct found")?
+  t.should_eq_repr(s.name, "Point")?
+  t.should_be_true(
+    s.type_parameters.length() == 0,
+    "type parameters should be empty",
+  )?
+  t.should_eq_repr(s.fields.length(), 2)?
+  let field1 = s.fields[0]
+  let field2 = s.fields[1]
+  let expected_field1 = ast.Field.new(16, 22, "x", ast.typ(19, 22, "Int", []))
+  let expected_field2 = ast.Field.new(25, 31, "y", ast.typ(28, 31, "Int", []))
+  t.should_eq(field1, expected_field1)?
+  t.should_eq(field2, expected_field2)?
   t.should_eq(
-    parser.defs.structs[0],
+    s,
+    ast.StructDef.new(
+      Span.new(0, 32),
+      "Point",
+      [],
+      [expected_field1, expected_field2],
+    ),
+  )?
+
+  // struct with type parameters
+  let mut parser = Parser.new_with_defs("struct Point[T]\n  x: T\n  y: T\n")
+  match parser.parse_struct() {
+    Ok(_) => (),
+    Err(e) => t.fail(e.Error())?,
+  }
+  let s = parser.defs.structs.get(0).ok_or("no struct found")?
+  t.should_eq_repr(s.name, "Point")?
+  t.should_be_true(
+    s.type_parameters.length() == 1,
+    "type parameters should have length 1",
+  )?
+  t.should_eq_repr(s.type_parameters[0], "T")?
+  t.should_eq_repr(s.fields.length(), 2)?
+  let field1 = s.fields[0]
+  let field2 = s.fields[1]
+  let expected_field1 = ast.Field.new(18, 22, "x", ast.typ(21, 22, "T", []))
+  let expected_field2 = ast.Field.new(25, 29, "y", ast.typ(28, 29, "T", []))
+  t.should_eq(field1, expected_field1)?
+  t.should_eq(field2, expected_field2)?
+  t.should_eq(
+    s,
     ast.StructDef.new(
       Span.new(0, 30),
-      "Name",
-      [],
-      [
-        ast.Field.new(6, 17, "field", ast.typ(13, 17, "Type", [])),
-        ast.Field.new(20, 31, "field", ast.typ(27, 31, "Type", [])),
-      ],
+      "Point",
+      ["T"],
+      [expected_field1, expected_field2],
     ),
   )?
   Ok(())
