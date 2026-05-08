@@ -6,7 +6,6 @@ pub struct Definitions {
   pub imports: Slice<Import>,
   pub structs: Slice<StructDef>,
   pub enums: Slice<EnumDef>,
-  pub interfaces: Slice<InterfaceDef>,
   pub functions: Slice<FunctionDef>,
   pub errors: Slice<errors.SyntaxError>,
 }
@@ -15,6 +14,7 @@ pub struct Import {
   pub path: string,
   pub alias: Option<string>,
 }
+
 impl Import {
   pub fn new(path: string, alias: Option<string>) -> Import {
     Import { path, alias }
@@ -27,8 +27,14 @@ pub struct StructDef {
   pub type_parameters: Slice<string>,
   pub fields: Slice<Field>,
 }
+
 impl StructDef {
-  pub fn new(span: span.Span, name: string, type_parameters: Slice<string>, fields: Slice<Field>) -> StructDef {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<string>,
+    fields: Slice<Field>,
+  ) -> StructDef {
     StructDef { span, name, type_parameters, fields }
   }
 }
@@ -38,9 +44,10 @@ pub struct Field {
   pub name: string,
   pub typ: Type,
 }
+
 impl Field {
   pub fn new(start: uint32, end: uint32, name: string, typ: Type) -> Field {
-    Field { span: span.Span{start, end}, name, typ }
+    Field { span: span.Span { start, end }, name, typ }
   }
 }
 
@@ -50,8 +57,14 @@ pub struct EnumDef {
   pub type_parameters: Slice<string>,
   pub variants: Slice<Variant>,
 }
+
 impl EnumDef {
-  pub fn new(span: span.Span, name: string, type_parameters: Slice<string>, variants: Slice<Variant>) -> EnumDef {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<string>,
+    variants: Slice<Variant>,
+  ) -> EnumDef {
     EnumDef { span, name, type_parameters, variants }
   }
 }
@@ -59,24 +72,12 @@ impl EnumDef {
 pub struct Variant {
   pub span: span.Span,
   pub name: string,
-  pub payload: Slice<Type>
+  pub payload: Slice<Type>,
 }
+
 impl Variant {
   pub fn new(span: span.Span, name: string, payload: Slice<Type>) -> Variant {
     Variant { span, name, payload }
-  }
-}
-
-pub struct InterfaceDef {
-  pub span: span.Span,
-  pub name: string,
-  pub type_parameters: Slice<string>,
-  pub parents: Slice<Type>,
-  pub methods: Slice<MethodDef>,
-}
-impl InterfaceDef {
-  pub fn new(span: span.Span, name: string, type_parameters: Slice<string>, parents: Slice<Type>, methods: Slice<MethodDef>) -> InterfaceDef {
-    InterfaceDef { span, name, type_parameters, parents, methods }
   }
 }
 
@@ -84,19 +85,10 @@ pub struct FunctionDef {
   pub sig: Signature,
   pub body: Expression,
 }
+
 impl FunctionDef {
   pub fn new(sig: Signature, body: Expression) -> FunctionDef {
     FunctionDef { sig, body }
-  }
-}
-
-pub struct MethodDef {
-  pub sig: Signature,
-  pub body: Option<Expression>,
-}
-impl MethodDef {
-  pub fn new(sig: Signature, body: Option<Expression>) -> MethodDef {
-    MethodDef { sig, body }
   }
 }
 
@@ -106,8 +98,14 @@ pub struct Signature {
   pub type_parameters: Slice<string>,
   pub parameters: Slice<Parameter>,
 }
+
 impl Signature {
-  pub fn new(span: span.Span, name: string, type_parameters: Slice<string>, parameters: Slice<Parameter>) -> Signature {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<string>,
+    parameters: Slice<Parameter>,
+  ) -> Signature {
     Signature { span, name, type_parameters, parameters }
   }
 }
@@ -116,22 +114,21 @@ pub struct Parameter {
   pub span: span.Span,
   pub mode: Mode,
   pub name: string,
-  pub typ:  Type,
+  pub typ: Type,
 }
+
 impl Parameter {
   pub fn new(span: span.Span, mode: Mode, name: string, typ: Type) -> Parameter {
     Parameter { span, mode, name, typ }
   }
 }
 
-
 impl Definitions {
   pub fn new() -> Definitions {
-    Definitions{
+    Definitions { 
       imports: [],
       structs: [],
       enums: [],
-      interfaces: [],
       functions: [],
       errors: [],
     }
@@ -140,18 +137,19 @@ impl Definitions {
   pub fn add_import(self: Ref<Definitions>, i: Import) {
     self.imports = self.imports.append(i)
   }
+
   pub fn add_struct(self: Ref<Definitions>, s: StructDef) {
     self.structs = self.structs.append(s)
   }
+
   pub fn add_enum(self: Ref<Definitions>, e: EnumDef) {
     self.enums = self.enums.append(e)
   }
-  pub fn add_interface(self: Ref<Definitions>, i: InterfaceDef) {
-    self.interfaces = self.interfaces.append(i)
-  }
+
   pub fn add_function(self: Ref<Definitions>, f: FunctionDef) {
     self.functions = self.functions.append(f)
   }
+
   pub fn add_error(self: Ref<Definitions>, s: errors.SyntaxError) {
     self.errors = self.errors.append(s)
   }
