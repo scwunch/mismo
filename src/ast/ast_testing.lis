@@ -19,3 +19,17 @@ impl StructDef {
     slice.compare(self.fields, other.fields, Field.eq)
   }
 }
+
+impl Variant {
+  pub fn eq(self, other: Variant) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.payload, other.payload, Type.eq)
+  }
+}
+
+impl EnumDef {
+  pub fn eq(self, other: EnumDef) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.variants, other.variants, Variant.eq)
+  }
+}

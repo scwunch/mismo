@@ -89,6 +89,20 @@ impl Parser {
   }
 
   fn parse_enum(self: Ref<Parser>) -> Result<(), ParseError> {
+    let mut span = self.next().span
+    // consume the "struct" keyword
+    let name = self.consume_identifier()?
+    let mut type_params = []
+    if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
+      type_params = self.parse_type_params()?
+      let _ = self
+        .consume(lexer.TokenKind.RightBracket)
+        .map_err(|tok| self.error(tok.span, "Expected right bracket"))?
+    }
+    let variants = self.parse_variants()?
+    let newline_span = self.next().span
+    span = span.merge(newline_span)
+    self.defs.add_enum(ast.EnumDef.new(span, name, type_params, variants))
     Ok(())
   }
 
@@ -170,6 +184,26 @@ impl Parser {
       self.* = state
     }
     res
+  }
+
+  fn parse_variants(self: Ref<Parser>) -> Result<Slice<ast.Variant>, ParseError> {
+    self.parse_list(lexer.TokenKind.Newline(0), self.parse_variant)
+  }
+
+  fn parse_variant(self: Ref<Parser>) -> Result<ast.Variant, ParseError> {
+    let mut span = self.peek().span
+    let name = self.consume_identifier()?
+    let mut payload = []
+    if self.consume(lexer.TokenKind.LeftParen).is_ok() {
+      payload = self.parse_list(lexer.TokenKind.RightParen, self.parse_type)?
+      let lparen = self
+        .consume(lexer.TokenKind.RightParen)
+        .map_err(|tok| {
+          self.error(span, f"Expected end parenthesis; got {tok.kind}")
+        })?
+      span = span.merge(lparen)
+    }
+    Ok(ast.Variant.new(span, name, payload))
   }
 
   fn parse_fields(self: Ref<Parser>) -> Result<Slice<ast.Field>, ParseError> {

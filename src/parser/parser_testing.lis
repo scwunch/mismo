@@ -14,6 +14,8 @@ pub fn test() {
       test_parse_field,
       test_parse_fields,
       test_parse_struct,
+      test_parse_variant,
+      test_parse_enum,
     ],
   )
 }
@@ -254,6 +256,80 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
       "Point",
       ["T"],
       [expected_field1, expected_field2],
+    ),
+  )?
+  Ok(())
+}
+
+fn test_parse_variant(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Variant"
+  let mut parser = Parser.new_with_defs("Some(T)")
+  match parser.parse_variant() {
+    Ok(variant) => t.should_eq(
+      variant,
+      ast.Variant.new(Span.new(0, 7), "Some", [ast.typ(5, 6, "T", [])]),
+    )?,
+    Err(e) => t.fail(e.Error())?,
+  }
+  parser = Parser.new_with_defs("None")
+  match parser.parse_variant() {
+    Ok(variant) => t.should_eq(
+      variant,
+      ast.Variant.new(Span.new(0, 4), "None", []),
+    )?,
+    Err(e) => t.fail(e.Error())?,
+  }
+  Ok(())
+}
+
+fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Enum"
+  let mut parser = Parser.new_with_defs("enum Color\n  Red\n  Green\n  Blue\n")
+  parser.parse_enum().map_err(|e| e.Error())?
+  let e = parser.defs.enums.get(0).ok_or("no enum found")?
+  t.should_eq_repr(e.name, "Color")?
+  t.should_eq_repr(e.variants.length(), 3)?
+  let variant1 = e.variants[0]
+  let variant2 = e.variants[1]
+  let variant3 = e.variants[2]
+  let expected_variant1 = ast.Variant.new(Span.new(13, 16), "Red", [])
+  let expected_variant2 = ast.Variant.new(Span.new(19, 24), "Green", [])
+  let expected_variant3 = ast.Variant.new(Span.new(27, 31), "Blue", [])
+  t.should_eq(variant1, expected_variant1)?
+  t.should_eq(variant2, expected_variant2)?
+  t.should_eq(variant3, expected_variant3)?
+  t.should_eq(
+    e,
+    ast.EnumDef.new(
+      Span.new(0, 32),
+      "Color",
+      [],
+      [expected_variant1, expected_variant2, expected_variant3],
+    ),
+  )?
+
+  parser = Parser.new_with_defs("enum Option[T]\n  Some(T)\n  None")
+  parser.parse_enum().map_err(|e| e.Error())?
+  let e = parser.defs.enums.get(0).ok_or("no enum found")?
+  t.should_eq_repr(e.name, "Option")?
+  t.should_eq_repr(e.variants.length(), 2)?
+  let variant1 = e.variants[0]
+  let variant2 = e.variants[1]
+  let expected_variant1 = ast.Variant.new(
+    Span.new(17, 24),
+    "Some",
+    [ast.typ(22, 23, "T", [])],
+  )
+  let expected_variant2 = ast.Variant.new(Span.new(27, 31), "None", [])
+  t.should_eq(variant1, expected_variant1)?
+  t.should_eq(variant2, expected_variant2)?
+  t.should_eq(
+    e,
+    ast.EnumDef.new(
+      Span.new(0, 31),
+      "Option",
+      ["T"],
+      [expected_variant1, expected_variant2],
     ),
   )?
   Ok(())
