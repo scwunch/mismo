@@ -1,12 +1,18 @@
-import "span"
-import "lexer"
 import "ast"
 import "errors"
+import "lexer"
+import "span"
+
 type Lexer = lexer.Lexer
+
 type Span = span.Span
+
 pub type Token = lexer.Token
+
 pub type TokenKind = lexer.TokenKind
+
 type TypeParameters = Slice<string>
+
 type ParseError = errors.ParseError
 
 pub struct Parser {
@@ -15,16 +21,12 @@ pub struct Parser {
   current_line_indent: uint32,
   pub defs: Ref<ast.Definitions>,
 }
+
 impl Parser {
   pub fn new(source: string, defs: Ref<ast.Definitions>) -> Parser {
     let mut lexer = Lexer.new(source)
     let peeked = lexer.next()
-    Parser { 
-      lexer, 
-      peeked, 
-      current_line_indent: 0, 
-      defs 
-    }
+    Parser { lexer, peeked, current_line_indent: 0, defs }
   }
 
   pub fn new_with_defs(source: string) -> Parser {
@@ -50,11 +52,14 @@ impl Parser {
         TokenKind.Identifier("enum") => self.parse_enum(),
         TokenKind.Identifier("interface") => self.parse_interface(),
         TokenKind.Identifier("fn") => self.parse_function(),
-        _ => Err(self.error(tok.span, "Expected top-level definition (fn, import, struct, enum, interface)"))
+        _ => Err(self.error(
+          tok.span,
+          "Expected top-level definition (fn, import, struct, enum, interface)",
+        )),
       }
       match result {
         Ok(_) => (),
-        Err(_) => self.recover_to_next_def()
+        Err(_) => self.recover_to_next_def(),
       }
     }
   }
@@ -62,7 +67,7 @@ impl Parser {
   fn parse_import(self: Ref<Parser>) -> Result<(), ParseError> {
     match self.peek().kind {
       TokenKind.StringLiteral(path) => panic("parse_import not implemented"),
-      _ => panic("parse_import not implemented")
+      _ => panic("parse_import not implemented"),
     }
   }
 
@@ -72,7 +77,9 @@ impl Parser {
     let mut type_params = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
       type_params = self.parse_type_params()?
-      self.consume(lexer.TokenKind.RightBracket)
+      if let Err(tok) = self.consume(lexer.TokenKind.RightBracket) {
+        return Err(self.error(tok.span, "Expected right bracket"))
+      }
     }
     let fields = self.parse_fields()?
     let newline_span = self.next().span
@@ -99,40 +106,30 @@ impl Parser {
         let _ = self.next()
         Ok(name)
       },
-      tok => Err(self.error(self.peek().span, f"Expected identifier.  Got {tok}"))
-    }
-  }
-
-  fn consume_newline(self: Ref<Parser>, current_indent: uint32) -> Result<uint32, Token> {
-    match self.peek().kind {
-      TokenKind.Newline(indent) if indent > current_indent => {
-        let _ = self.next()
-        Ok(indent)
-      },
-      _ => Err(self.peek())
+      tok => Err(self.error(
+        self.peek().span,
+        f"Expected identifier.  Got {tok}",
+      )),
     }
   }
 
   fn parse_type_params(self: Ref<Parser>) -> Result<TypeParameters, ParseError> {
-    self.parse_list(
-      lexer.TokenKind.RightBracket,
-      self.consume_identifier
-    )
+    self.parse_list(lexer.TokenKind.RightBracket, self.consume_identifier)
   }
 
   /// parse a list of items using a given parse function.  Items are separated by
-  /// (COMMA | COMMA + NEWLINE | NEWLINE) where the NEWLINE must be indented 
+  /// (COMMA | COMMA + NEWLINE | NEWLINE) where the NEWLINE must be indented
   /// beyond the given indent.
-  /// 
-  /// Returns either a ParseError, or a tuple containing the parsed items along 
+  ///
+  /// Returns either a ParseError, or a tuple containing the parsed items along
   /// with the index of the ending token
-  /// 
+  ///
   /// Will consume initial newline, and any trailing comma and newline.
   /// Beginning and ending brackets are not consumed.
   fn parse_list<Item>(
     self: Ref<Parser>,
     end: TokenKind,
-    fun: fn()->Result<Item, ParseError>,
+    fun: fn() -> Result<Item, ParseError>,
   ) -> Result<Slice<Item>, ParseError> {
     let mut items = []
     let indent = self.current_line_indent
@@ -144,15 +141,18 @@ impl Parser {
           continue
         } else {
           // syntax error, unless the closing token follows this newline
-          if i == indent && self.try_or_backtrack(|| {
-            let _ = self.next()
-            if self.peek().kind == end { Ok(()) } else { Err(()) }
-          }).is_ok() {
+          if i == indent &&
+          self
+            .try_or_backtrack(|| {
+              let _ = self.next()
+              if self.peek().kind == end { Ok(()) } else { Err(()) }
+            })
+            .is_ok() {
             break
           }
           return Err(self.error(
-            self.peek().span, 
-            "list items must be indented deeper than line of list start"
+            self.peek().span,
+            "list items must be indented deeper than line of list start",
           ))
         }
       }
@@ -165,7 +165,7 @@ impl Parser {
     Ok(items)
   }
 
-  fn try_or_backtrack<R, E>(self: Ref<Parser>, fun: fn()->Result<R, E>) -> Result<R, E> {
+  fn try_or_backtrack<R, E>(self: Ref<Parser>, fun: fn() -> Result<R, E>) -> Result<R, E> {
     let state = self.*
     // let index = self.lexer.index
     // let peeked = self.peeked
@@ -180,10 +180,7 @@ impl Parser {
 
   fn parse_fields(self: Ref<Parser>) -> Result<Slice<ast.Field>, ParseError> {
     // let _ = self.consume_newline(0)
-    self.parse_list(
-      lexer.TokenKind.Newline(0),
-      self.parse_field
-    )
+    self.parse_list(lexer.TokenKind.Newline(0), self.parse_field)
     // let mut fields = []
     // loop {
     //   match self.consume_newline() {
@@ -212,7 +209,8 @@ impl Parser {
   fn parse_field(self: Ref<Parser>) -> Result<ast.Field, ParseError> {
     let mut span = self.peek().span
     let name = self.consume_identifier()?
-    let _ = self.consume(lexer.TokenKind.Colon)  // optional colon
+    let _ = self.consume(lexer.TokenKind.Colon)
+    // optional colon
     span = span.merge(self.peek().span)
     let typ = self.parse_type()?
     Ok(ast.Field { span, name, typ })
@@ -225,24 +223,24 @@ impl Parser {
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
       type_args = self.parse_type_args()?
       span = span.merge(
-        self.consume(lexer.TokenKind.RightBracket)
-        .map_err(|tok| {self.error(span, f"Expected end bracket; got {tok.kind}")})?
+        self
+          .consume(lexer.TokenKind.RightBracket)
+          .map_err(|tok| {
+            self.error(span, f"Expected end bracket; got {tok.kind}")
+          })?,
       )
     }
     Ok(ast.Type.new(span, name, type_args))
   }
 
   fn parse_type_args(self: Ref<Parser>) -> Result<Slice<ast.Type>, ParseError> {
-    self.parse_list( 
-      lexer.TokenKind.RightBracket,
-      self.parse_type,
-    )
+    self.parse_list(lexer.TokenKind.RightBracket, self.parse_type)
   }
 
   fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, Token> {
     if self.peek().kind == kind {
       Ok(self.next().span)
-    } else { 
+    } else {
       Err(self.peek())
     }
   }
@@ -256,15 +254,13 @@ impl Parser {
 
   /// recover parser to the next top-level statement (ie, indent=0)
   fn recover_to_next_def(self: Ref<Parser>) {
-    if self.peek().kind == lexer.TokenKind.Newline(0) {
-      return
-    }
+    if self.peek().kind == lexer.TokenKind.Newline(0) { return }
     loop {
       match self.next().kind {
         TokenKind.Newline(0) | TokenKind.EOF => {
           return
         },
-        _ => ()
+        _ => (),
       }
     }
   }

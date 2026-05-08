@@ -1,30 +1,32 @@
 import "go:fmt"
 
-pub fn test(test_name: string, test_fn: fn(Ref<TestRunner>)->Result<(), string>) -> TestRunner {
+pub fn test(
+  test_name: string,
+  test_fn: fn(Ref<TestRunner>) -> Result<(), string>,
+) -> TestRunner {
   let t = TestRunner.new(test_name)
   match test_fn(&t) {
     Ok(_) => (),
-    Err(e) => fmt.Println(e)
+    Err(e) => fmt.Println(e),
   }
   t
 }
 
-pub fn test_suite(suite_name: string, tests: Slice<fn(Ref<TestRunner>)->Result<(), string>>) -> bool {
+pub fn test_suite(
+  suite_name: string,
+  tests: Slice<fn(Ref<TestRunner>) -> Result<(), string>>,
+) -> bool {
   fmt.Println(f"Test suite: {suite_name}")
   let num_tests = tests.length()
   let mut suite: Slice<TestRunner> = []
   for test_fn in tests {
     let t = TestRunner.new("")
-    if let Err(e) = test_fn(&t) {
-      fmt.Println(e)
-    }
+    if let Err(e) = test_fn(&t) { fmt.Println(e) }
     suite = suite.append(t)
   }
   let mut passed = 0
   for t in suite {
-    if t.passed() {
-      passed += 1
-    }
+    if t.passed() { passed += 1 }
   }
   if passed == num_tests {
     fmt.Println(f"All {num_tests} tests passed!")
@@ -33,12 +35,10 @@ pub fn test_suite(suite_name: string, tests: Slice<fn(Ref<TestRunner>)->Result<(
     fmt.Println(f"{passed} out of {num_tests} tests passed.")
     false
   }
-  false
 }
 
-pub struct TestFailure {
-  msg: string,
-}
+pub struct TestFailure { msg: string }
+
 impl TestFailure {
   pub fn Error(self) -> string {
     self.msg
@@ -49,35 +49,34 @@ pub struct TestRunner {
   pub test_name: string,
   status: bool,
 }
+
 impl TestRunner {
-  pub fn new(test_name: string) -> TestRunner { 
-    TestRunner{test_name, status: true} 
+  pub fn new(test_name: string) -> TestRunner {
+    TestRunner { test_name, status: true }
   }
 
-  pub fn passed(self) -> bool { self.status }
+  pub fn passed(self) -> bool {
+    self.status
+  }
 
   pub fn fail(self: Ref<TestRunner>, msg: string) -> Result<(), string> {
     self.status = false
     Err(f"{self.test_name} failed: {msg}")
   }
-  
+
   pub fn should_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
-        self: Ref<TestRunner>, 
-        val: A, 
-        expected: B
-      ) -> Result<(), string> {
+    self: Ref<TestRunner>,
+    val: A,
+    expected: B,
+  ) -> Result<(), string> {
     if val.eq(expected) {
       Ok(())
     } else {
       self.fail(f"Expected {expected}; got {val}")
-    } 
+    }
   }
 
-  pub fn should_eq_repr<A, B>(
-    self: Ref<TestRunner>, 
-    val: A, 
-    expected: B
-  ) -> Result<(), string> {
+  pub fn should_eq_repr<A, B>(self: Ref<TestRunner>, val: A, expected: B) -> Result<(), string> {
     if f"{val}" == f"{expected}" {
       Ok(())
     } else {
@@ -86,10 +85,10 @@ impl TestRunner {
   }
 
   pub fn should_contain<A: Contains<B>, B>(
-        self: Ref<TestRunner>, 
-        val:  A,  
-        expected: B
-      ) -> Result<(), string> {
+    self: Ref<TestRunner>,
+    val: A,
+    expected: B,
+  ) -> Result<(), string> {
     if val.contains(expected) {
       Ok(())
     } else {
@@ -98,10 +97,10 @@ impl TestRunner {
   }
 
   pub fn shouldnt_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
-      self: Ref<TestRunner>, 
-      val: A, 
-      expected: B
-      ) -> Result<(), string> {
+    self: Ref<TestRunner>,
+    val: A,
+    expected: B,
+  ) -> Result<(), string> {
     if val.eq(expected) {
       self.fail(f"Expected valueto not be {expected}")
     } else {
@@ -110,18 +109,11 @@ impl TestRunner {
   }
 
   pub fn should_be_true(self: Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
-    if cond {
-      Ok(())
-    } else {
-      self.fail(error_msg)
-    }
+    if cond { Ok(()) } else { self.fail(error_msg) }
   }
+
   pub fn should_be_false(self: Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
-    if !cond  {
-      Ok(())
-    } else {
-      self.fail(error_msg)
-    }
+    if !cond { Ok(()) } else { self.fail(error_msg) }
   }
 }
 
