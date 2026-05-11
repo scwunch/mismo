@@ -2,8 +2,30 @@ import "utils/slice"
 
 impl Type {
   pub fn eq(self, other: Type) -> bool {
-    self.span == other.span && self.name == other.name &&
-    slice.compare(self.type_args, other.type_args, Type.eq)
+    self.span == other.span && self.kind.eq(other.kind)
+  }
+}
+
+impl TypeKind {
+  pub fn eq(self, other: TypeKind) -> bool {
+    match (self, other) {
+      (TypeKind.Nominal(name1, args1), TypeKind.Nominal(name2, args2)) => {
+        name1 == name2 && slice.compare(args1, args2, Type.eq)
+      },
+      (TypeKind.Tuple(args1), TypeKind.Tuple(args2)) => {
+        slice.compare(args1, args2, Type.eq)
+      },
+      (TypeKind.Fn(params1, ret1), TypeKind.Fn(params2, ret2)) => {
+        slice.compare(params1, params2, ParamType.eq) && ret1.*.eq(ret2.*)
+      },
+      _ => false,
+    }
+  }
+}
+
+impl ParamType {
+  pub fn eq(self, other: ParamType) -> bool {
+    self.mode == other.mode && self.typ.eq(other.typ)
   }
 }
 

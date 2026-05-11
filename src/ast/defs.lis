@@ -1,4 +1,5 @@
 import "errors"
+import "mode"
 import "span"
 
 /// a container for definitions collected from a module
@@ -82,13 +83,14 @@ impl Variant {
 }
 
 pub struct FunctionDef {
-  pub sig: Signature,
+  pub span: span.Span,
+  pub signature: Signature,
   pub body: Expression,
 }
 
 impl FunctionDef {
-  pub fn new(sig: Signature, body: Expression) -> FunctionDef {
-    FunctionDef { sig, body }
+  pub fn new(span: span.Span, signature: Signature, body: Expression) -> FunctionDef {
+    FunctionDef { span, signature, body }
   }
 }
 
@@ -97,6 +99,7 @@ pub struct Signature {
   pub name: string,
   pub type_parameters: Slice<string>,
   pub parameters: Slice<Parameter>,
+  pub return_type: Type,
 }
 
 impl Signature {
@@ -105,20 +108,21 @@ impl Signature {
     name: string,
     type_parameters: Slice<string>,
     parameters: Slice<Parameter>,
+    return_type: Type,
   ) -> Signature {
-    Signature { span, name, type_parameters, parameters }
+    Signature { span, name, type_parameters, parameters, return_type }
   }
 }
 
 pub struct Parameter {
   pub span: span.Span,
-  pub mode: Mode,
+  pub mode: Option<mode.Mode>,
   pub name: string,
   pub typ: Type,
 }
 
 impl Parameter {
-  pub fn new(span: span.Span, mode: Mode, name: string, typ: Type) -> Parameter {
+  pub fn new(span: span.Span, mode: Option<mode.Mode>, name: string, typ: Type) -> Parameter {
     Parameter { span, mode, name, typ }
   }
 }

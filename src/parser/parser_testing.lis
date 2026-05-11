@@ -11,11 +11,14 @@ pub fn test() {
       test_consume,
       test_parse_type_params,
       test_parse_type,
+      test_parse_tuple_type,
+      test_parse_fn_type,
       test_parse_field,
       test_parse_fields,
       test_parse_struct,
       test_parse_variant,
       test_parse_enum,
+      test_parse_signature,
     ],
   )
 }
@@ -34,17 +37,17 @@ fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut parser = Parser.new_with_defs("[[[[[")
   match parser.consume(lexer.TokenKind.LeftBracket) {
     Ok(s) => t.should_eq(s, span.Span.new(0, 1))?,
-    Err(e) => t.fail(f"Expected `[`; got {e}")?,
+    Err(e) => t.fail(f"{e}")?,
   }
   match parser.consume(lexer.TokenKind.RightBracket) {
     Ok(s) => t.fail("Did not expect `]`")?,
-    Err(e) => t.should_eq(e, lexer.Token.left_bracket(1))?,
+    Err(e) => t.should_eq(parser.peek(), lexer.Token.left_bracket(1))?,
   }
   parser = Parser.new_with_defs("foobar")
   match parser.consume_identifier() {
-    Ok(str) => t.should_eq_repr(str, "foobar"),
-    Err(e) => t.fail(e.Error()),
-  }?
+    Ok(str) => t.should_eq_repr(str, "foobar")?,
+    Err(e) => t.fail(f"{e}")?,
+  }
   Ok(())
 }
 
@@ -166,6 +169,52 @@ fn test_parse_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Err(e) => t.fail(e.Error()),
   }?
 
+  Ok(())
+}
+
+fn test_parse_tuple_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Tuple Type"
+  let mut parser = Parser.new_with_defs("(Type, Type)")
+  let res = ast.Type.tuple(
+    span.Span.new(0, 12),
+    [ast.typ(1, 5, "Type", []), ast.typ(7, 11, "Type", [])],
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.Error()),
+  }?
+  Ok(())
+}
+
+fn test_parse_fn_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Function Type"
+  let mut parser = Parser.new_with_defs("(Type, Type) -> Type")
+  let res = ast.Type.fn_(
+    span.Span.new(0, 20),
+    [
+      ast.ParamType.none(ast.typ(1, 5, "Type", [])),
+      ast.ParamType.none(ast.typ(7, 11, "Type", [])),
+    ],
+    &ast.typ(16, 20, "Type", []),
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.Error()),
+  }?
+
+  parser = Parser.new_with_defs("(let Option[T], mut! T)->R")
+  let res = ast.Type.fn_(
+    span.Span.new(0, 26),
+    [
+      ast.ParamType.let_(ast.typ(5, 14, "Option", [ast.typ(12, 13, "T", [])])),
+      ast.ParamType.mut_bang(ast.typ(21, 22, "T", [])),
+    ],
+    &ast.typ(25, 26, "R", []),
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.Error()),
+  }?
   Ok(())
 }
 
@@ -332,5 +381,31 @@ fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
       [expected_variant1, expected_variant2],
     ),
   )?
+  Ok(())
+}
+
+fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parse Function Signature"
+  let mut parser = Parser.new_with_defs("fn foo(a: Int, b: Int) Int")
+  match parser.consume_identifier() {
+    Ok(name) => t.should_eq_repr(name, "fn")?,
+    Err(e) => return t.fail(e.Error()),
+  }
+  let sig = match parser.parse_signature() {
+    Ok(sig) => sig,
+    Err(e) => return t.fail(e.Error()),
+  }
+  t.should_eq_repr(sig.name, "foo")?
+  t.should_eq_repr(sig.type_parameters.length(), 0)?
+  t.should_eq_repr(sig.parameters.length(), 2)?
+  t.should_eq(
+    sig.parameters[0],
+    ast.param(7, 13, None, "a", ast.typ(10, 13, "Int", [])),
+  )?
+  t.should_eq(
+    sig.parameters[1],
+    ast.param(15, 21, None, "b", ast.typ(18, 21, "Int", [])),
+  )?
+  t.should_eq(sig.return_type, ast.typ(23, 26, "Int", []))?
   Ok(())
 }

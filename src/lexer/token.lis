@@ -1,8 +1,9 @@
 import "operator"
 import "span"
-pub type Operator = operator.Operator
-pub type Span = span.Span
 
+pub type Operator = operator.Operator
+
+pub type Span = span.Span
 
 pub struct Token {
   pub span: Span,
@@ -26,6 +27,7 @@ pub enum TokenKind {
   Comma,
   Colon,
   Semicolon,
+  Arrow,
   Newline(uint32),
   Keyword(Keyword),
   Operator(Operator),
@@ -75,6 +77,7 @@ pub enum Keyword {
   Continue,
   Return,
 }
+
 impl Keyword {
   pub fn string(self) -> string {
     match self {
@@ -151,6 +154,7 @@ impl TokenKind {
       TokenKind.Comma => ",",
       TokenKind.Colon => ":",
       TokenKind.Semicolon => ";",
+      TokenKind.Arrow => "->",
       TokenKind.Newline(indent) => f"\\n({indent})",
       TokenKind.Keyword(keyword) => f"{keyword}",
       TokenKind.Operator(op) => f"{op}",
@@ -173,7 +177,7 @@ impl TokenKind {
       TokenKind.Question => "?",
       TokenKind.Slash => "/",
       TokenKind.EOF => "EOF",
-      TokenKind.Error(err) => f"Error({err})"
+      TokenKind.Error(err) => f"Error({err})",
     }
   }
 }
@@ -191,7 +195,7 @@ impl Token {
   //  constructors
   // ===============
   pub fn nil(start: uint32, end: uint32) -> Token {
-    Token.new(Span{ start, end }, TokenKind.Nil)
+    Token.new(Span { start, end }, TokenKind.Nil)
   }
 
   pub fn bool(start: uint32, end: uint32, val: bool) -> Token {
@@ -244,6 +248,10 @@ impl Token {
 
   pub fn semicolon(start: uint32) -> Token {
     Token.new(Span { start, end: start + 1 }, TokenKind.Semicolon)
+  }
+
+  pub fn arrow(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 2 }, TokenKind.Arrow)
   }
 
   pub fn operator(start: uint32, end: uint32, operator: Operator) -> Token {

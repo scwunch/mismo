@@ -1,35 +1,39 @@
-import "span"
 import "mode"
 import "operator"
+import "span"
+
 // type Span = span.Span
 pub type Operator = operator.Operator
-pub type Mode = mode.Mode
 
+pub struct Expression {
+  pub span: span.Span,
+  pub kind: Expr,
+}
 
-pub enum Expression {
-  Nil(span.Span),
-  Bool(span.Span, bool),
-  IntLiteral(span.Span, int),
-  FloatLiteral(span.Span, float64),
-  StringLiteral(span.Span, string),
-  ArrayLiteral(span.Span, Slice<Expression>),
-  TupleLiteral(span.Span, Slice<Expression>),
-  Identifier(span.Span, string),
-  Binding(Mode, Ref<Expression>),
-  Binop{left: Ref<Expression>, op: Operator, right: Ref<Expression>},
-  Assign{pattern: Ref<Expression>, value: Option<Ref<Expression>>},
-  Call{span: span.Span, fn_name: string, type_args: Slice<Type>, args: Slice<Expression>},
-  If(span.Span, Conditional),
-  While(span.Span, Conditional),
-  For{span: span.Span, binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression>},
+pub enum Expr {
+  Nil,
+  Bool(bool),
+  IntLiteral(int),
+  FloatLiteral(float64),
+  StringLiteral(string),
+  ArrayLiteral(Slice<Expression>),
+  TupleLiteral(Slice<Expression>),
+  Identifier(string),
+  Binding(mode.Mode, Ref<Expression>),
+  Binop { left: Ref<Expression>, op: Operator, right: Ref<Expression> },
+  Assign { pattern: Ref<Expression>, value: Option<Ref<Expression>> },
+  Call { fn_name: string, type_args: Slice<Type>, args: Slice<Expression> },
+  If(Conditional),
+  While(Conditional),
+  For { binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression> },
   Block(Slice<Expression>),
 }
 
 pub enum Conditional {
-  Binary{subject: Ref<Expression>, ops: Slice<Comparison>},
-  Unary{expr: Ref<Expression>, consequent: Ref<Expression>},
+  Binary { subject: Ref<Expression>, ops: Slice<Comparison> },
+  Unary { expr: Ref<Expression>, consequent: Ref<Expression> },
   Multi(Slice<Conditional>),
-  Else{consequent: Ref<Expression>}
+  Else { consequent: Ref<Expression> },
 }
 
 pub struct Comparison {
@@ -48,6 +52,29 @@ pub enum Consequent {
   Do(Ref<Expression>),
 }
 
+pub fn nil_lit(span: span.Span) -> Expression {
+  Expression { span, kind: Expr.Nil }
+}
+
+pub fn bool_lit(span: span.Span, value: bool) -> Expression {
+  Expression { span, kind: Expr.Bool(value) }
+}
+
+pub fn int_lit(span: span.Span, value: int) -> Expression {
+  Expression { span, kind: Expr.IntLiteral(value) }
+}
+
+pub fn float_lit(span: span.Span, value: float64) -> Expression {
+  Expression { span, kind: Expr.FloatLiteral(value) }
+}
+
+pub fn string_lit(span: span.Span, value: string) -> Expression {
+  Expression { span, kind: Expr.StringLiteral(value) }
+}
+
+pub fn array_lit(span: span.Span, values: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.ArrayLiteral(values) }
+}
 
 // struct PatternExpr {
 //   span: Span,

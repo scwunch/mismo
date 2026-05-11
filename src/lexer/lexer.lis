@@ -4,18 +4,16 @@ pub struct Lexer {
   pub source: Slice<rune>,
   pub index: uint32,
 }
+
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    Lexer { 
-      source: source as Slice<rune>, 
-      index: 0,
-    }
+    Lexer { source: source as Slice<rune>, index: 0 }
   }
 
   /// Returns the next token in the source, advancing the index.
   pub fn next(self: Ref<Lexer>) -> Token {
     let pos = self.index
-    
+
     let tok = match self.peek_char() {
       ',' => Token.comma(pos),
       '.' => Token.dot(pos),
@@ -30,6 +28,7 @@ impl Lexer {
       '"' | '\'' | '`' => self.read_string(),
       '\n' => self.new_line(),
       '-' if self.peek_char_at(1) == '-' => self.new_line(),
+      '-' if self.peek_char_at(1) == '>' => Token.arrow(pos),
       ' ' | '\t' => {
         self.index += 1
         return self.next()
@@ -38,7 +37,7 @@ impl Lexer {
       c if is_digit(c) => self.read_number(),
       c if is_identifier_start(c) => self.read_word(),
       c if is_operator(c) => self.read_operator(),
-      c => Token.error(pos, self.index, f"Unhandled character: '{c}'")
+      c => Token.error(pos, self.index, f"Unhandled character: '{c}'"),
     }
 
     self.index = tok.span.end
@@ -53,26 +52,25 @@ impl Lexer {
 
   /// Returns the character at the current index plus offset, or 0 if at end.
   fn peek_char_at(self, offset: int) -> rune {
-    self.source.get(
-      self.index as int + offset
-    ).unwrap_or(0)
+    self.source.get(self.index as int + offset).unwrap_or(0)
   }
 
   /// get a bounds-checked sub-slice of self.source
   fn slice(self, start: uint32, end: uint32) -> Slice<rune> {
     if end as int >= self.source.length() {
-      self.source[start as int ..]
+      self.source[start as int..]
     } else {
-      self.source[start as int .. end as int]
+      self.source[start as int..end as int]
     }
   }
 
-  /// Advances to next significant line (non-whitespace, non-comment) and 
-  /// counts the indentation (spaces/tabs) until the first significant 
+  /// Advances to next significant line (non-whitespace, non-comment) and
+  /// counts the indentation (spaces/tabs) until the first significant
   /// character.  Returns newline token.
   fn new_line(self: Ref<Lexer>) -> Token {
     self.new_line_recursive(self.index)
   }
+
   fn new_line_recursive(self: Ref<Lexer>, start: uint32) -> Token {
     // advance to next line
     loop {
@@ -106,27 +104,23 @@ impl Lexer {
     let start = self.index
     loop {
       let c = self.peek_char()
-      if is_alphanumeric(c) {
-        self.index += 1
-      } else {
-        break
-      }
+      if is_alphanumeric(c) { self.index += 1 } else { break }
     }
     let word = self.slice(start, self.index) as string
-    
+
     match Keyword.parse(word) {
-      Some(Keyword.Mut) if self.peek_char_at(1) == '!' => {
+      Some(Keyword.Mut) if self.peek_char() == '!' => {
         self.index += 1
         Token.keyword(start, self.index, Keyword.MutBang)
       },
       Some(kw) => Token.keyword(start, self.index, kw),
       None => match word {
         "and" => Token.operator(start, self.index, Operator.And),
-        "or"  => Token.operator(start, self.index, Operator.Or),
+        "or" => Token.operator(start, self.index, Operator.Or),
         "not" => Token.operator(start, self.index, Operator.Not),
-        "is"  => Token.operator(start, self.index, Operator.Is),
-        "in"  => Token.operator(start, self.index, Operator.In),
-        _ => Token.identifier(start, self.index, word)
+        "is" => Token.operator(start, self.index, Operator.Is),
+        "in" => Token.operator(start, self.index, Operator.In),
+        _ => Token.identifier(start, self.index, word),
       },
     }
   }
@@ -157,7 +151,7 @@ impl Lexer {
           num_digits += 1
         },
         '_' => (),
-        _ => return (acc, num_digits)
+        _ => return (acc, num_digits),
       }
       self.index += 1
     }
@@ -168,7 +162,7 @@ impl Lexer {
     let quote = self.source[start as int]
     self.index += 1
     let mut quote_width = 1
-    
+
     while self.peek_char() == quote {
       quote_width += 1
       self.index += 1
@@ -186,8 +180,12 @@ impl Lexer {
       loop {
         match self.peek_char() {
           '`' => break,
-          0 | '\n' => return Token.error(start, self.index, "unterminated string literal"),
-          _ => self.index += 1
+          0 | '\n' => return Token.error(
+            start,
+            self.index,
+            "unterminated string literal",
+          ),
+          _ => self.index += 1,
         }
       }
       let str = self.slice(start + 1, self.index) as string
@@ -205,7 +203,7 @@ impl Lexer {
           '\\' => {
             self.index += 1
             chars = match self.peek_char() {
-              'n'  => chars.append('\n'),
+              'n' => chars.append('\n'),
               't' => chars.append('\t'),
               'r' => chars.append('\r'),
               '\\' => chars.append('\\'),
@@ -213,7 +211,11 @@ impl Lexer {
               '\'' => chars.append('\''),
               ec => {
                 self.index += 1
-                return Token.error(self.index - 2, self.index, f"Invalid escape sequence: \\{ec}")
+                return Token.error(
+                  self.index - 2,
+                  self.index,
+                  f"Invalid escape sequence: \\{ec}",
+                )
               },
             }
           },
@@ -227,10 +229,10 @@ impl Lexer {
 
   /// call immediately after consuming open quote
   fn read_multiline_string(
-    self: Ref<Lexer>, 
-    start: uint32, 
-    quote: rune, 
-    quote_width: int
+    self: Ref<Lexer>,
+    start: uint32,
+    quote: rune,
+    quote_width: int,
   ) -> Token {
     let result = try {
       self.validate_open_quote(start)?
@@ -257,20 +259,20 @@ impl Lexer {
       Err(Token.error(
         start,
         self.index,
-        "Multiline string literals start on line after opening quote."
+        "Multiline string literals start on line after opening quote.",
       ))
     }
   }
 
-  /// Called when lexer is on the first column of the line after 
+  /// Called when lexer is on the first column of the line after
   /// consuming the starting quote of a multiline string.
-  /// Return the a slice of subslices of the source, not including 
+  /// Return the a slice of subslices of the source, not including
   /// the opening or closing quotes.  Also return the indent of the end
-  /// quote.  
+  /// quote.
   fn get_string_lines(
-    self: Ref<Lexer>, 
+    self: Ref<Lexer>,
     start: uint32,
-    quote: rune, 
+    quote: rune,
     quote_width: int,
   ) -> Result<(Slice<Slice<rune>>, int), Token> {
     let mut lines = []
@@ -279,8 +281,9 @@ impl Lexer {
     loop {
       match self.peek_char() {
         0 => return Err(Token.error(
-          start, 
-          self.index,"unterminated string literal"
+          start,
+          self.index,
+          "unterminated string literal",
         )),
         '\n' => {
           let line = self.slice(line_start, self.index)
@@ -291,22 +294,26 @@ impl Lexer {
           count += 1
           if count == quote_width {
             self.index += 1
-            if self.slice(line_start, self.index - count as uint32).any(|c| {
-              c != ' ' && c != '\t'
-            }) {
+            if self
+              .slice(line_start, self.index - count as uint32)
+              .any(|c| {
+                c != ' ' && c != '\t'
+              }) {
               return Err(Token.error(
                 line_start,
                 self.index,
-                "Only whitespace is allowed before the endquote of a multiline string literal."
+                "Only whitespace is allowed before the endquote of a multiline string literal.",
               ))
             } else {
               let indent = self.index as int - count - line_start as int
-              if indent < 0 { panic("compiler bug... negative indent detected") }
+              if indent < 0 {
+                panic("compiler bug... negative indent detected")
+              }
               return Ok((lines, indent))
             }
           }
         },
-        _ => count = 0
+        _ => count = 0,
       }
       self.index += 1
     }
@@ -331,7 +338,7 @@ impl Lexer {
         '!' => Operator.Neq,
         '<' => Operator.Lte,
         '>' => Operator.Gte,
-        c => return Token.error(start, self.index, "Invalid operator: {c}=")
+        c => return Token.error(start, self.index, "Invalid operator: {c}="),
       }
     } else {
       self.index += 1
@@ -347,29 +354,28 @@ impl Lexer {
         '!' => Operator.Not,
         '~' => Operator.Not,
         '=' => Operator.Assign,
-        c => return Token.error(start, self.index, f"Unrecognized operator: {c}")
+        c => return Token.error(
+          start,
+          self.index,
+          f"Unrecognized operator: {c}",
+        ),
       }
     }
     Token.operator(start, self.index, op)
   }
 }
 
-
 fn is_digit(c: rune) -> bool {
   c >= '0' && c <= '9'
 }
 
 fn is_alphanumeric(c: rune) -> bool {
-  c == '_' || 
-    (c >= 'a' && c <= 'z') || 
-    (c >= 'A' && c <= 'Z') || 
-    (c >= '0' && c <= '9')
+  c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+  (c >= '0' && c <= '9')
 }
 
 fn is_identifier_start(c: rune) -> bool {
-  c == '_' || 
-    (c >= 'a' && c <= 'z') || 
-    (c >= 'A' && c <= 'Z')
+  c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 fn is_operator(c: rune) -> bool {
@@ -384,7 +390,11 @@ fn parse_lines(start: uint32, lines: Slice<Slice<rune>>, indent: int) -> Result<
       i += 1
       r != ' ' && r != '\t'
     }) {
-      return Err(Token.error(i, i+1, "content found in indentation space of multiline string"))
+      return Err(Token.error(
+        i,
+        i + 1,
+        "content found in indentation space of multiline string",
+      ))
     }
     let line = line[indent..]
     contents = contents.append(parse_string(i, line)?)
@@ -407,12 +417,12 @@ fn parse_string(start: uint32, runes: Slice<rune>) -> Result<string, Token> {
           c => {
             let i = start + i as uint32
             return Err(Token.error(i, i + 1, "invalid escape sequence"))
-          }
+          },
         }
         parsed = parsed.append(c)
       },
       Some(c) => parsed = parsed.append(c),
-      None => break
+      None => break,
     }
     i += 1
   }

@@ -1,16 +1,65 @@
+import "mode"
 import "span"
 
 pub struct Type {
   pub span: span.Span,
-  pub name: string,
-  pub type_args: Slice<Type>,
+  pub kind: TypeKind,
 }
+
+pub enum TypeKind {
+  Nominal(string, Slice<Type>),
+  Tuple(Slice<Type>),
+  Fn(Slice<ParamType>, Ref<Type>),
+}
+
+pub struct ParamType {
+  pub mode: Option<mode.Mode>,
+  pub typ: Type,
+}
+
+impl ParamType {
+  pub fn new(mode: Option<mode.Mode>, typ: Type) -> ParamType {
+    ParamType { mode, typ }
+  }
+
+  pub fn none(typ: Type) -> ParamType {
+    ParamType { mode: None, typ }
+  }
+
+  pub fn let_(typ: Type) -> ParamType {
+    ParamType { mode: Some(mode.Mode.Let), typ }
+  }
+
+  pub fn mut_(typ: Type) -> ParamType {
+    ParamType { mode: Some(mode.Mode.Mut), typ }
+  }
+
+  pub fn mut_bang(typ: Type) -> ParamType {
+    ParamType { mode: Some(mode.Mode.MutBang), typ }
+  }
+
+  pub fn var_(typ: Type) -> ParamType {
+    ParamType { mode: Some(mode.Mode.Var), typ }
+  }
+}
+
 impl Type {
   pub fn new(span: span.Span, name: string, type_args: Slice<Type>) -> Type {
-    Type { span, name, type_args }
+    Type { span, kind: TypeKind.Nominal(name, type_args) }
+  }
+
+  pub fn tuple(span: span.Span, type_args: Slice<Type>) -> Type {
+    Type { span, kind: TypeKind.Tuple(type_args) }
+  }
+
+  pub fn fn_(span: span.Span, params: Slice<ParamType>, ret: Ref<Type>) -> Type {
+    Type { span, kind: TypeKind.Fn(params, ret) }
   }
 }
 
 pub fn typ(start: uint32, end: uint32, name: string, type_args: Slice<Type>) -> Type {
-  Type.new(span.Span{start, end}, name, type_args)
+  Type { 
+    span: span.Span { start, end },
+    kind: TypeKind.Nominal(name, type_args),
+  }
 }

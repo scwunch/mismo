@@ -1,6 +1,7 @@
 import "ast"
 import "errors"
 import "lexer"
+import "mode"
 import "span"
 
 type Lexer = lexer.Lexer
@@ -45,7 +46,6 @@ impl Parser {
 
   pub fn parse(self: Ref<Parser>) {
     loop {
-      // let tok = self.next()
       let result: Result<(), ParseError> = match self.peek().kind {
         TokenKind.Identifier("import") => self.parse_import(),
         TokenKind.Identifier("struct") => self.parse_struct(),
@@ -77,9 +77,7 @@ impl Parser {
     let mut type_params = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
       type_params = self.parse_type_params()?
-      if let Err(tok) = self.consume(lexer.TokenKind.RightBracket) {
-        return Err(self.error(tok.span, "Expected right bracket"))
-      }
+      let _ = self.consume(lexer.TokenKind.RightBracket)?
     }
     let fields = self.parse_fields()?
     let newline_span = self.next().span
@@ -95,9 +93,7 @@ impl Parser {
     let mut type_params = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
       type_params = self.parse_type_params()?
-      let _ = self
-        .consume(lexer.TokenKind.RightBracket)
-        .map_err(|tok| self.error(tok.span, "Expected right bracket"))?
+      let _ = self.consume(lexer.TokenKind.RightBracket)?
     }
     let variants = self.parse_variants()?
     let newline_span = self.next().span
@@ -107,7 +103,49 @@ impl Parser {
   }
 
   fn parse_function(self: Ref<Parser>) -> Result<(), ParseError> {
+    let mut span = self.next().span
+    let sig = self.parse_signature()?
+    let body = self.parse_function_body()?
+    span = span.merge(body.span)
+    self.defs.add_function(ast.FunctionDef.new(span, sig, body))
     Ok(())
+  }
+
+  fn parse_signature(self: Ref<Parser>) -> Result<ast.Signature, ParseError> {
+    let mut span = self.peek().span
+    let name = self.consume_identifier()?
+    let mut type_params = []
+    if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
+      type_params = self.parse_type_params()?
+      let _ = self.consume(lexer.TokenKind.RightBracket)?
+    }
+    let _ = self.consume(lexer.TokenKind.LeftParen)?
+    let params = self.parse_function_params()?
+    let rparen = self.consume(lexer.TokenKind.RightParen)?
+    span = span.merge(rparen)
+    let ret_type = self.parse_type()?
+    span = span.merge(ret_type.span)
+    Ok(ast.Signature.new(span, name, type_params, params, ret_type))
+  }
+
+  fn parse_function_params(self: Ref<Parser>) -> Result<Slice<ast.Parameter>, ParseError> {
+    self.parse_list(lexer.TokenKind.RightParen, self.parse_parameter)
+  }
+
+  fn parse_parameter(self: Ref<Parser>) -> Result<ast.Parameter, ParseError> {
+    let mut span = self.peek().span
+    let mut name = self.consume_identifier()?
+    let mode = mode.parse(name)
+    if mode.is_some() { name = self.consume_identifier()? }
+    let _ = self.consume(lexer.TokenKind.Colon)
+    let typ = self.parse_type()?
+    span = span.merge(typ.span)
+    Ok(ast.Parameter.new(span, mode, name, typ))
+  }
+
+  fn parse_function_body(self: Ref<Parser>) -> Result<ast.Expression, ParseError> {
+    let span = self.peek().span
+    Ok(ast.nil_lit(span))
   }
 
   fn consume_identifier(self: Ref<Parser>) -> Result<string, ParseError> {
@@ -121,6 +159,19 @@ impl Parser {
         f"Expected identifier.  Got {tok}",
       )),
     }
+  }
+
+  fn consume_mode(self: Ref<Parser>) -> Option<mode.Mode> {
+    // let mod = match self.peek().kind {
+    //   TokenKind.Keyword(Keyword.Let) => mode.Mode.Let,
+    //   TokenKind.Keyword(Keyword.Mut) => mode.Mode.Mut,
+    //   TokenKind.Keyword(Keyword.MutBang) => mode.Mode.MutBang,
+    //   TokenKind.Keyword(Keyword.Var) => mode.Mode.Var,
+    //   tok => return None,
+    // }
+    let mod = mode.parse(self.peek().kind.string())
+    if mod.is_some() { let _ = self.next() }
+    mod
   }
 
   fn parse_type_params(self: Ref<Parser>) -> Result<TypeParameters, ParseError> {
@@ -151,17 +202,18 @@ impl Parser {
           continue
         } else {
           // syntax error, unless the closing token follows this newline
-          let found_end_token = self.try_or_backtrack(|| {
+          self.try_or_backtrack(|| {
             let _ = self.consume(lexer.TokenKind.Newline(indent))?
-            if self.peek().kind == end { Ok(()) } else { Err(self.peek()) }
-          })
-          match found_end_token {
-            Ok(_) => break,
-            Err(tok) => return Err(self.error(
-              tok.span,
-              "list items must be indented deeper than line of list start",
-            )),
-          }
+            if self.peek().kind == end {
+              Ok(())
+            } else {
+              Err(self.error(
+                self.peek().span,
+                "list items must be indented deeper than line of list start",
+              ))
+            }
+          })?
+          break
         }
       }
 
@@ -196,11 +248,7 @@ impl Parser {
     let mut payload = []
     if self.consume(lexer.TokenKind.LeftParen).is_ok() {
       payload = self.parse_list(lexer.TokenKind.RightParen, self.parse_type)?
-      let lparen = self
-        .consume(lexer.TokenKind.RightParen)
-        .map_err(|tok| {
-          self.error(span, f"Expected end parenthesis; got {tok.kind}")
-        })?
+      let lparen = self.consume(lexer.TokenKind.RightParen)?
       span = span.merge(lparen)
     }
     Ok(ast.Variant.new(span, name, payload))
@@ -246,17 +294,13 @@ impl Parser {
 
   fn parse_type(self: Ref<Parser>) -> Result<ast.Type, ParseError> {
     let mut span = self.peek().span
-    let name = self.consume_identifier()?
+    let Ok(name) = self.consume_identifier() else {
+      return self.parse_tuple_or_fn_type()
+    }
     let mut type_args = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
       type_args = self.parse_type_args()?
-      span = span.merge(
-        self
-          .consume(lexer.TokenKind.RightBracket)
-          .map_err(|tok| {
-            self.error(span, f"Expected end bracket; got {tok.kind}")
-          })?,
-      )
+      span = span.merge(self.consume(lexer.TokenKind.RightBracket)?)
     }
     Ok(ast.Type.new(span, name, type_args))
   }
@@ -265,11 +309,45 @@ impl Parser {
     self.parse_list(lexer.TokenKind.RightBracket, self.parse_type)
   }
 
-  fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, Token> {
+  fn parse_param_type(self: Ref<Parser>) -> Result<ast.ParamType, ParseError> {
+    let mode = self.consume_mode()
+    let typ = self.parse_type()?
+    Ok(ast.ParamType { mode, typ })
+  }
+
+  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<ast.Type, ParseError> {
+    let mut span = self.peek().span
+    let _ = self
+      .consume(lexer.TokenKind.LeftParen)
+      .map_err(|_| {
+        self.error(
+          span,
+          f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
+        )
+      })?
+    let params = self.parse_list(
+      lexer.TokenKind.RightParen,
+      self.parse_param_type,
+    )?
+    span = span.merge(self.consume(lexer.TokenKind.RightParen)?)
+    if self.consume(lexer.TokenKind.Arrow).is_ok() {
+      let ret_type = self.parse_type()?
+      span = span.merge(ret_type.span)
+      Ok(ast.Type.fn_(span, params, &ret_type))
+    } else {
+      let type_pargs = params.map(|p| p.typ)
+      Ok(ast.Type.tuple(span, type_pargs))
+    }
+  }
+
+  fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, ParseError> {
     if self.peek().kind == kind {
       Ok(self.next().span)
     } else {
-      Err(self.peek())
+      Err(self.error(
+        self.peek().span,
+        f"Expected {kind}; got {self.peek().kind}",
+      ))
     }
   }
 
