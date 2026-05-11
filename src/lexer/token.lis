@@ -29,7 +29,17 @@ pub enum TokenKind {
   Semicolon,
   Arrow,
   Newline(uint32),
-  Keyword(Keyword),
+  Let,
+  Var,
+  Mut,
+  MutBang,
+  Move,
+  If,
+  For,
+  While,
+  Break,
+  Continue,
+  Return,
   Operator(Operator),
   Tilde,
   Bang,
@@ -53,88 +63,6 @@ pub enum TokenKind {
   Error(string),
 }
 
-pub enum Keyword {
-  // Import,
-  // Extern,
-  // Struct,
-  // Enum,
-  // Extend,
-  // Trait,
-  // Field,
-  // Constructor,
-  // Static,
-  // Fn,
-  Let,
-  Var,
-  Mut,
-  MutBang,
-  Move,
-  Const,
-  If,
-  For,
-  While,
-  Break,
-  Continue,
-  Return,
-}
-
-impl Keyword {
-  pub fn string(self) -> string {
-    match self {
-      // Keyword.Import => "import",
-      // Keyword.Extern => "extern",
-      // Keyword.Struct => "struct",
-      // Keyword.Enum => "enum",
-      // Keyword.Extend => "extend",
-      // Keyword.Trait => "trait",
-      // Keyword.Field => "field",
-      // Keyword.Constructor => "constructor",
-      // Keyword.Static => "static",
-      // Keyword.Fn => "fn",
-      Keyword.Let => "let",
-      Keyword.Var => "var",
-      Keyword.Mut => "mut",
-      Keyword.MutBang => "mut!",
-      Keyword.Move => "move",
-      Keyword.Const => "const",
-      Keyword.If => "if",
-      Keyword.For => "for",
-      Keyword.While => "while",
-      Keyword.Break => "break",
-      Keyword.Continue => "continue",
-      Keyword.Return => "return",
-    }
-  }
-
-  pub fn parse(s: string) -> Option<Keyword> {
-    let kw = match s {
-      // "import" => Keyword.Import,
-      // "extern" => Keyword.Extern,
-      // "struct" => Keyword.Struct,
-      // "enum" => Keyword.Enum,
-      // "impl" => Keyword.Impl,
-      // "trait" => Keyword.Trait,
-      // "field" => Keyword.Field,
-      // "constructor" => Keyword.Constructor,
-      // "static" => Keyword.Static,
-      // "fn" => Keyword.Fn,
-      "let" => Keyword.Let,
-      "var" => Keyword.Var,
-      "mut" => Keyword.Mut,
-      "mut!" => Keyword.MutBang,
-      "move" => Keyword.Move,
-      "if" => Keyword.If,
-      "for" => Keyword.For,
-      "while" => Keyword.While,
-      "break" => Keyword.Break,
-      "continue" => Keyword.Continue,
-      "return" => Keyword.Return,
-      _ => return None,
-    }
-    Some(kw)
-  }
-}
-
 impl TokenKind {
   pub fn string(self) -> string {
     match self {
@@ -156,7 +84,17 @@ impl TokenKind {
       TokenKind.Semicolon => ";",
       TokenKind.Arrow => "->",
       TokenKind.Newline(indent) => f"\\n({indent})",
-      TokenKind.Keyword(keyword) => f"{keyword}",
+      TokenKind.Let => "let",
+      TokenKind.Var => "var",
+      TokenKind.Mut => "mut",
+      TokenKind.MutBang => "mut!",
+      TokenKind.Move => "move",
+      TokenKind.If => "if",
+      TokenKind.For => "for",
+      TokenKind.While => "while",
+      TokenKind.Break => "break",
+      TokenKind.Continue => "continue",
+      TokenKind.Return => "return",
       TokenKind.Operator(op) => f"{op}",
       TokenKind.Tilde => "~",
       TokenKind.Bang => "!",
@@ -346,8 +284,48 @@ impl Token {
     Token.new(Span { start, end: start + 1 }, TokenKind.Question)
   }
 
-  pub fn keyword(start: uint32, end: uint32, kw: Keyword) -> Token {
-    Token.new(Span { start, end }, TokenKind.Keyword(kw))
+  pub fn let_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Let)
+  }
+
+  pub fn var_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Var)
+  }
+
+  pub fn mut_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Mut)
+  }
+
+  pub fn mut_bang(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.MutBang)
+  }
+
+  pub fn move_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Move)
+  }
+
+  pub fn if_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.If)
+  }
+
+  pub fn for_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.For)
+  }
+
+  pub fn while_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.While)
+  }
+
+  pub fn break_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Break)
+  }
+
+  pub fn continue_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Continue)
+  }
+
+  pub fn return_(start: uint32, end: uint32) -> Token {
+    Token.new(Span { start, end }, TokenKind.Return)
   }
 
   pub fn error(start: uint32, end: uint32, msg: string) -> Token {

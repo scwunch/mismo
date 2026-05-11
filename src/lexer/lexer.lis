@@ -108,20 +108,27 @@ impl Lexer {
     }
     let word = self.slice(start, self.index) as string
 
-    match Keyword.parse(word) {
-      Some(Keyword.Mut) if self.peek_char() == '!' => {
+    match word {
+      "let" => Token.let_(start, self.index),
+      "var" => Token.var_(start, self.index),
+      "mut" if self.peek_char() == '!' => {
         self.index += 1
-        Token.keyword(start, self.index, Keyword.MutBang)
+        Token.mut_bang(start, self.index)
       },
-      Some(kw) => Token.keyword(start, self.index, kw),
-      None => match word {
-        "and" => Token.operator(start, self.index, Operator.And),
-        "or" => Token.operator(start, self.index, Operator.Or),
-        "not" => Token.operator(start, self.index, Operator.Not),
-        "is" => Token.operator(start, self.index, Operator.Is),
-        "in" => Token.operator(start, self.index, Operator.In),
-        _ => Token.identifier(start, self.index, word),
-      },
+      "mut" => Token.mut_(start, self.index),
+      "move" => Token.move_(start, self.index),
+      "if" => Token.if_(start, self.index),
+      "for" => Token.for_(start, self.index),
+      "while" => Token.while_(start, self.index),
+      "break" => Token.break_(start, self.index),
+      "continue" => Token.continue_(start, self.index),
+      "return" => Token.return_(start, self.index),
+      "and" => Token.operator(start, self.index, Operator.And),
+      "or" => Token.operator(start, self.index, Operator.Or),
+      "not" => Token.operator(start, self.index, Operator.Not),
+      "is" => Token.operator(start, self.index, Operator.Is),
+      "in" => Token.operator(start, self.index, Operator.In),
+      _ => Token.identifier(start, self.index, word),
     }
   }
 
