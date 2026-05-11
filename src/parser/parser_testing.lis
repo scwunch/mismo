@@ -1,5 +1,6 @@
 import "ast"
 import "lexer"
+import "mode"
 import "span"
 import "testing"
 
@@ -407,5 +408,28 @@ fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ast.param(15, 21, None, "b", ast.typ(18, 21, "Int", [])),
   )?
   t.should_eq(sig.return_type, ast.typ(23, 26, "Int", []))?
+
+  parser = Parser.new_with_defs("fn bar(let a String, mut! b Int) -> Nil")
+  match parser.consume_identifier() {
+    Ok(name) => t.should_eq_repr(name, "fn")?,
+    Err(e) => return t.fail(e.Error()),
+  }
+  let sig = match parser.parse_signature() {
+    Ok(sig) => sig,
+    Err(e) => return t.fail(e.Error()),
+  }
+  t.should_eq_repr(sig.name, "bar")?
+  t.should_eq_repr(sig.type_parameters.length(), 0)?
+  t.should_eq_repr(sig.parameters.length(), 2)?
+  t.should_eq(
+    sig.parameters[0],
+    ast.param(7, 19, Some(mode.Mode.Let), "a", ast.typ(13, 19, "String", [])),
+  )?
+  t.should_eq(
+    sig.parameters[1],
+    ast.param(21, 31, Some(mode.Mode.MutBang), "b", ast.typ(28, 31, "Int", [])),
+  )?
+  t.should_eq(sig.return_type, ast.typ(36, 39, "Nil", []))?
+
   Ok(())
 }

@@ -123,6 +123,7 @@ impl Parser {
     let params = self.parse_function_params()?
     let rparen = self.consume(lexer.TokenKind.RightParen)?
     span = span.merge(rparen)
+    let _ = self.consume(lexer.TokenKind.Arrow)
     let ret_type = self.parse_type()?
     span = span.merge(ret_type.span)
     Ok(ast.Signature.new(span, name, type_params, params, ret_type))
@@ -134,9 +135,8 @@ impl Parser {
 
   fn parse_parameter(self: Ref<Parser>) -> Result<ast.Parameter, ParseError> {
     let mut span = self.peek().span
-    let mut name = self.consume_identifier()?
-    let mode = mode.parse(name)
-    if mode.is_some() { name = self.consume_identifier()? }
+    let mode = self.consume_mode()
+    let name = self.consume_identifier()?
     let _ = self.consume(lexer.TokenKind.Colon)
     let typ = self.parse_type()?
     span = span.merge(typ.span)
@@ -148,30 +148,43 @@ impl Parser {
     Ok(ast.nil_lit(span))
   }
 
+  // consume and return the string representation of an identifier, keyword, or operator
+  // e.g. "let", "if", "+", "*"
+  //
+  // returns an error if the peeked token is not an identifier, keyword, or operator
   fn consume_identifier(self: Ref<Parser>) -> Result<string, ParseError> {
-    match self.peek().kind {
-      TokenKind.Identifier(name) => {
-        let _ = self.next()
-        Ok(name)
-      },
-      tok => Err(self.error(
+    let ident = match self.peek().kind {
+      TokenKind.Identifier(name) => name,
+      TokenKind.Let => "let",
+      TokenKind.Mut => "mut",
+      TokenKind.MutBang => "mut!",
+      TokenKind.Var => "var",
+      TokenKind.Break => "break",
+      TokenKind.Continue => "continue",
+      TokenKind.Return => "return",
+      TokenKind.If => "if",
+      TokenKind.For => "for",
+      TokenKind.While => "while",
+      TokenKind.Operator(op) => op.sigil(),
+      tok => return Err(self.error(
         self.peek().span,
         f"Expected identifier.  Got {tok}",
       )),
     }
+    let _ = self.next()
+    Ok(ident)
   }
 
   fn consume_mode(self: Ref<Parser>) -> Option<mode.Mode> {
-    // let mod = match self.peek().kind {
-    //   TokenKind.Keyword(Keyword.Let) => mode.Mode.Let,
-    //   TokenKind.Keyword(Keyword.Mut) => mode.Mode.Mut,
-    //   TokenKind.Keyword(Keyword.MutBang) => mode.Mode.MutBang,
-    //   TokenKind.Keyword(Keyword.Var) => mode.Mode.Var,
-    //   tok => return None,
-    // }
-    let mod = mode.parse(self.peek().kind.string())
-    if mod.is_some() { let _ = self.next() }
-    mod
+    let mod = match self.peek().kind {
+      TokenKind.Let => mode.Mode.Let,
+      TokenKind.Mut => mode.Mode.Mut,
+      TokenKind.MutBang => mode.Mode.MutBang,
+      TokenKind.Var => mode.Mode.Var,
+      tok => return None,
+    }
+    let _ = self.next()
+    Some(mod)
   }
 
   fn parse_type_params(self: Ref<Parser>) -> Result<TypeParameters, ParseError> {
