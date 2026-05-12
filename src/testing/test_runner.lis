@@ -20,8 +20,11 @@ pub fn test_suite(
   let num_tests = tests.length()
   let mut suite: Slice<TestRunner> = []
   for test_fn in tests {
-    let t = TestRunner.new("")
-    if let Err(e) = test_fn(&t) { fmt.Println(e) }
+    let mut t = TestRunner.new("")
+    if let Err(e) = test_fn(&t) {
+      fmt.Println(e)
+      t.status = false
+    }
     suite = suite.append(t)
   }
   let mut passed = 0
