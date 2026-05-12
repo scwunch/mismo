@@ -35,8 +35,8 @@ impl Operator {
     self.sigil()
   }
 
-  pub fn eq(self, other: Operator) -> bool { 
-    self == other 
+  pub fn eq(self, other: Operator) -> bool {
+    self == other
   }
 
   pub fn sigil(self) -> string {
@@ -72,4 +72,112 @@ impl Operator {
       Operator.OrAssign => "|=",
     }
   }
+
+  pub fn precedence_class(self) -> Prec {
+    match self {
+      Operator.Or => Prec.Or,
+      Operator.And => Prec.And,
+      Operator.Is | Operator.IsNot | Operator.In | Operator.NotIn => Prec.Comparison,
+      Operator.Eq |
+      Operator.Neq |
+      Operator.Lt |
+      Operator.Gt |
+      Operator.Lte |
+      Operator.Gte => Prec.Comparison,
+      Operator.Add | Operator.Sub => Prec.Add,
+      Operator.Mul | Operator.Div | Operator.Mod => Prec.Mul,
+      Operator.Pow => Prec.Pow,
+      Operator.Not => Prec.Unary,
+      // Operator.Comma => Prec.Comma,
+      // Operator.Dot => Prec.Call,
+      Operator.Assign |
+      Operator.AddAssign |
+      Operator.SubAssign |
+      Operator.MulAssign |
+      Operator.DivAssign |
+      Operator.ModAssign |
+      Operator.AndAssign |
+      Operator.OrAssign |
+      Operator.PowAssign => Prec.Assign,
+    }
+  }
+
+  pub fn relative_precedence(self, other: Operator) -> Bind {
+    match (self.precedence_class(), other.precedence_class()) {
+      (Prec.Call, _) => Bind.Tighter, // Prec.Call is highest, and left-associative
+      (_, Prec.Call) => Bind.Looser,
+
+      (Prec.Assign, Prec.Assign) => Bind.Looser, // right-associative
+      (Prec.Comma, Prec.Assign) => Bind.Tighter, // comma is the only operator that works in the LHS of an assignment
+      (_, Prec.Assign) => Bind.None, // everything else require
+      (Prec.Assign, _) => Bind.Looser, // and tighter on the right
+      (Prec.Comma, _) => Bind.Looser, // and comma binds looser than everything else
+      (_, Prec.Comma) => Bind.Tighter,
+
+      (Prec.Or, Prec.Or) => Bind.Tighter,
+      (Prec.Or, Prec.Comparison) => Bind.Tighter,
+      (Prec.Or, Prec.Unary) => Bind.Looser,
+      (Prec.Or, Prec.And) => Bind.None,
+      (Prec.Or, Prec.Add) => Bind.None,
+      (Prec.Or, Prec.Mul) => Bind.None,
+      (Prec.Or, Prec.Pow) => Bind.None,
+      (Prec.And, Prec.And) => Bind.Tighter,
+      (Prec.And, Prec.Comparison) => Bind.Looser,
+      (Prec.And, Prec.Unary) => Bind.Looser,
+      (Prec.And, Prec.Or) => Bind.None,
+      (Prec.And, Prec.Add) => Bind.None,
+      (Prec.And, Prec.Mul) => Bind.None,
+      (Prec.And, Prec.Pow) => Bind.None,
+      (Prec.Comparison, Prec.Or) => Bind.Tighter,
+      (Prec.Comparison, Prec.And) => Bind.Tighter,
+      (Prec.Comparison, Prec.Comparison) => Bind.None,
+      (Prec.Comparison, Prec.Add) => Bind.Looser,
+      (Prec.Comparison, Prec.Mul) => Bind.Looser,
+      (Prec.Comparison, Prec.Pow) => Bind.Looser,
+      (Prec.Comparison, Prec.Unary) => Bind.Looser,
+      (Prec.Add, Prec.Comparison) => Bind.Tighter,
+      (Prec.Add, Prec.Add) => Bind.Tighter,
+      (Prec.Add, Prec.Mul) => Bind.Looser,
+      (Prec.Add, Prec.Pow) => Bind.Looser,
+      (Prec.Add, Prec.Unary) => Bind.Looser,
+      (Prec.Add, Prec.Or) => Bind.None,
+      (Prec.Add, Prec.And) => Bind.None,
+      (Prec.Mul, Prec.Comparison) => Bind.Tighter,
+      (Prec.Mul, Prec.Add) => Bind.Tighter,
+      (Prec.Mul, Prec.Mul) => Bind.Tighter,
+      (Prec.Mul, Prec.Pow) => Bind.Looser,
+      (Prec.Mul, Prec.Unary) => Bind.Looser,
+      (Prec.Mul, Prec.Or) => Bind.None,
+      (Prec.Mul, Prec.And) => Bind.None,
+      (Prec.Pow, Prec.Comparison) => Bind.Tighter,
+      (Prec.Pow, Prec.Add) => Bind.Tighter,
+      (Prec.Pow, Prec.Mul) => Bind.Tighter,
+      (Prec.Pow, Prec.Pow) => Bind.None,
+      (Prec.Pow, Prec.Unary) => Bind.None,
+      (Prec.Pow, Prec.Or) => Bind.None,
+      (Prec.Pow, Prec.And) => Bind.None,
+      (Prec.Unary, Prec.Pow) => Bind.None,
+      (Prec.Unary, Prec.Unary) => Bind.None,
+      (Prec.Unary, _) => Bind.Tighter,
+    }
+  }
+}
+
+pub enum Prec {
+  Assign,
+  Comma,
+  Or,
+  And,
+  Comparison,
+  Add,
+  Mul,
+  Pow,
+  Unary,
+  Call,
+}
+
+pub enum Bind {
+  None,
+  Tighter,
+  Looser,
 }
