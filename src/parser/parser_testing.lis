@@ -707,7 +707,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.Error())?
   match expr.kind {
     ast.Expr.DotName(receiver, field) => {
-      t.should_eq(expr.span, span.Span.new(0, 11))?
+      t.should_eq(expr.span, span.Span.new(0, 8))?
       t.should_eq(receiver.kind, ast.Expr.Identifier("self"))?
       t.should_eq_repr(field, "awesome")?
     },

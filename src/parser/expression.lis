@@ -3,6 +3,7 @@ import "errors"
 import "lexer"
 import "mode"
 import "operator"
+import "span"
 
 type Operator = operator.Operator
 
@@ -23,7 +24,8 @@ enum Expecting {
 enum StackOp {
   Op(Operator),
   Comma,
-  Neg,
+  Neg(span.Span),
+  NotPrefix(span.Span),
 }
 
 impl StackOp {
@@ -31,7 +33,8 @@ impl StackOp {
     match self {
       StackOp.Op(op) => op.string(),
       StackOp.Comma => ",",
-      StackOp.Neg => "-unary",
+      StackOp.Neg(_) => "-unary",
+      StackOp.NotPrefix(_) => "not",
     }
   }
 }
@@ -131,15 +134,14 @@ impl ExpressionParser {
     let op = self.operators[last]
     self.operators = self.operators[..last]
     match op {
-      StackOp.Neg => {
+      StackOp.Neg(neg_span) => {
         let t1 = self.pop_term()?
-        let t1_span = t1.span
-        self.terms = self.terms.append(ast.neg(t1_span, &t1))
+        let span = neg_span.merge(t1.span)
+        self.terms = self.terms.append(ast.neg(span, &t1))
       },
-      StackOp.Op(Operator.Not) => {
+      StackOp.NotPrefix(not_span) => {
         let t1 = self.pop_term()?
-        let t1_span = t1.span
-        self.terms = self.terms.append(ast.not_(t1_span, &t1))
+        self.terms = self.terms.append(ast.not_(not_span, &t1))
       },
       StackOp.Comma => {
         let t2 = self.pop_term()?
@@ -234,7 +236,7 @@ impl ExpressionParser {
       TokenKind.Operator(op) => match op {
         Operator.Sub => self.handle_prefix_minus(tok_span)?,
         Operator.Not => {
-          self.push_operator(StackOp.Op(operator.Operator.Not))?
+          self.push_operator(StackOp.NotPrefix(tok_span))?
           return self.read_operand()
         },
         _ => return Err(self.parser.error(
@@ -308,7 +310,7 @@ impl ExpressionParser {
         Ok(ast.float_lit(span.merge(next_span), -n))
       },
       _ => {
-        self.push_operator(StackOp.Neg)?
+        self.push_operator(StackOp.Neg(span))?
         self.read_operand()?
         let term = self.pop_term()?
         Ok(term)
@@ -445,17 +447,19 @@ impl ExpressionParser {
 
   fn handle_dot(self: Ref<ExpressionParser>) -> Result<ast.Expression, ParseError> {
     let receiver = self.pop_term()?
-    let rec_span = receiver.span
+    let start = receiver.span.start
     let name = self.parser.consume_identifier()?
     let type_args_raw = self.parse_type_args()?
     let type_args = if type_args_raw.length() == 0 { None } else { Some(type_args_raw) }
 
+    let mut end = self.parser.peek().span.start
     if self.parser.peek().kind == lexer.TokenKind.LeftParen {
       let args = self.parse_args([])?
+      end = self.parser.peek().span.start
       let call = ast.Call { fn_name: name, type_args, args }
-      Ok(ast.dot_call(rec_span, &receiver, call))
+      Ok(ast.dot_call(span.Span.new(start, end), &receiver, call))
     } else {
-      Ok(ast.dot_name(rec_span, &receiver, name))
+      Ok(ast.dot_name(span.Span.new(start, end), &receiver, name))
     }
   }
 
@@ -760,8 +764,11 @@ fn stack_relative_precedence(left: StackOp, right: StackOp) -> Bind {
     },
     (StackOp.Comma, _) => Bind.Looser,
     (_, StackOp.Comma) => Bind.Tighter,
-    (StackOp.Neg, StackOp.Neg) => Bind.None,
-    (StackOp.Neg, _) => Bind.Tighter,
-    (_, StackOp.Neg) => Bind.Tighter,
+    (StackOp.Neg(_), StackOp.Neg(_)) => Bind.None,
+    (StackOp.Neg(_), _) => Bind.Tighter,
+    (_, StackOp.Neg(_)) => Bind.Tighter,
+    (StackOp.NotPrefix(_), StackOp.NotPrefix(_)) => Bind.None,
+    (StackOp.NotPrefix(_), _) => Bind.Tighter,
+    (_, StackOp.NotPrefix(_)) => Bind.Tighter,
   }
 }
