@@ -454,13 +454,13 @@ fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     ast.Expr.Binop { left, op, right } => {
       t.should_eq_repr(op, Operator.Add)?
-      match left.*.kind {
+      match left.kind {
         ast.Expr.IntLiteral(1) => (),
-        _ => return t.fail(f"Expected IntLiteral(1); got {left.*.kind}"),
+        _ => return t.fail(f"Expected IntLiteral(1); got {left.kind}"),
       }
-      match right.*.kind {
+      match right.kind {
         ast.Expr.IntLiteral(2) => (),
-        _ => return t.fail(f"Expected IntLiteral(2); got {right.*.kind}"),
+        _ => return t.fail(f"Expected IntLiteral(2); got {right.kind}"),
       }
     },
     _ => return t.fail(f"Expected Binop; got {expr.kind}"),
@@ -476,23 +476,23 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
   match expr.kind {
     ast.Expr.Binop { left, op, right } => {
       t.should_eq_repr(op, Operator.Add)?
-      match left.*.kind {
+      match left.kind {
         ast.Expr.IntLiteral(1) => (),
         _ => return t.fail(f"Expected IntLiteral(1); got {left.kind}"),
       }
-      match right.*.kind {
+      match right.kind {
         ast.Expr.Binop { left: rl, op: rop, right: rr } => {
           t.should_eq_repr(rop, Operator.Mul)?
-          match rl.*.kind {
+          match rl.kind {
             ast.Expr.IntLiteral(2) => (),
-            _ => return t.fail(f"Expected IntLiteral(2); got {rl.*.kind}"),
+            _ => return t.fail(f"Expected IntLiteral(2); got {rl.kind}"),
           }
-          match rr.*.kind {
+          match rr.kind {
             ast.Expr.IntLiteral(3) => (),
-            _ => return t.fail(f"Expected IntLiteral(3); got {rr.*.kind}"),
+            _ => return t.fail(f"Expected IntLiteral(3); got {rr.kind}"),
           }
         },
-        _ => return t.fail(f"Expected Binop; got {right.*.kind}"),
+        _ => return t.fail(f"Expected Binop; got {right.kind}"),
       }
     },
     _ => return t.fail(f"Expected Binop; got {expr.kind}"),
@@ -504,21 +504,21 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
   match expr.kind {
     ast.Expr.Binop { left, op, right } => {
       t.should_eq_repr(op, Operator.Add)?
-      match left.*.kind {
+      match left.kind {
         ast.Expr.Binop { left: ll, op: lop, right: lr } => {
           t.should_eq_repr(lop, Operator.Sub)?
-          match ll.*.kind {
+          match ll.kind {
             ast.Expr.IntLiteral(1) => (),
             _ => return t.fail("Expected 1"),
           }
-          match lr.*.kind {
+          match lr.kind {
             ast.Expr.Binop { left: lrl, op: lrop, right: lrr } => {
               t.should_eq_repr(lrop, Operator.Mul)?
-              match lrl.*.kind {
+              match lrl.kind {
                 ast.Expr.IntLiteral(2) => (),
                 _ => return t.fail("Expected 2"),
               }
-              match lrr.*.kind {
+              match lrr.kind {
                 ast.Expr.IntLiteral(3) => (),
                 _ => return t.fail("Expected 3"),
               }
@@ -528,7 +528,7 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
         },
         _ => return t.fail("Expected Binop"),
       }
-      match right.*.kind {
+      match right.kind {
         ast.Expr.IntLiteral(4) => (),
         _ => return t.fail("Expected 4"),
       }
@@ -546,21 +546,21 @@ fn test_parse_parens(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     ast.Expr.Binop { left, op, right } => {
       t.should_eq_repr(op, Operator.Mul)?
-      match left.*.kind {
+      match left.kind {
         ast.Expr.Binop { left: ll, op: lop, right: lr } => {
           t.should_eq_repr(lop, Operator.Add)?
-          match ll.*.kind {
+          match ll.kind {
             ast.Expr.IntLiteral(1) => (),
             _ => return t.fail("Expected 1"),
           }
-          match lr.*.kind {
+          match lr.kind {
             ast.Expr.IntLiteral(2) => (),
             _ => return t.fail("Expected 2"),
           }
         },
         _ => return t.fail("Expected Binop for paren group"),
       }
-      match right.*.kind {
+      match right.kind {
         ast.Expr.IntLiteral(3) => (),
         _ => return t.fail("Expected 3"),
       }
@@ -812,7 +812,7 @@ fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
   ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
   let expr = ep.parse().map_err(|e| e.Error())?
   match expr.kind {
-    ast.Expr.Neg(e) => match e.*.kind {
+    ast.Expr.Neg(e) => match e.kind {
       ast.Expr.Identifier(name) => t.should_eq_repr(name, "x")?,
       _ => return t.fail("Expected Identifier"),
     },
@@ -827,7 +827,7 @@ fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
   let expr = ep.parse().map_err(|e| e.Error())?
   match expr.kind {
-    ast.Expr.Not(e) => match e.*.kind {
+    ast.Expr.Not(e) => match e.kind {
       ast.Expr.Identifier(name) => t.should_eq_repr(name, "x")?,
       _ => return t.fail("Expected Identifier"),
     },
@@ -845,7 +845,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     ast.Expr.Let { name, init } => {
       t.should_eq_repr(name, "x")?
-      match init.*.kind {
+      match init.kind {
         ast.Expr.IntLiteral(5) => (),
         _ => return t.fail("Expected 5"),
       }
@@ -859,7 +859,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     ast.Expr.Var { name, init } => {
       t.should_eq_repr(name, "y")?
-      match init.*.kind {
+      match init.kind {
         ast.Expr.IntLiteral(10) => (),
         _ => return t.fail("Expected 10"),
       }
@@ -876,7 +876,7 @@ fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
   let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
   let expr = ep.parse().map_err(|e| e.Error())?
   match expr.kind {
-    ast.Expr.Return(Some(e)) => match e.*.kind {
+    ast.Expr.Return(Some(e)) => match e.kind {
       ast.Expr.IntLiteral(42) => (),
       _ => return t.fail("Expected 42"),
     },
