@@ -27,6 +27,17 @@ pub enum Expr {
   While(Conditional),
   For { binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression> },
   Block(Slice<Expression>),
+  Neg(Ref<Expression>),
+  Not(Ref<Expression>),
+  Let { name: string, init: Ref<Expression> },
+  Var { name: string, init: Ref<Expression> },
+  Constructor { typ: Type, args: Slice<Expression> },
+  EnumConstructor { typ: Type, variant: string, args: Slice<Expression> },
+  StaticAccess { typ: Type, method: string, args: Slice<Expression> },
+  Dot { receiver: Ref<Expression>, field: string, args: Slice<Expression> },
+  Return(Option<Ref<Expression>>),
+  Break,
+  Continue,
 }
 
 pub enum Conditional {
@@ -74,6 +85,131 @@ pub fn string_lit(span: span.Span, value: string) -> Expression {
 
 pub fn array_lit(span: span.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.ArrayLiteral(values) }
+}
+
+pub fn tuple_lit(span: span.Span, values: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.TupleLiteral(values) }
+}
+
+pub fn identifier(span: span.Span, name: string) -> Expression {
+  Expression { span, kind: Expr.Identifier(name) }
+}
+
+pub fn binding(span: span.Span, mode: mode.Mode, expr: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Binding(mode, expr) }
+}
+
+pub fn binop(span: span.Span, left: Ref<Expression>, op: Operator, right: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Binop { left, op, right } }
+}
+
+pub fn assign(span: span.Span, pattern: Ref<Expression>, value: Option<Ref<Expression>>) -> Expression {
+  Expression { span, kind: Expr.Assign { pattern, value } }
+}
+
+pub fn call(span: span.Span, fn_name: string, type_args: Slice<Type>, args: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.Call { fn_name, type_args, args } }
+}
+
+pub fn if_(span: span.Span, cond: Conditional) -> Expression {
+  Expression { span, kind: Expr.If(cond) }
+}
+
+pub fn while_(span: span.Span, cond: Conditional) -> Expression {
+  Expression { span, kind: Expr.While(cond) }
+}
+
+pub fn for_(span: span.Span, binding: Ref<Expression>, iter: Ref<Expression>, body: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.For { binding, iter, body } }
+}
+
+pub fn block(span: span.Span, exprs: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.Block(exprs) }
+}
+
+pub fn neg(span: span.Span, expr: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Neg(expr) }
+}
+
+pub fn not_(span: span.Span, expr: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Not(expr) }
+}
+
+pub fn let_(span: span.Span, name: string, init: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Let { name, init } }
+}
+
+pub fn var_(span: span.Span, name: string, init: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Var { name, init } }
+}
+
+pub fn constructor(span: span.Span, typ: Type, args: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.Constructor { typ, args } }
+}
+
+pub fn enum_constructor(span: span.Span, typ: Type, variant: string, args: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.EnumConstructor { typ, variant, args } }
+}
+
+pub fn static_access(span: span.Span, typ: Type, method: string, args: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.StaticAccess { typ, method, args } }
+}
+
+pub fn dot(span: span.Span, receiver: Ref<Expression>, field: string, args: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.Dot { receiver, field, args } }
+}
+
+pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+  Expression { span, kind: Expr.Return(expr) }
+}
+
+pub fn break_(span: span.Span) -> Expression {
+  Expression { span, kind: Expr.Break }
+}
+
+pub fn continue_(span: span.Span) -> Expression {
+  Expression { span, kind: Expr.Continue }
+}
+
+impl Expression {
+  pub fn string(self) -> string {
+    f"{self.span}: {self.kind.string()}"
+  }
+}
+
+impl Expr {
+  pub fn string(self) -> string {
+    match self {
+      Expr.Nil => "nil",
+      Expr.Bool(b) => f"{b}",
+      Expr.IntLiteral(i) => f"{i}",
+      Expr.FloatLiteral(f) => f"{f}",
+      Expr.StringLiteral(s) => f"\"{s}\"",
+      Expr.ArrayLiteral(elems) => f"[{elems.length()} elems]",
+      Expr.TupleLiteral(elems) => f"({elems.length()} elems)",
+      Expr.Identifier(name) => name,
+      Expr.Binding(mode, _) => f"Binding({mode})",
+      Expr.Binop { left, op, right } => f"Binop({left.*.kind.string()} {op} {right.*.kind.string()})",
+      Expr.Assign { pattern, value: _ } => f"Assign({pattern.*.kind.string()})",
+      Expr.Call { fn_name, type_args, args } => f"Call({fn_name}[{type_args.length()}]({args.length()}))",
+      Expr.If(_) => "If(...)",
+      Expr.While(_) => "While(...)",
+      Expr.For { binding, iter, body } => f"For({binding.*.kind.string()} in {iter.*.kind.string()})",
+      Expr.Block(stmts) => f"Block({stmts.length()})",
+      Expr.Neg(e) => f"Neg({e.*.kind.string()})",
+      Expr.Not(e) => f"Not({e.*.kind.string()})",
+      Expr.Let { name, init: _ } => f"Let({name})",
+      Expr.Var { name, init: _ } => f"Var({name})",
+      Expr.Constructor { typ, args } => f"Constructor({typ.span})",
+      Expr.EnumConstructor { typ, variant, args } => f"EnumConstructor({typ.span}.{variant})",
+      Expr.StaticAccess { typ, method, args } => f"StaticAccess({typ.span}.{method})",
+      Expr.Dot { receiver, field, args } => f"Dot({receiver.*.kind.string()}.{field})",
+      Expr.Return(Some(e)) => f"Return({e.*.kind.string()})",
+      Expr.Return(None) => "Return",
+      Expr.Break => "Break",
+      Expr.Continue => "Continue",
+    }
+  }
 }
 
 // struct PatternExpr {
