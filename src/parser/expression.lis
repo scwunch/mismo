@@ -156,7 +156,7 @@ impl ExpressionParser {
         let t2 = self.pop_term()?
         let t1 = self.pop_term()?
         let span = t1.span.merge(t2.span)
-        self.terms = self.terms.append(ast.binop(span, &t1, binop, &t2))
+        self.terms = self.terms.append(ast.binop_expr(span, t1, binop, t2))
       },
     }
     Ok(())
@@ -268,7 +268,6 @@ impl ExpressionParser {
             TokenKind.LeftParen | TokenKind.LeftBracket => self.function_call(
               tok_span,
               name,
-              None,
             )?,
             _ => ast.identifier(tok_span, name),
           },
@@ -448,25 +447,27 @@ impl ExpressionParser {
     let receiver = self.pop_term()?
     let rec_span = receiver.span
     let name = self.parser.consume_identifier()?
-    let type_args = self.parse_type_args()?
-    let mut args_slice = [receiver]
-    args_slice = self.parse_args(args_slice)?
-    Ok(ast.call(rec_span, name, type_args, args_slice))
+    let type_args_raw = self.parse_type_args()?
+    let type_args = if type_args_raw.length() == 0 { None } else { Some(type_args_raw) }
+
+    if self.parser.peek().kind == lexer.TokenKind.LeftParen {
+      let args = self.parse_args([])?
+      let call = ast.Call { fn_name: name, type_args, args }
+      Ok(ast.dot_call(rec_span, &receiver, call))
+    } else {
+      Ok(ast.dot_name(rec_span, &receiver, name))
+    }
   }
 
   fn function_call(
     self: Ref<ExpressionParser>,
     span: Span,
     name: string,
-    receiver: Option<ast.Expression>,
   ) -> Result<ast.Expression, ParseError> {
-    let type_args = self.parse_type_args()?
-    let mut args_slice = match receiver {
-      Some(r) => [r],
-      None => [],
-    }
-    args_slice = self.parse_args(args_slice)?
-    Ok(ast.call(span, name, type_args, args_slice))
+    let type_args_raw = self.parse_type_args()?
+    let type_args = if type_args_raw.length() == 0 { None } else { Some(type_args_raw) }
+    let args = self.parse_args([])?
+    Ok(ast.call_expr(span, name, type_args, args))
   }
 
   fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Slice<ast.Type>, ParseError> {
@@ -523,6 +524,7 @@ impl ExpressionParser {
   }
 
   fn parse_let_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+    let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
       operator.Operator.Assign,
@@ -539,10 +541,13 @@ impl ExpressionParser {
     )
     let value = expr_parser.parse()?
     let val_span = value.span
-    Ok(ast.let_(span.merge(val_span), name, &value))
+    let id_expr = ast.identifier(name_span, name)
+    let binding = ast.binding(name_span, mode.Mode.Let, &id_expr)
+    Ok(ast.binop_expr(span.merge(val_span), binding, operator.Operator.Assign, value))
   }
 
   fn parse_var_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+    let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
       operator.Operator.Assign,
@@ -559,7 +564,9 @@ impl ExpressionParser {
     )
     let value = expr_parser.parse()?
     let val_span = value.span
-    Ok(ast.var_(span.merge(val_span), name, &value))
+    let id_expr = ast.identifier(name_span, name)
+    let binding = ast.binding(name_span, mode.Mode.Var, &id_expr)
+    Ok(ast.binop_expr(span.merge(val_span), binding, operator.Operator.Assign, value))
   }
 
   fn parse_while_expression(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
@@ -606,9 +613,9 @@ impl ExpressionParser {
     let body_span = body.span
     Ok(ast.for_(
       span.merge(body_span),
-      &ast.identifier(var_tok_span, var_name),
-      &iterator,
-      &body,
+      ast.identifier(var_tok_span, var_name),
+      iterator,
+      body,
     ))
   }
 

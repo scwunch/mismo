@@ -16,7 +16,7 @@ impl TypeKind {
         slice.compare(args1, args2, Type.eq)
       },
       (TypeKind.Fn(params1, ret1), TypeKind.Fn(params2, ret2)) => {
-        slice.compare(params1, params2, ParamType.eq) && ret1.*.eq(ret2.*)
+        slice.compare(params1, params2, ParamType.eq) && ret1.eq(ret2.*)
       },
       _ => false,
     }
@@ -53,5 +53,107 @@ impl EnumDef {
   pub fn eq(self, other: EnumDef) -> bool {
     self.span == other.span && self.name == other.name &&
     slice.compare(self.variants, other.variants, Variant.eq)
+  }
+}
+
+impl Expression {
+  pub fn eq(self, other: Expression) -> bool {
+    self.span == other.span && self.kind.eq(other.kind)
+  }
+}
+
+impl Expr {
+  pub fn eq(self, other: Expr) -> bool {
+    match (self, other) {
+      (Expr.Nil, Expr.Nil) => true,
+      (Expr.BoolLiteral(b1), Expr.BoolLiteral(b2)) => b1 == b2,
+      (Expr.IntLiteral(i1), Expr.IntLiteral(i2)) => i1 == i2,
+      (Expr.FloatLiteral(f1), Expr.FloatLiteral(f2)) => f1 == f2,
+      (Expr.StringLiteral(s1), Expr.StringLiteral(s2)) => s1 == s2,
+      (Expr.ArrayLiteral(a1), Expr.ArrayLiteral(a2)) => slice.compare(
+        a1,
+        a2,
+        Expression.eq,
+      ),
+      (Expr.TupleLiteral(t1), Expr.TupleLiteral(t2)) => slice.compare(
+        t1,
+        t2,
+        Expression.eq,
+      ),
+      (Expr.Identifier(i1), Expr.Identifier(i2)) => i1 == i2,
+      (Expr.Binding(m1, e1), Expr.Binding(m2, e2)) => m1 == m2 && e1.eq(e2.*),
+      (Expr.Binop(b1), Expr.Binop(b2)) => b1.eq(b2.*),
+      (Expr.If(cond1), Expr.If(cond2)) => cond1.eq(cond2),
+      (Expr.While(cond1), Expr.While(cond2)) => cond1.eq(cond2),
+      (Expr.For(f1), Expr.For(f2)) => f1.eq(f2.*),
+      (Expr.Block(exprs1), Expr.Block(exprs2)) => slice.compare(
+        exprs1,
+        exprs2,
+        Expression.eq,
+      ),
+      (Expr.Neg(e1), Expr.Neg(e2)) => e1.eq(e2.*),
+      (Expr.Not(e1), Expr.Not(e2)) => e1.eq(e2.*),
+      (Expr.Return(Some(e1)), Expr.Return(Some(e2))) => e1.eq(e2.*),
+      (Expr.Return(None), Expr.Return(None)) => true,
+      (Expr.Break, Expr.Break) => true,
+      (Expr.Continue, Expr.Continue) => true,
+      (Expr.Type(n1, a1), Expr.Type(n2, a2)) => {
+        let type_args_eq = match (a1, a2) {
+          (None, None) => true,
+          (Some(t1), Some(t2)) => slice.compare(t1, t2, Type.eq),
+          _ => false,
+        }
+        n1 == n2 && type_args_eq
+      },
+      (Expr.DotName(r1, f1), Expr.DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
+      (Expr.DotCall(r1, c1), Expr.DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
+      _ => false,
+    }
+  }
+}
+
+impl Conditional {
+  pub fn eq(self, other: Conditional) -> bool {
+    match (self, other) {
+      (
+        Conditional.Binary { subject: s1, ops: o1 },
+        Conditional.Binary { subject: s2, ops: o2 },
+      ) => s1 == s2 && slice.compare(o1, o2, Comparison.eq),
+      (
+        Conditional.Unary { expr: e1, consequent: c1 },
+        Conditional.Unary { expr: e2, consequent: c2 },
+      ) => e1 == e2 && c1 == c2,
+      (Conditional.Multi(c1), Conditional.Multi(c2)) => slice.compare(
+        c1,
+        c2,
+        Conditional.eq,
+      ),
+      (Conditional.Else { consequent: c1 }, Conditional.Else { consequent: c2 }) => c1 ==
+      c2,
+      _ => false,
+    }
+  }
+}
+
+impl Comparison {
+  pub fn eq(self, other: Comparison) -> bool {
+    self.op == other.op && slice.compare(self.objects, other.objects, Branch.eq)
+  }
+}
+
+impl Branch {
+  pub fn eq(self, other: Branch) -> bool {
+    self.object.eq(other.object.*) && self.then.eq(other.then)
+  }
+}
+
+impl Consequent {
+  pub fn eq(self, other: Consequent) -> bool {
+    match (self, other) {
+      (Consequent.And(c1), Consequent.And(c2)) => c1.eq(c2),
+      (Consequent.Or(c1), Consequent.Or(c2)) => c1.eq(c2),
+      (Consequent.Do(e1), Consequent.Do(e2)) => e1.eq(e2.*),
+      _ => false,
+    }
   }
 }
