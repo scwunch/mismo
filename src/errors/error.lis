@@ -1,23 +1,163 @@
 import "span"
 
-pub interface Error {
-  fn Error(self) -> string
+pub interface Diagnostic {
+  // impl error
+  fn code(self) -> int // eg E0132
+  fn span(self) -> span.Span
+  fn message(self) -> string
+
+  // fn labels() -> Slice<Label>    // Secondary highlights (e.g., pointing to the live borrow)
+  // fn help() -> Option<string>    // Hints (e.g., "Consider upgrading the mode to mut!")
 }
 
+// impl Diagnostic {
+pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
+  let mut line: uint32 = 0
+  let mut col: uint32 = 0
+  for i in 0..source.length() {
+    if source[i] == '\n' {
+      line += 1
+      col = 0
+    } else {
+      col += 1
+    }
+    if i == self.span().start as int { return span.Location { line, col } }
+  }
+  span.Location { line, col }
+}
+
+pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
+  let loc = location(self, source)
+  let mut start = self.span().start as int - 1
+  while start > 0 {
+    if source[start] == '\n' { break }
+    start -= 1
+  }
+  let mut end = self.span().end as int
+  while end < source.length() {
+    if source[end] == '\n' { break }
+    end += 1
+  }
+  let line = source[start..end]
+
+  let mut highlight = []
+  for _ in 1..loc.col as int {
+    highlight = highlight.append(' ')
+  }
+  for _ in self.span().start as int..self.span().end as int {
+    highlight = highlight.append('^')
+  }
+
+  f"E{self.code()}: {self.message()}\n{line}\n{highlight as string}"
+}
+
+// }
+
 pub interface SyntaxError {
-  impl error
-  fn location(self, source: Slice<rune>) -> span.Location
+  impl Diagnostic
+
+  // fn location(self, source: Slice<rune>) -> span.Location
 }
 
 pub struct ParseError {
-  pub span: span.Span,
+  _s_: span.Span,
   pub msg: string,
 }
+
 impl ParseError {
-  pub fn location(self, source: Slice<rune>) -> span.Location {
-    self.span.location(source)
+  pub fn new(span: span.Span, msg: string) -> ParseError {
+    ParseError { _s_: span, msg }
   }
-  pub fn Error(self) -> string {
+
+  pub fn message(self) -> string {
+    self.msg
+  }
+
+  pub fn code(self) -> int {
+    1000
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+
+  pub fn Diagnostic(self) -> string {
     f"{self.span}: {self.msg}"
+  }
+}
+
+pub interface TypeError {
+  impl Diagnostic
+}
+
+pub struct DuplicateNameError {
+  pub name: string,
+  pub span1: span.Span,
+  pub span2: span.Span,
+}
+
+impl DuplicateNameError {
+  pub fn new(name: string, span1: span.Span, span2: span.Span) -> DuplicateNameError {
+    DuplicateNameError { name, span1, span2 }
+  }
+
+  pub fn code(self) -> int {
+    2001
+  }
+
+  pub fn message(self) -> string {
+    f"{self.name} is defined twice: {self.span1} and {self.span2}"
+  }
+
+  pub fn span(self) -> span.Span {
+    self.span1
+  }
+}
+
+pub struct MissingNameError {
+  pub name: string,
+  pub _s_: span.Span,
+}
+
+impl MissingNameError {
+  pub fn new(name: string, span: span.Span) -> MissingNameError {
+    MissingNameError { name, _s_: span }
+  }
+
+  pub fn code(self) -> int {
+    2002
+  }
+
+  pub fn message(self) -> string {
+    f"\"{self.name}\" is not defined"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct TypeParameterArityError {
+  pub _s_: span.Span,
+  pub name: string,
+  pub expected: int,
+  pub actual: int,
+}
+
+impl TypeParameterArityError {
+  pub fn new(span: span.Span, name: string, expected: int, actual: int) -> TypeParameterArityError {
+    TypeParameterArityError { _s_: span, name, expected, actual }
+  }
+
+  pub fn code(self) -> int {
+    2003
+  }
+
+  pub fn message(self) -> string {
+    f"\"{self.name}\" expects {self.expected} type arguments but {self.actual} were provided"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
   }
 }

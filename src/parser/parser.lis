@@ -204,7 +204,7 @@ impl Parser {
 
   /// emit an error
   fn error(self: Ref<Parser>, span: Span, msg: string) -> ParseError {
-    let err = ParseError { span, msg }
+    let err = ParseError.new(span, msg)
     self.defs.errors = self.defs.errors.append(err)
     err
   }
