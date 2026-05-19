@@ -20,18 +20,18 @@ pub struct Parser {
   lexer: Lexer,
   peeked: Token,
   current_line_indent: uint32,
-  pub defs: Ref<ast.Definitions>,
+  pub defs: Ref<ast.Declarations>,
 }
 
 impl Parser {
-  pub fn new(source: string, defs: Ref<ast.Definitions>) -> Parser {
+  pub fn new(source: string, defs: Ref<ast.Declarations>) -> Parser {
     let mut lexer = Lexer.new(source)
     let peeked = lexer.next()
     Parser { lexer, peeked, current_line_indent: 0, defs }
   }
 
   pub fn new_with_defs(source: string) -> Parser {
-    Parser.new(source, &ast.Definitions.new())
+    Parser.new(source, &ast.Declarations.new())
   }
 
   pub fn peek(self: Ref<Parser>) -> Token {

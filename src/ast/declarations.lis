@@ -2,8 +2,8 @@ import "errors"
 import "mode"
 import "span"
 
-/// a container for definitions collected from a module
-pub struct Definitions {
+/// a container for declarations collected from a module
+pub struct Declarations {
   pub imports: Slice<Import>,
   pub types: Slice<TypeDecl>,
   pub functions: Slice<FunctionDecl>,
@@ -122,24 +122,24 @@ impl Parameter {
   }
 }
 
-impl Definitions {
-  pub fn new() -> Definitions {
-    Definitions { imports: [], types: [], functions: [], errors: [] }
+impl Declarations {
+  pub fn new() -> Declarations {
+    Declarations { imports: [], types: [], functions: [], errors: [] }
   }
 
-  pub fn add_import(self: Ref<Definitions>, i: Import) {
+  pub fn add_import(self: Ref<Declarations>, i: Import) {
     self.imports = self.imports.append(i)
   }
 
-  pub fn add_type(self: Ref<Definitions>, t: TypeDecl) {
+  pub fn add_type(self: Ref<Declarations>, t: TypeDecl) {
     self.types = self.types.append(t)
   }
 
-  pub fn add_function(self: Ref<Definitions>, f: FunctionDecl) {
+  pub fn add_function(self: Ref<Declarations>, f: FunctionDecl) {
     self.functions = self.functions.append(f)
   }
 
-  pub fn add_error(self: Ref<Definitions>, s: errors.SyntaxError) {
+  pub fn add_error(self: Ref<Declarations>, s: errors.SyntaxError) {
     self.errors = self.errors.append(s)
   }
 }

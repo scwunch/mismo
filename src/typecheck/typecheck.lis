@@ -18,7 +18,7 @@ impl TypeEnv {
     }
   }
 
-  pub fn type_check_program(self: Ref<TypeEnv>, items: ast.Definitions) {
+  pub fn type_check_program(self: Ref<TypeEnv>, items: ast.Declarations) {
     // populate @type_defs and @function_defs with names of types/functions and number and names of type parameters
     self.register_types(items.types)
     // evaluate fields and variants for structs and enums
