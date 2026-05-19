@@ -1,5 +1,6 @@
 # output
 target/
+output.log
 
 # IDE
 .cursor/
