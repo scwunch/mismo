@@ -1,9 +1,10 @@
 import "go:fmt"
 import "go:os"
 
-import "span"
-import "lexer" 
+import "lexer"
 import "parser"
+import "span"
+import "typecheck"
 
 fn main() {
   match os.Args {
@@ -34,6 +35,7 @@ fn run_tests(tests: Slice<string>) {
     ("span", span.test),
     ("lexer", lexer.test),
     ("parser", parser.test),
+    ("typecheck", typecheck.test),
   ])
 
   if tests.is_empty() {

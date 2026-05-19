@@ -1,13 +1,16 @@
 import "ast"
 import "parser"
 
-pub struct Compiler {
-  ast_defs: ast.Definitions,
-}
+pub struct Compiler { ast_defs: ast.Definitions }
+
 impl Compiler {
   pub fn parse(source: string) -> Ref<ast.Definitions> {
     let mut parser = parser.Parser.new(source, &ast.Definitions.new())
     parser.parse()
     parser.defs
+  }
+
+  pub fn type_check() -> Result<(), ()> {
+    Ok(())
   }
 }

@@ -1,5 +1,191 @@
-import "error"
+import "ast"
+import "errors"
+import "mode"
+import "span"
 
-pub fn typecheck() -> bool {
-  true
+pub struct TypeEnv {
+  pub type_defs: Map<string, Ref<TypeDef>>,
+  pub function_defs: Map<string, Ref<FunctionDefinition>>,
+  pub errors: Slice<errors.TypeError>,
 }
+
+impl TypeEnv {
+  pub fn new() -> TypeEnv {
+    TypeEnv { 
+      type_defs: Map.new(),
+      function_defs: Map.new(),
+      errors: Slice.new(),
+    }
+  }
+
+  pub fn type_check_program(self: Ref<TypeEnv>, items: ast.Definitions) {
+    // populate @type_defs and @function_defs with names of types/functions and number and names of type parameters
+    self.register_types(items.types)
+    // evaluate fields and variants for structs and enums
+    self.fill_out_type_info(items.types)
+
+    self.type_check_functions()
+  }
+
+  fn register_types(self: Ref<TypeEnv>, type_defs: Slice<ast.TypeDecl>) {
+    for t in type_defs {
+      match self.type_defs.get(t.name) {
+        Some(def) => self.error(errors.DuplicateNameError.new(
+          t.name,
+          t.span,
+          def.span,
+        )),
+        None => {
+          let kind = match t.body {
+            ast.TypeBody.Struct(_) => TypeKind.Struct([]),
+            ast.TypeBody.Enum(_) => TypeKind.Enum([]),
+          }
+          let type_params = t.type_parameters.map(|param| {
+            TypeParameter { name: param }
+          })
+          self.type_defs[t.name] = &TypeDef.new(
+            t.span,
+            t.name,
+            type_params,
+            kind,
+          )
+        },
+      }
+    }
+  }
+
+  fn fill_out_type_info(self: Ref<TypeEnv>, types: Slice<ast.TypeDecl>) {
+    for decl in types {
+      let def = self.type_defs[decl.name]
+      match decl.body {
+        ast.TypeBody.Struct(fields) => {
+          def.kind = TypeKind.Struct(fields.map(|field| {
+            Field { 
+              span: field.span,
+              name: field.name,
+              typ: self
+                .eval_type(field.typ)
+                .unwrap_or_else(|e| {
+                  self.error(e)
+                  Type.Never
+                }),
+            }
+          }))
+        },
+        ast.TypeBody.Enum(variants) => {
+          def.kind = TypeKind.Enum(variants.map(|variant| {
+            Variant { 
+              span: variant.span,
+              name: variant.name,
+              payload: variant.payload.map(|typ| {
+                self
+                  .eval_type(typ)
+                  .unwrap_or_else(|e| {
+                    self.error(e)
+                    Type.Never
+                  })
+              }),
+            }
+          }))
+        },
+      }
+    }
+  }
+
+  fn eval_type(self, typ: ast.Type) -> Result<Type, errors.TypeError> {
+    match typ.kind {
+      ast.TypeKind.Tuple(types) => {
+        // Ok(Type.Tuple(slice.map_result(types, self.eval_type)))
+        let mut ts = []
+        for t in types {
+          ts = ts.append(self.eval_type(t)?)
+        }
+        Ok(Type.Tuple(ts))
+      },
+      ast.TypeKind.Fn(params, ret) => {
+        // let params = slice.map_result(params, self.eval_param_type)?
+        let mut param_types = []
+        for p in params {
+          param_types = param_types.append(self.eval_param_type(p)?)
+        }
+        let ret = self.eval_type(ret.*)?
+        Ok(Type.Fn(param_types, &ret))
+      },
+      ast.TypeKind.Nominal(name, type_args) => {
+        let primitive = match name {
+          "Never" => Some(Type.Never),
+          "Nil" => Some(Type.Nil),
+          "Bool" => Some(Type.Bool),
+          "Nat" => Some(Type.Nat),
+          "Int" => Some(Type.Int),
+          "Float" => Some(Type.Float),
+          "String" => Some(Type.String),
+          _ => None,
+        }
+        if let Some(primitive) = primitive {
+          self.check_arity(typ.span, name, type_args.length(), 0)?
+          return Ok(primitive)
+        }
+
+        match self.type_defs.get(name) {
+          None => {
+            return Err(errors.MissingNameError.new(name, typ.span))
+          },
+          Some(def) => {
+            // let type_args = slice.map_result(type_args, self.eval_type)?
+            let mut ts = []
+            for t in type_args {
+              ts = ts.append(self.eval_type(t)?)
+            }
+            self.check_arity(
+              typ.span,
+              name,
+              type_args.length(),
+              def.type_parameters.length(),
+            )?
+            Ok(Type.Adt(def, ts))
+          },
+        }
+      },
+    }
+  }
+
+  fn check_arity(
+    self,
+    span: span.Span,
+    name: string,
+    type_args: int,
+    type_params: int,
+  ) -> Result<(), errors.TypeError> {
+    if type_args == type_params {
+      Ok(())
+    } else {
+      Err(errors.TypeParameterArityError.new(span, name, type_args, type_params))
+    }
+  }
+
+  pub fn eval_param(self, param: ast.Parameter) -> Result<Parameter, errors.TypeError> {
+    let typ = self.eval_type(param.typ)?
+    Ok(
+      Parameter { 
+        span: param.span,
+        mode: param.mode.unwrap_or(mode.Mode.Let),
+        name: param.name,
+        typ,
+      },
+    )
+  }
+
+  fn eval_param_type(self, param: ast.ParamType) -> Result<ParamType, errors.TypeError> {
+    let typ = self.eval_type(param.typ)?
+    Ok(ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
+  }
+
+  fn type_check_functions(self: Ref<TypeEnv>) {}
+
+  fn error(self: Ref<TypeEnv>, err: errors.TypeError) {
+    self.errors = self.errors.append(err)
+  }
+}
+
+pub struct Box<T> { value: T }

@@ -1,0 +1,10 @@
+import "testing"
+
+pub fn test() {
+  let _ = testing.test_suite("Type Check", [test_dummy])
+}
+
+fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Type Check Dummy"
+  Ok(())
+}

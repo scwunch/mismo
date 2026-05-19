@@ -1,0 +1,59 @@
+import "ast"
+import "mode"
+import "span"
+
+pub struct TypeDef {
+  pub span: span.Span,
+  pub name: string,
+  pub type_parameters: Slice<TypeParameter>,
+  pub kind: TypeKind,
+}
+
+pub enum TypeKind {
+  Struct(Slice<Field>),
+  Enum(Slice<Variant>),
+}
+
+pub struct TypeParameter {
+  // pub span: span.Span,
+  pub name: string,
+}
+
+pub struct Field {
+  pub span: span.Span,
+  pub name: string,
+  pub typ: Type,
+}
+
+pub struct Variant {
+  pub span: span.Span,
+  pub name: string,
+  pub payload: Slice<Type>,
+}
+
+pub struct FunctionDefinition {
+  pub span: span.Span,
+  pub name: string,
+  pub type_parameters: Slice<TypeParameter>,
+  pub parameters: Slice<Parameter>,
+  pub return_type: Type,
+  pub body: ast.Expression,
+}
+
+pub struct Parameter {
+  pub span: span.Span,
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+}
+
+impl TypeDef {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    kind: TypeKind,
+  ) -> TypeDef {
+    TypeDef { span, name, type_parameters, kind }
+  }
+}
