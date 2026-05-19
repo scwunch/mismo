@@ -61,3 +61,10 @@ impl ParamType {
     self.mode == other.mode && self.typ.eq(other.typ)
   }
 }
+
+impl Parameter {
+  pub fn eq(self, other: Parameter) -> bool {
+    self.span == other.span && self.mode == other.mode &&
+    self.name == other.name && self.typ.eq(other.typ)
+  }
+}

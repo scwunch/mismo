@@ -1,10 +1,398 @@
+import "ast"
+import "errors"
+import "mode"
+import "span"
 import "testing"
 
 pub fn test() {
-  let _ = testing.test_suite("Type Check", [test_dummy])
+  let _ = testing.test_suite(
+    "Type Check",
+    [
+      test_eval_type_primitives,
+      test_eval_type_compound,
+      test_eval_type_nominal,
+      test_eval_type_errors,
+      test_eval_param_type,
+      test_eval_param,
+      test_register_and_fill_struct,
+      test_register_and_fill_enum,
+      test_duplicate_name_error,
+    ],
+  )
 }
 
-fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "Type Check Dummy"
+fn test_eval_type_primitives(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_type primitives"
+  let env = TypeEnv.new()
+
+  match env.eval_type(ast.typ(0, 5, "Never", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Never)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 3, "Nil", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Nil)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 4, "Bool", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Bool)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 3, "Nat", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Nat)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 3, "Int", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Int)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 5, "Float", [])) {
+    Ok(typ) => t.should_eq(typ, Type.Float)?,
+    Err(e) => t.fail(e.message())?,
+  }
+  match env.eval_type(ast.typ(0, 6, "String", [])) {
+    Ok(typ) => t.should_eq(typ, Type.String)?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_eval_type_compound(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_type compound types"
+  let env = TypeEnv.new()
+
+  // Tuple type: (Int, Bool)
+  match env.eval_type(ast.Type.tuple(
+    span.Span.new(0, 11),
+    [ast.typ(1, 4, "Int", []), ast.typ(6, 10, "Bool", [])],
+  )) {
+    Ok(typ) => t.should_eq(typ, Type.Tuple([Type.Int, Type.Bool]))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Empty tuple type: ()
+  match env.eval_type(ast.Type.tuple(span.Span.new(0, 2), [])) {
+    Ok(typ) => t.should_eq(typ, Type.Tuple([]))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Function type: (Int) -> String
+  match env.eval_type(ast.Type.fn_(
+    span.Span.new(0, 14),
+    [ast.ParamType.none(ast.typ(1, 4, "Int", []))],
+    &ast.typ(10, 16, "String", []),
+  )) {
+    Ok(typ) => t.should_eq(
+      typ,
+      Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.Int }], &Type.String),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Function type with let and mut! params
+  match env.eval_type(ast.Type.fn_(
+    span.Span.new(0, 26),
+    [
+      ast.ParamType.let_(ast.typ(5, 11, "String", [])),
+      ast.ParamType.mut_bang(ast.typ(18, 21, "Int", [])),
+    ],
+    &ast.typ(24, 28, "Bool", []),
+  )) {
+    Ok(typ) => t.should_eq(
+      typ,
+      Type.Fn(
+        [
+          ParamType { mode: mode.Mode.Let, typ: Type.String },
+          ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
+        ],
+        &Type.Bool,
+      ),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_eval_type_nominal(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_type nominal types"
+  let mut env = TypeEnv.new()
+  env.register_types([
+    ast.TypeDecl.new_enum(
+      span.Span.new(0, 18),
+      "Option",
+      ["T"],
+      [
+        ast.Variant.new(
+          span.Span.new(10, 14),
+          "Some",
+          [ast.typ(15, 16, "T", [])],
+        ),
+        ast.Variant.new(span.Span.new(17, 21), "None", []),
+      ],
+    ),
+  ])
+
+  // Option[Int]
+  let option_ref = env.type_defs["Option"]
+  match env.eval_type(ast.typ(0, 11, "Option", [ast.typ(7, 10, "Int", [])])) {
+    Ok(typ) => t.should_eq(typ, Type.Adt(option_ref, [Type.Int]))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Option[Option[Int]]
+  match env.eval_type(ast.typ(
+    0,
+    18,
+    "Option",
+    [ast.typ(7, 17, "Option", [ast.typ(14, 17, "Int", [])])],
+  )) {
+    Ok(typ) => t.should_eq(
+      typ,
+      Type.Adt(option_ref, [Type.Adt(option_ref, [Type.Int])]),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_type errors"
+  let mut env = TypeEnv.new()
+
+  // Missing name
+  match env.eval_type(ast.typ(0, 6, "Wobble", [])) {
+    Ok(_) => t.fail("expected error for unknown type")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2002,
+      f"expected code 2002, got {e.code()}",
+    )?,
+  }
+
+  // Arity mismatch on primitive: Int[String]
+  match env.eval_type(ast.typ(0, 3, "Int", [ast.typ(0, 6, "String", [])])) {
+    Ok(_) => t.fail("expected arity error on primitive")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2003,
+      f"expected code 2003, got {e.code()}",
+    )?,
+  }
+
+  // Register Option[T] for ADT arity test
+  env.register_types([
+    ast.TypeDecl.new_enum(
+      span.Span.new(0, 18),
+      "Option",
+      ["T"],
+      [
+        ast.Variant.new(
+          span.Span.new(10, 14),
+          "Some",
+          [ast.typ(15, 16, "T", [])],
+        ),
+        ast.Variant.new(span.Span.new(17, 21), "None", []),
+      ],
+    ),
+  ])
+
+  // Arity mismatch on ADT: Option[Int, String] (2 args, 1 expected)
+  match env.eval_type(ast.typ(
+    0,
+    20,
+    "Option",
+    [ast.typ(7, 10, "Int", []), ast.typ(12, 18, "String", [])],
+  )) {
+    Ok(_) => t.fail("expected arity error on ADT")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2003,
+      f"expected code 2003, got {e.code()}",
+    )?,
+  }
+
+  Ok(())
+}
+
+fn test_eval_param_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_param_type"
+  let env = TypeEnv.new()
+
+  // none mode → defaults to Let
+  match env.eval_param_type(ast.ParamType.none(ast.typ(0, 3, "Int", []))) {
+    Ok(pt) => t.should_eq(pt, ParamType { mode: mode.Mode.Let, typ: Type.Int })?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // let mode
+  match env.eval_param_type(ast.ParamType.let_(ast.typ(0, 4, "Bool", []))) {
+    Ok(pt) => t.should_eq(pt, ParamType { mode: mode.Mode.Let, typ: Type.Bool })?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // mut! mode
+  match env.eval_param_type(ast.ParamType.mut_bang(ast.typ(0, 3, "Int", []))) {
+    Ok(pt) => t.should_eq(
+      pt,
+      ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_param"
+  let env = TypeEnv.new()
+
+  // No mode → defaults to Let
+  match env.eval_param(ast.param(0, 10, None, "x", ast.typ(6, 9, "Int", []))) {
+    Ok(param) => t.should_eq(
+      param,
+      Parameter { 
+        span: span.Span.new(0, 10),
+        mode: mode.Mode.Let,
+        name: "x",
+        typ: Type.Int,
+      },
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // let mode
+  match env.eval_param(ast.param(
+    0,
+    14,
+    Some(mode.Mode.Let),
+    "s",
+    ast.typ(10, 14, "String", []),
+  )) {
+    Ok(param) => t.should_eq(
+      param,
+      Parameter { 
+        span: span.Span.new(0, 14),
+        mode: mode.Mode.Let,
+        name: "s",
+        typ: Type.String,
+      },
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // var mode
+  match env.eval_param(ast.param(
+    0,
+    12,
+    Some(mode.Mode.Var),
+    "y",
+    ast.typ(8, 11, "Int", []),
+  )) {
+    Ok(param) => t.should_eq(
+      param,
+      Parameter { 
+        span: span.Span.new(0, 12),
+        mode: mode.Mode.Var,
+        name: "y",
+        typ: Type.Int,
+      },
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_register_and_fill_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: register and fill struct"
+  let mut env = TypeEnv.new()
+
+  let decl = ast.TypeDecl.new_struct(
+    span.Span.new(0, 22),
+    "Point",
+    [],
+    [
+      ast.Field.new(8, 14, "x", ast.typ(11, 14, "Int", [])),
+      ast.Field.new(15, 21, "y", ast.typ(18, 21, "Int", [])),
+    ],
+  )
+  env.register_types([decl])
+  env.fill_out_type_info([decl])
+
+  let def = env.type_defs["Point"]
+  t.should_eq(
+    def.*,
+    TypeDef.new(
+      span.Span.new(0, 22),
+      "Point",
+      [],
+      TypeKind.Struct([
+        Field { span: span.Span.new(8, 14), name: "x", typ: Type.Int },
+        Field { span: span.Span.new(15, 21), name: "y", typ: Type.Int },
+      ]),
+    ),
+  )?
+
+  Ok(())
+}
+
+fn test_register_and_fill_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: register and fill enum"
+  let mut env = TypeEnv.new()
+
+  let decl = ast.TypeDecl.new_enum(
+    span.Span.new(0, 30),
+    "Color",
+    [],
+    [
+      ast.Variant.new(span.Span.new(13, 16), "Red", []),
+      ast.Variant.new(
+        span.Span.new(19, 25),
+        "Green",
+        [ast.typ(25, 28, "Int", [])],
+      ),
+    ],
+  )
+  env.register_types([decl])
+  env.fill_out_type_info([decl])
+
+  let def = env.type_defs["Color"]
+  t.should_eq(
+    def.*,
+    TypeDef.new(
+      span.Span.new(0, 30),
+      "Color",
+      [],
+      TypeKind.Enum([
+        Variant { span: span.Span.new(13, 16), name: "Red", fields: [] },
+        Variant { 
+          span: span.Span.new(19, 25),
+          name: "Green",
+          fields: [Type.Int],
+        },
+      ]),
+    ),
+  )?
+
+  Ok(())
+}
+
+fn test_duplicate_name_error(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: duplicate name error"
+  let mut env = TypeEnv.new()
+
+  env.register_types([
+    ast.TypeDecl.new_struct(span.Span.new(0, 10), "Point", [], []),
+    ast.TypeDecl.new_struct(span.Span.new(10, 20), "Point", [], []),
+  ])
+
+  t.should_be_true(
+    env.errors.length() == 1,
+    f"expected 1 error, got {env.errors.length()}",
+  )?
+  t.should_be_true(
+    env.errors[0].code() == 2001,
+    f"expected code 2001, got {env.errors[0].code()}",
+  )?
+
   Ok(())
 }
