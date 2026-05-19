@@ -17,6 +17,8 @@ pub fn test() {
       test_register_and_fill_struct,
       test_register_and_fill_enum,
       test_duplicate_name_error,
+      test_eval_function,
+      test_register_functions,
     ],
   )
 }
@@ -392,6 +394,183 @@ fn test_duplicate_name_error(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.should_be_true(
     env.errors[0].code() == 2001,
     f"expected code 2001, got {env.errors[0].code()}",
+  )?
+
+  Ok(())
+}
+
+fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: eval_function"
+  let env = TypeEnv.new()
+
+  // fn foo() Int
+  let sig = ast.Signature.new(
+    span.Span.new(0, 18),
+    "foo",
+    [],
+    [],
+    ast.typ(14, 17, "Int", []),
+  )
+  let decl = ast.FunctionDecl.new(
+    span.Span.new(0, 22),
+    sig,
+    ast.int_lit(span.Span.new(20, 22), 42),
+  )
+
+  match env.eval_function(decl) {
+    Ok(func) => t.should_eq(
+      func,
+      FunctionDef.new(
+        span.Span.new(0, 22),
+        "foo",
+        [],
+        [],
+        Type.Int,
+        ast.int_lit(span.Span.new(20, 22), 42),
+      ),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // fn add(a Int, b Int) Int
+  let params = [
+    ast.param(6, 12, None, "a", ast.typ(9, 12, "Int", [])),
+    ast.param(14, 20, None, "b", ast.typ(17, 20, "Int", [])),
+  ]
+  let add_sig = ast.Signature.new(
+    span.Span.new(0, 29),
+    "add",
+    [],
+    params,
+    ast.typ(26, 29, "Int", []),
+  )
+  let add_decl = ast.FunctionDecl.new(
+    span.Span.new(0, 29),
+    add_sig,
+    ast.nil_lit(span.Span.new(0, 0)),
+  )
+
+  match env.eval_function(add_decl) {
+    Ok(func) => {
+      t.should_eq_repr(func.name, "add")?
+      t.should_be_true(
+        func.parameters.length() == 2,
+        f"expected 2 params, got {func.parameters.length()}",
+      )?
+      t.should_eq(
+        func.parameters[0],
+        Parameter { 
+          span: span.Span.new(6, 12),
+          mode: mode.Mode.Let,
+          name: "a",
+          typ: Type.Int,
+        },
+      )?
+      t.should_eq(func.return_type, Type.Int)?
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // `fn bad() Wobble` => Error: unknown return type Wobble
+  let bad_sig = ast.Signature.new(
+    span.Span.new(0, 20),
+    "bad",
+    [],
+    [],
+    ast.typ(14, 19, "Wobble", []),
+  )
+  let bad_decl = ast.FunctionDecl.new(
+    span.Span.new(0, 20),
+    bad_sig,
+    ast.nil_lit(span.Span.new(0, 0)),
+  )
+
+  match env.eval_function(bad_decl) {
+    Ok(_) => t.fail("expected error for unknown return type")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2002,
+      f"expected code 2002, got {e.code()}",
+    )?,
+  }
+
+  Ok(())
+}
+
+fn test_register_functions(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "TypeCheck: register_functions"
+  let mut env = TypeEnv.new()
+
+  // Register fn foo() Int: 42
+  let foo_sig = ast.Signature.new(
+    span.Span.new(0, 18),
+    "foo",
+    [],
+    [],
+    ast.typ(14, 17, "Int", []),
+  )
+  let foo_decl = ast.FunctionDecl.new(
+    span.Span.new(0, 22),
+    foo_sig,
+    ast.int_lit(span.Span.new(20, 22), 42),
+  )
+  env.register_functions([foo_decl])
+
+  let foo_funcs = env.function_defs["foo"]
+  t.should_be_true(
+    foo_funcs.length() == 1,
+    f"expected 1 function for foo, got {foo_funcs.length()}",
+  )?
+  t.should_eq_repr(foo_funcs[0].name, "foo")?
+  t.should_eq(foo_funcs[0].return_type, Type.Int)?
+
+  // Overload: register another fn foo(x Int) Int
+  let foo2_sig = ast.Signature.new(
+    span.Span.new(0, 22),
+    "foo",
+    [],
+    [ast.param(7, 13, None, "x", ast.typ(10, 13, "Int", []))],
+    ast.typ(18, 21, "Int", []),
+  )
+  let foo2_decl = ast.FunctionDecl.new(
+    span.Span.new(0, 22),
+    foo2_sig,
+    ast.nil_lit(span.Span.new(0, 0)),
+  )
+  env.register_functions([foo2_decl])
+
+  let foo_funcs = env.function_defs["foo"]
+  t.should_be_true(
+    foo_funcs.length() == 2,
+    f"expected 2 functions for foo, got {foo_funcs.length()}",
+  )?
+
+  // Register a function with error (unknown return type)
+  let bad_sig = ast.Signature.new(
+    span.Span.new(0, 16),
+    "bad",
+    [],
+    [],
+    ast.typ(12, 16, "Wobble", []),
+  )
+  let bad_decl = ast.FunctionDecl.new(
+    span.Span.new(0, 16),
+    bad_sig,
+    ast.nil_lit(span.Span.new(0, 0)),
+  )
+  env.register_functions([bad_decl])
+
+  t.should_be_true(
+    env.function_defs.get("bad").is_none(),
+    "expected no function for bad",
+  )?
+
+  t.should_be_true(
+    env.errors.length() == 1,
+    f"expected 1 error, got {env.errors.length()}",
+  )?
+  t.should_be_true(
+    env.errors[0].code() == 2002,
+    f"expected code 2002, got {env.errors[0].code()}",
   )?
 
   Ok(())

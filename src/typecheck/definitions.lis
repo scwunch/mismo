@@ -31,7 +31,7 @@ pub struct Variant {
   pub fields: Slice<Type>,
 }
 
-pub struct FunctionDefinition {
+pub struct FunctionDef {
   pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
@@ -55,5 +55,18 @@ impl TypeDef {
     kind: TypeKind,
   ) -> TypeDef {
     TypeDef { span, name, type_parameters, kind }
+  }
+}
+
+impl FunctionDef {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    parameters: Slice<Parameter>,
+    return_type: Type,
+    body: ast.Expression,
+  ) -> FunctionDef {
+    FunctionDef { span, name, type_parameters, parameters, return_type, body }
   }
 }

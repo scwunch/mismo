@@ -5,7 +5,7 @@ import "span"
 
 pub struct TypeEnv {
   pub type_defs: Map<string, Ref<TypeDef>>,
-  pub function_defs: Map<string, Ref<FunctionDefinition>>,
+  pub function_defs: Map<string, Slice<FunctionDef>>,
   pub errors: Slice<errors.TypeError>,
 }
 
@@ -23,6 +23,9 @@ impl TypeEnv {
     self.register_types(items.types)
     // evaluate fields and variants for structs and enums
     self.fill_out_type_info(items.types)
+
+    // register signatures of all functions
+    self.register_functions(items.functions)
 
     self.type_check_functions()
   }
@@ -181,7 +184,50 @@ impl TypeEnv {
     Ok(ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
   }
 
-  fn type_check_functions(self: Ref<TypeEnv>) {}
+  fn register_functions(self: Ref<TypeEnv>, functions: Slice<ast.FunctionDecl>) {
+    for func in functions {
+      match self.eval_function(func) {
+        Ok(def) => {
+          match self.function_defs.get(def.name) {
+            Some(existing) => {
+              self.function_defs[def.name] = existing.append(def)
+            },
+            None => {
+              self.function_defs[def.name] = [def]
+            },
+          }
+        },
+        Err(err) => {
+          self.error(err)
+        },
+      }
+    }
+  }
+
+  fn eval_function(self, func: ast.FunctionDecl) -> Result<FunctionDef, errors.TypeError> {
+    let span = func.span
+    let name = func.signature.name
+    let type_params = func.signature.type_parameters.map(|param| {
+      TypeParameter { span: param.span, name: param.name }
+    })
+    let mut params = []
+    for param in func.signature.parameters {
+      params = params.append(self.eval_param(param)?)
+    }
+    let return_type = self.eval_type(func.signature.return_type)?
+    let body = func.body
+    Ok(FunctionDef.new(span, name, type_params, params, return_type, body))
+  }
+
+  fn type_check_functions(self) {
+    for (_name, funcs) in self.function_defs {
+      for func in funcs {
+        self.type_check_function(func)
+      }
+    }
+  }
+
+  fn type_check_function(self, _func: FunctionDef) {}
 
   fn error(self: Ref<TypeEnv>, err: errors.TypeError) {
     self.errors = self.errors.append(err)

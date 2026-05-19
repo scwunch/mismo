@@ -69,3 +69,13 @@ impl Parameter {
     self.typ.eq(other.typ)
   }
 }
+
+impl FunctionDef {
+  pub fn eq(self, other: FunctionDef) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
+    slice.compare(self.parameters, other.parameters, Parameter.eq) &&
+    self.return_type.eq(other.return_type) &&
+    self.body.eq(other.body)
+  }
+}
