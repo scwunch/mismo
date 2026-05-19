@@ -1,0 +1,62 @@
+import "ast"
+import "errors"
+import "mode"
+import "span"
+
+impl TypeEnv {
+  fn type_check_function(self: Ref<TypeEnv>, func: FunctionDef) {
+    let scope = TypeScope.from_params(func.parameters)
+    let res = self.check(func.body, func.return_type, &scope)
+    if let Err(err) = res { self.error(err) }
+  }
+
+  fn check(
+    self: Ref<TypeEnv>,
+    expr: ast.Expression,
+    expected: Type,
+    scope: Ref<TypeScope>,
+  ) -> Result<(), errors.TypeError> {
+    let actual = self.infer(expr, scope)?
+    if !actual.eq(expected) { panic("register type mismatch error here") }
+    Ok(())
+  }
+
+  fn infer(self: Ref<TypeEnv>, expr: ast.Expression, scope: Ref<TypeScope>) -> Result<Type, errors.TypeError> {
+    panic("TODO")
+  }
+}
+
+struct TypeScope {
+  names: Map<string, Variable>,
+  parent: Option<Ref<TypeScope>>,
+}
+
+impl TypeScope {
+  fn from_params(params: Slice<Parameter>) -> TypeScope {
+    let mut names = Map.new()
+    for param in params {
+      names[param.name] = Variable.from_param(param)
+    }
+    TypeScope { names, parent: None }
+  }
+}
+
+struct Variable {
+  mode: mode.Mode,
+  name: string,
+  typ: Type,
+  init: uint32,
+  consumed: Option<uint32>,
+}
+
+impl Variable {
+  fn from_param(param: Parameter) -> Variable {
+    Variable { 
+      mode: param.mode,
+      name: param.name,
+      typ: param.typ,
+      init: param.span.start,
+      consumed: None,
+    }
+  }
+}
