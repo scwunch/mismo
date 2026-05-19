@@ -40,13 +40,13 @@ impl Parser {
     let fields = self.parse_fields()?
     let newline_span = self.next().span
     span = span.merge(newline_span)
-    self.defs.add_struct(ast.StructDef.new(span, name, type_params, fields))
+    self.defs.add_type(ast.TypeDecl.new_struct(span, name, type_params, fields))
     Ok(())
   }
 
   fn parse_enum(self: Ref<Parser>) -> Result<(), ParseError> {
     let mut span = self.next().span
-    // consume the "struct" keyword
+    // consume the "enum" keyword
     let name = self.consume_identifier()?
     let mut type_params = []
     if self.consume(lexer.TokenKind.LeftBracket).is_ok() {
@@ -56,7 +56,7 @@ impl Parser {
     let variants = self.parse_variants()?
     let newline_span = self.next().span
     span = span.merge(newline_span)
-    self.defs.add_enum(ast.EnumDef.new(span, name, type_params, variants))
+    self.defs.add_type(ast.TypeDecl.new_enum(span, name, type_params, variants))
     Ok(())
   }
 
@@ -65,7 +65,7 @@ impl Parser {
     let sig = self.parse_signature()?
     let body = self.parse_function_body()?
     span = span.merge(body.span)
-    self.defs.add_function(ast.FunctionDef.new(span, sig, body))
+    self.defs.add_function(ast.FunctionDecl.new(span, sig, body))
     Ok(())
   }
 

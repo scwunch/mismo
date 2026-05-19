@@ -35,10 +35,35 @@ impl Field {
   }
 }
 
-impl StructDef {
-  pub fn eq(self, other: StructDef) -> bool {
+impl TypeDecl {
+  pub fn eq(self, other: TypeDecl) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.fields, other.fields, Field.eq)
+    slice.compare(
+      self.type_parameters,
+      other.type_parameters,
+      |a, b| {
+        a == b
+      },
+    ) &&
+    self.body.eq(other.body)
+  }
+}
+
+impl TypeBody {
+  pub fn eq(self, other: TypeBody) -> bool {
+    match (self, other) {
+      (TypeBody.Struct(s1), TypeBody.Struct(s2)) => slice.compare(
+        s1,
+        s2,
+        Field.eq,
+      ),
+      (TypeBody.Enum(e1), TypeBody.Enum(e2)) => slice.compare(
+        e1,
+        e2,
+        Variant.eq,
+      ),
+      _ => false,
+    }
   }
 }
 
@@ -46,13 +71,6 @@ impl Variant {
   pub fn eq(self, other: Variant) -> bool {
     self.span == other.span && self.name == other.name &&
     slice.compare(self.payload, other.payload, Type.eq)
-  }
-}
-
-impl EnumDef {
-  pub fn eq(self, other: EnumDef) -> bool {
-    self.span == other.span && self.name == other.name &&
-    slice.compare(self.variants, other.variants, Variant.eq)
   }
 }
 

@@ -5,9 +5,8 @@ import "span"
 /// a container for definitions collected from a module
 pub struct Definitions {
   pub imports: Slice<Import>,
-  pub structs: Slice<StructDef>,
-  pub enums: Slice<EnumDef>,
-  pub functions: Slice<FunctionDef>,
+  pub types: Slice<TypeDecl>,
+  pub functions: Slice<FunctionDecl>,
   pub errors: Slice<errors.SyntaxError>,
 }
 
@@ -22,22 +21,36 @@ impl Import {
   }
 }
 
-pub struct StructDef {
+pub struct TypeDecl {
   pub span: span.Span,
   pub name: string,
   pub type_parameters: Slice<string>,
-  pub fields: Slice<Field>,
+  pub body: TypeBody,
 }
 
-impl StructDef {
-  pub fn new(
+impl TypeDecl {
+  pub fn new_struct(
     span: span.Span,
     name: string,
     type_parameters: Slice<string>,
     fields: Slice<Field>,
-  ) -> StructDef {
-    StructDef { span, name, type_parameters, fields }
+  ) -> TypeDecl {
+    TypeDecl { span, name, type_parameters, body: TypeBody.Struct(fields) }
   }
+
+  pub fn new_enum(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<string>,
+    variants: Slice<Variant>,
+  ) -> TypeDecl {
+    TypeDecl { span, name, type_parameters, body: TypeBody.Enum(variants) }
+  }
+}
+
+pub enum TypeBody {
+  Struct(Slice<Field>),
+  Enum(Slice<Variant>),
 }
 
 pub struct Field {
@@ -49,24 +62,6 @@ pub struct Field {
 impl Field {
   pub fn new(start: uint32, end: uint32, name: string, typ: Type) -> Field {
     Field { span: span.Span { start, end }, name, typ }
-  }
-}
-
-pub struct EnumDef {
-  pub span: span.Span,
-  pub name: string,
-  pub type_parameters: Slice<string>,
-  pub variants: Slice<Variant>,
-}
-
-impl EnumDef {
-  pub fn new(
-    span: span.Span,
-    name: string,
-    type_parameters: Slice<string>,
-    variants: Slice<Variant>,
-  ) -> EnumDef {
-    EnumDef { span, name, type_parameters, variants }
   }
 }
 
@@ -82,15 +77,15 @@ impl Variant {
   }
 }
 
-pub struct FunctionDef {
+pub struct FunctionDecl {
   pub span: span.Span,
   pub signature: Signature,
   pub body: Expression,
 }
 
-impl FunctionDef {
-  pub fn new(span: span.Span, signature: Signature, body: Expression) -> FunctionDef {
-    FunctionDef { span, signature, body }
+impl FunctionDecl {
+  pub fn new(span: span.Span, signature: Signature, body: Expression) -> FunctionDecl {
+    FunctionDecl { span, signature, body }
   }
 }
 
@@ -129,28 +124,18 @@ impl Parameter {
 
 impl Definitions {
   pub fn new() -> Definitions {
-    Definitions { 
-      imports: [],
-      structs: [],
-      enums: [],
-      functions: [],
-      errors: [],
-    }
+    Definitions { imports: [], types: [], functions: [], errors: [] }
   }
 
   pub fn add_import(self: Ref<Definitions>, i: Import) {
     self.imports = self.imports.append(i)
   }
 
-  pub fn add_struct(self: Ref<Definitions>, s: StructDef) {
-    self.structs = self.structs.append(s)
+  pub fn add_type(self: Ref<Definitions>, t: TypeDecl) {
+    self.types = self.types.append(t)
   }
 
-  pub fn add_enum(self: Ref<Definitions>, e: EnumDef) {
-    self.enums = self.enums.append(e)
-  }
-
-  pub fn add_function(self: Ref<Definitions>, f: FunctionDef) {
+  pub fn add_function(self: Ref<Definitions>, f: FunctionDecl) {
     self.functions = self.functions.append(f)
   }
 
