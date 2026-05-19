@@ -77,7 +77,7 @@ impl TypeEnv {
             Variant { 
               span: variant.span,
               name: variant.name,
-              payload: variant.payload.map(|typ| {
+              fields: variant.payload.map(|typ| {
                 self
                   .eval_type(typ)
                   .unwrap_or_else(|e| {

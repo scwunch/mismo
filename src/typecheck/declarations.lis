@@ -28,7 +28,7 @@ pub struct Field {
 pub struct Variant {
   pub span: span.Span,
   pub name: string,
-  pub payload: Slice<Type>,
+  pub fields: Slice<Type>,
 }
 
 pub struct FunctionDefinition {

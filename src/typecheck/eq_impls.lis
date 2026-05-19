@@ -1,0 +1,63 @@
+import "utils/slice"
+
+impl TypeDef {
+  pub fn eq(self, other: TypeDef) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
+    self.kind.eq(other.kind)
+  }
+}
+
+impl TypeParameter {
+  pub fn eq(self, other: TypeParameter) -> bool {
+    self.name == other.name
+  }
+}
+
+impl TypeKind {
+  pub fn eq(self, other: TypeKind) -> bool {
+    match (self, other) {
+      (TypeKind.Struct(a), TypeKind.Struct(b)) => slice.compare(a, b, Field.eq),
+      (TypeKind.Enum(a), TypeKind.Enum(b)) => slice.compare(a, b, Variant.eq),
+      _ => false,
+    }
+  }
+}
+
+impl Field {
+  pub fn eq(self, other: Field) -> bool {
+    self.span == other.span && self.name == other.name && self.typ.eq(other.typ)
+  }
+}
+
+impl Variant {
+  pub fn eq(self, other: Variant) -> bool {
+    self.span == other.span && self.name == other.name &&
+    slice.compare(self.fields, other.fields, Type.eq)
+  }
+}
+
+impl Type {
+  pub fn eq(self, other: Type) -> bool {
+    match (self, other) {
+      (Type.Never, Type.Never) => true,
+      (Type.Nil, Type.Nil) => true,
+      (Type.Bool, Type.Bool) => true,
+      (Type.Nat, Type.Nat) => true,
+      (Type.Int, Type.Int) => true,
+      (Type.Float, Type.Float) => true,
+      (Type.String, Type.String) => true,
+      (Type.Tuple(a), Type.Tuple(b)) => slice.compare(a, b, Type.eq),
+      (Type.Fn(a, b), Type.Fn(c, d)) => slice.compare(a, c, ParamType.eq) &&
+      b.eq(d.*),
+      (Type.Adt(a, b), Type.Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
+      _ => false,
+    }
+  }
+}
+
+impl ParamType {
+  pub fn eq(self, other: ParamType) -> bool {
+    self.mode == other.mode && self.typ.eq(other.typ)
+  }
+}
