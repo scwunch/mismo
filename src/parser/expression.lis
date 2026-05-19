@@ -450,7 +450,11 @@ impl ExpressionParser {
     let start = receiver.span.start
     let name = self.parser.consume_identifier()?
     let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.length() == 0 { None } else { Some(type_args_raw) }
+    let type_args = if type_args_raw.length() == 0 {
+      None
+    } else {
+      Some(type_args_raw)
+    }
 
     let mut end = self.parser.peek().span.start
     if self.parser.peek().kind == lexer.TokenKind.LeftParen {
@@ -463,13 +467,13 @@ impl ExpressionParser {
     }
   }
 
-  fn function_call(
-    self: Ref<ExpressionParser>,
-    span: Span,
-    name: string,
-  ) -> Result<ast.Expression, ParseError> {
+  fn function_call(self: Ref<ExpressionParser>, span: Span, name: string) -> Result<ast.Expression, ParseError> {
     let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.length() == 0 { None } else { Some(type_args_raw) }
+    let type_args = if type_args_raw.length() == 0 {
+      None
+    } else {
+      Some(type_args_raw)
+    }
     let args = self.parse_args([])?
     Ok(ast.call_expr(span, name, type_args, args))
   }
@@ -547,7 +551,12 @@ impl ExpressionParser {
     let val_span = value.span
     let id_expr = ast.identifier(name_span, name)
     let binding = ast.binding(name_span, mode.Mode.Let, &id_expr)
-    Ok(ast.binop_expr(span.merge(val_span), binding, operator.Operator.Assign, value))
+    Ok(ast.binop_expr(
+      span.merge(val_span),
+      binding,
+      operator.Operator.Assign,
+      value,
+    ))
   }
 
   fn parse_var_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
@@ -570,7 +579,12 @@ impl ExpressionParser {
     let val_span = value.span
     let id_expr = ast.identifier(name_span, name)
     let binding = ast.binding(name_span, mode.Mode.Var, &id_expr)
-    Ok(ast.binop_expr(span.merge(val_span), binding, operator.Operator.Assign, value))
+    Ok(ast.binop_expr(
+      span.merge(val_span),
+      binding,
+      operator.Operator.Assign,
+      value,
+    ))
   }
 
   fn parse_while_expression(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {

@@ -10,7 +10,7 @@ impl TypeDef {
 
 impl TypeParameter {
   pub fn eq(self, other: TypeParameter) -> bool {
-    self.name == other.name
+    self.span == other.span && self.name == other.name
   }
 }
 
@@ -65,6 +65,7 @@ impl ParamType {
 impl Parameter {
   pub fn eq(self, other: Parameter) -> bool {
     self.span == other.span && self.mode == other.mode &&
-    self.name == other.name && self.typ.eq(other.typ)
+    self.name == other.name &&
+    self.typ.eq(other.typ)
   }
 }

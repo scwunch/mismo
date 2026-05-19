@@ -37,16 +37,16 @@ impl Field {
   }
 }
 
+impl TypeParameter {
+  pub fn eq(self, other: TypeParameter) -> bool {
+    self.span == other.span && self.name == other.name
+  }
+}
+
 impl TypeDecl {
   pub fn eq(self, other: TypeDecl) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(
-      self.type_parameters,
-      other.type_parameters,
-      |a, b| {
-        a == b
-      },
-    ) &&
+    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
     self.body.eq(other.body)
   }
 }

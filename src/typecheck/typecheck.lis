@@ -41,7 +41,7 @@ impl TypeEnv {
             ast.TypeBody.Enum(_) => TypeKind.Enum([]),
           }
           let type_params = t.type_parameters.map(|param| {
-            TypeParameter { name: param }
+            TypeParameter { span: param.span, name: param.name }
           })
           self.type_defs[t.name] = &TypeDef.new(
             t.span,

@@ -12,8 +12,6 @@ pub type Token = lexer.Token
 
 pub type TokenKind = lexer.TokenKind
 
-type TypeParameters = Slice<string>
-
 type ParseError = errors.ParseError
 
 pub struct Parser {

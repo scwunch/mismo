@@ -21,10 +21,21 @@ impl Import {
   }
 }
 
+pub struct TypeParameter {
+  pub span: span.Span,
+  pub name: string,
+}
+
+impl TypeParameter {
+  pub fn new(span: span.Span, name: string) -> TypeParameter {
+    TypeParameter { span, name }
+  }
+}
+
 pub struct TypeDecl {
   pub span: span.Span,
   pub name: string,
-  pub type_parameters: Slice<string>,
+  pub type_parameters: Slice<TypeParameter>,
   pub body: TypeBody,
 }
 
@@ -32,7 +43,7 @@ impl TypeDecl {
   pub fn new_struct(
     span: span.Span,
     name: string,
-    type_parameters: Slice<string>,
+    type_parameters: Slice<TypeParameter>,
     fields: Slice<Field>,
   ) -> TypeDecl {
     TypeDecl { span, name, type_parameters, body: TypeBody.Struct(fields) }
@@ -41,7 +52,7 @@ impl TypeDecl {
   pub fn new_enum(
     span: span.Span,
     name: string,
-    type_parameters: Slice<string>,
+    type_parameters: Slice<TypeParameter>,
     variants: Slice<Variant>,
   ) -> TypeDecl {
     TypeDecl { span, name, type_parameters, body: TypeBody.Enum(variants) }
@@ -92,7 +103,7 @@ impl FunctionDecl {
 pub struct Signature {
   pub span: span.Span,
   pub name: string,
-  pub type_parameters: Slice<string>,
+  pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
   pub return_type: Type,
 }
@@ -101,7 +112,7 @@ impl Signature {
   pub fn new(
     span: span.Span,
     name: string,
-    type_parameters: Slice<string>,
+    type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
     return_type: Type,
   ) -> Signature {

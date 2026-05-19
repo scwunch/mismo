@@ -60,35 +60,65 @@ fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // so we just leave it off here
   let mut parser = Parser.new_with_defs(" T, U]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        ast.TypeParameter.new(span.Span.new(1, 2), "T"),
+        ast.TypeParameter.new(span.Span.new(4, 5), "U"),
+      ],
+    )?,
     Err(err) => t.fail(err.message())?,
   }
 
   // trailing comma
   parser = Parser.new_with_defs(" T, U,]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        ast.TypeParameter.new(span.Span.new(1, 2), "T"),
+        ast.TypeParameter.new(span.Span.new(4, 5), "U"),
+      ],
+    )?,
     Err(err) => t.fail(err.message())?,
   }
 
   // space-separated
   parser = Parser.new_with_defs(" T U]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        ast.TypeParameter.new(span.Span.new(1, 2), "T"),
+        ast.TypeParameter.new(span.Span.new(3, 4), "U"),
+      ],
+    )?,
     Err(err) => t.fail(err.message())?,
   }
 
   // newline-separated, newline at beginning and end
   parser = Parser.new_with_defs(" \n T\n U\n]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        ast.TypeParameter.new(span.Span.new(3, 4), "T"),
+        ast.TypeParameter.new(span.Span.new(6, 7), "U"),
+      ],
+    )?,
     Err(err) => t.fail(err.message())?,
   }
 
   // comma-newline-separated, newline at end
   parser = Parser.new_with_defs(" T,\n U,\n]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, ["T", "U"])?,
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        ast.TypeParameter.new(span.Span.new(1, 2), "T"),
+        ast.TypeParameter.new(span.Span.new(5, 6), "U"),
+      ],
+    )?,
     Err(err) => t.fail(err.message())?,
   }
 
@@ -294,7 +324,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
     s.type_parameters.length() == 1,
     "type parameters should have length 1",
   )?
-  t.should_eq_repr(s.type_parameters[0], "T")?
+  t.should_eq_repr(s.type_parameters[0].name, "T")?
   let ast.TypeBody.Struct(fields) = s.body else {
     return Err("expected struct, got enum")
   }
@@ -308,7 +338,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ast.TypeDecl.new_struct(
       Span.new(0, 30),
       "Point",
-      ["T"],
+      [ast.TypeParameter.new(Span.new(13, 14), "T")],
       [expected_field1, expected_field2],
     ),
   )?
@@ -383,7 +413,7 @@ fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ast.TypeDecl.new_enum(
       Span.new(0, 31),
       "Option",
-      ["T"],
+      [ast.TypeParameter.new(Span.new(12, 13), "T")],
       [expected_variant1, expected_variant2],
     ),
   )?

@@ -4,6 +4,7 @@ pub enum Mode {
   MutBang,
   Var,
 }
+
 impl Mode {
   pub fn string(self) -> string {
     match self {
@@ -17,10 +18,10 @@ impl Mode {
 
 pub fn parse(str: string) -> Option<Mode> {
   match str {
-    "let" =>  Some(Mode.Let),
-    "mut" =>  Some(Mode.Mut),
+    "let" => Some(Mode.Let),
+    "mut" => Some(Mode.Mut),
     "mut!" => Some(Mode.MutBang),
-    "var" =>  Some(Mode.Var),
-    _ => None
+    "var" => Some(Mode.Var),
+    _ => None,
   }
 }

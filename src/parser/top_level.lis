@@ -106,8 +106,14 @@ impl Parser {
     Ok(ast.nil_lit(span))
   }
 
-  fn parse_type_params(self: Ref<Parser>) -> Result<TypeParameters, ParseError> {
-    self.parse_list(lexer.TokenKind.RightBracket, self.consume_identifier)
+  fn parse_type_param(self: Ref<Parser>) -> Result<ast.TypeParameter, ParseError> {
+    let span = self.peek().span
+    let name = self.consume_identifier()?
+    Ok(ast.TypeParameter { span, name })
+  }
+
+  fn parse_type_params(self: Ref<Parser>) -> Result<Slice<ast.TypeParameter>, ParseError> {
+    self.parse_list(lexer.TokenKind.RightBracket, self.parse_type_param)
   }
 
   fn parse_variants(self: Ref<Parser>) -> Result<Slice<ast.Variant>, ParseError> {

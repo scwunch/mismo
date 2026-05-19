@@ -15,7 +15,7 @@ pub enum TypeKind {
 }
 
 pub struct TypeParameter {
-  // pub span: span.Span,
+  pub span: span.Span,
   pub name: string,
 }
 

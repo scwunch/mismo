@@ -121,7 +121,7 @@ fn test_eval_type_nominal(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ast.TypeDecl.new_enum(
       span.Span.new(0, 18),
       "Option",
-      ["T"],
+      [ast.TypeParameter.new(span.Span.new(7, 8), "T")],
       [
         ast.Variant.new(
           span.Span.new(10, 14),
@@ -184,7 +184,7 @@ fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ast.TypeDecl.new_enum(
       span.Span.new(0, 18),
       "Option",
-      ["T"],
+      [ast.TypeParameter.new(span.Span.new(7, 8), "T")],
       [
         ast.Variant.new(
           span.Span.new(10, 14),
