@@ -1,0 +1,372 @@
+import "cst"
+import "errors"
+import "mode"
+import "operator"
+import "span"
+import "utils/slice"
+
+impl TypeEnv {
+  fn type_check_function(self: Ref<TypeEnv>, func: FunctionDef) {
+    // let scope = Scope.from_params(&TypeCheck.new(self), func.parameters)
+    // let res = scope.check(func.body, func.return_type)
+    let res = TypeCheck.new(self, func).check(func.body, func.return_type)
+    if let Err(err) = res { self.error(err) }
+  }
+}
+
+pub struct TypeCheck {
+  env: Ref<TypeEnv>,
+  next_var: Ref<int>,
+  return_type: Type,
+  bindings: List<Ref<Variable>>,
+}
+
+impl TypeCheck {
+  fn new(env: Ref<TypeEnv>, func: FunctionDef) -> TypeCheck {
+    let zero = 0
+    let mut scope = List.Nil
+    for param in func.parameters {
+      let prev = &scope
+      scope = List.Cons(&Variable.from_param(param), prev)
+    }
+    TypeCheck { 
+      env,
+      next_var: &zero,
+      return_type: func.return_type,
+      bindings: scope,
+    }
+  }
+}
+
+// pub struct Scope { typecheck: Ref<TypeCheck>, bindings: List<Ref<Variable>> }
+
+pub enum List<T> {
+  Nil,
+  Cons(T, Ref<List<T>>),
+}
+
+impl<T> List<T> {
+  fn cons(self, item: T) -> List<T> {
+    List.Cons(item, &self)
+  }
+}
+
+// impl Scope {
+//   fn new(typecheck: Ref<TypeCheck>) -> Scope {
+//     Scope { typecheck, bindings: List.Nil }
+//   }
+
+//   fn from_params(typecheck: Ref<TypeCheck>, params: Slice<Parameter>) -> Scope {
+//     let mut scope = Scope.new(typecheck)
+//     for param in params {
+//       scope = scope.cons(&Variable.from_param(param))
+//     }
+//     scope
+//   }
+
+//   fn get(self, name: string) -> Option<Ref<Variable>> {
+//     let mut current = self.bindings
+//     while let List.Cons(binding, next) = current {
+//       if binding.name == name { return Some(binding) }
+//       current = next.*
+//     }
+//     None
+//   }
+
+//   fn cons(self, binding: Ref<Variable>) -> Scope {
+//     Scope {
+//       typecheck: self.typecheck,
+//       bindings: List.Cons(binding, &self.bindings),
+//     }
+//   }
+// }
+
+impl TypeCheck {
+  fn get(self, name: string) -> Option<Ref<Variable>> {
+    let mut current = self.bindings
+    while let List.Cons(binding, next) = current {
+      if binding.name == name { return Some(binding) }
+      current = next.*
+    }
+    None
+  }
+}
+
+impl TypeCheck {
+  fn check(self, expr: cst.Expression, expected: Type) -> Result<Expression, errors.TypeError> {
+    let actual = self.infer(expr)?
+    if !actual.typ().eq(expected) { panic("register type mismatch error here") }
+    Ok(actual)
+  }
+
+  fn infer(self, node: cst.Expression) -> Result<Expression, errors.TypeError> {
+    let expr = match node.kind {
+      cst.Expr.Nil => Expr.Nil,
+      cst.Expr.BoolLiteral(b) => Expr.BoolLiteral(b),
+      cst.Expr.IntLiteral(i) => Expr.IntLiteral(i),
+      cst.Expr.FloatLiteral(f) => Expr.FloatLiteral(f),
+      cst.Expr.StringLiteral(s) => Expr.StringLiteral(s),
+      cst.Expr.ArrayLiteral(elems) => self.array(elems, node.span)?,
+      cst.Expr.TupleLiteral(elems) => Expr.TupleLiteral(
+        slice.map_result(elems, self.infer)?,
+      ),
+      cst.Expr.Identifier(name) => match self.get(name) {
+        Some(varid) => Expr.Identifier(varid),
+        None => return Err(errors.MissingNameError.new(name, node.span)),
+      },
+      cst.Expr.Binding(m, expr) => {
+        let e = self.infer(expr.*)?
+        Expr.Binding(m, &e)
+      },
+      cst.Expr.Binop(binop) => self.binop(binop.*, node.span)?,
+      cst.Expr.Call(call) => self.call(
+        call.fn_name,
+        slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
+        slice.map_result(call.args, self.infer)?,
+        node.span,
+      )?,
+      cst.Expr.If(cond) => self.if_expr(cond, node.span)?,
+      cst.Expr.While(cond) => self.while_expr(cond, node.span)?,
+      cst.Expr.For(for_loop) => self.for_expr(for_loop.*, node.span)?,
+      cst.Expr.Block(exprs) => self.block(exprs, node.span)?,
+      cst.Expr.Neg(expr) => self.call(
+        "neg",
+        [],
+        [self.infer(expr.*)?],
+        node.span,
+      )?,
+      cst.Expr.Not(expr) => self.call(
+        "not",
+        [],
+        [self.infer(expr.*)?],
+        node.span,
+      )?,
+      cst.Expr.Return(None) => Expr.Return(None),
+      cst.Expr.Return(Some(expr)) => {
+        let e = self.infer(expr.*)?
+        Expr.Return(Some(&e))
+      },
+      cst.Expr.Break(None) => Expr.Break(None),
+      cst.Expr.Break(Some(expr)) => {
+        let e = self.infer(expr.*)?
+        Expr.Break(Some(&e))
+      },
+      cst.Expr.Continue => Expr.Continue,
+      cst.Expr.Type(name, type_args) => {
+        self.env.error(errors.ParseError.new(
+          node.span,
+          "unexpected type expression",
+        ))
+        Expr.Nil
+      },
+      cst.Expr.DotName(expr, string) => self.dot_name(
+        self.infer(expr.*)?,
+        string,
+        node.span,
+      )?,
+      cst.Expr.DotCall(expr, call) => self.call(
+        call.fn_name,
+        slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
+        [self.infer(expr.*)?].append(slice.map_result(call.args, self.infer)?...),
+        node.span,
+      )?,
+    }
+    Ok(Expression { span: node.span, kind: expr })
+  }
+
+  fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
+    let mut self = self
+    if exprs.length() == 0 { return Ok(Expr.Nil) }
+    let mut expressions = []
+    let mut types = []
+    for node in exprs {
+      let expr = self.infer(node)?
+      expressions = expressions.append(expr)
+      match expr.kind {
+        Expr.Assign(varid, _) => self.bindings = self.bindings.cons(varid),
+        Expr.Return(opt_expr) => {
+          let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Nil)
+          if !self.return_type.eq(actual) {
+            return Err(errors.TypeMismatchError.new(
+              span,
+              f"{self.return_type}",
+              f"{actual}",
+            ))
+          }
+        },
+        Expr.Break(opt_expr) => {
+          let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.Nil)
+          types = types.append(ty)
+        },
+        _ => (),
+      }
+    }
+    types = types.append(expressions[expressions.length() - 1].typ())
+    Ok(Expr.Block(expressions, types[0]))
+  }
+
+  fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
+    if elems.length() == 0 {
+      return Err(errors.EmptyArrayLiteralError.new(span))
+    }
+    let inferred = slice.map_result(elems, self.infer)?
+
+    let typ = inferred[0].typ()
+    for elem in inferred {
+      if !elem.typ().eq(typ) {
+        let types = inferred.map(|e| f"{e.typ()}").join(", ")
+        return Err(errors.HeterogeneousArrayLiteralError.new(span, types))
+      }
+    }
+
+    Ok(Expr.ArrayLiteral(inferred, typ))
+  }
+
+  fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, errors.TypeError> {
+    if binop.op == operator.Operator.Assign {
+      match binop.left.kind {
+        cst.Expr.Identifier(name) => match self.get(name) {
+          Some(varid) => {
+            let value = self.infer(binop.right)?
+            Ok(Expr.Assign(varid, &value))
+          },
+          None => {
+            self.env.error(errors.MissingNameError.new(name, binop.left.span))
+            let _ = self.infer(binop.right)?
+            Ok(Expr.Nil)
+          },
+        },
+        _ => {
+          self.env.error(errors.InvalidAssignmentTargetError.new(
+            binop.left.span,
+            binop.left,
+          ))
+          Ok(Expr.Nil)
+        },
+      }
+    } else {
+      self.call(
+        binop.op.string(),
+        [],
+        [self.infer(binop.left)?, self.infer(binop.right)?],
+        span,
+      )
+    }
+  }
+
+  fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, errors.TypeError> {
+    let _ = cond
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, errors.TypeError> {
+    let _ = cond
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn for_expr(self, for_loop: cst.ForLoop, span: span.Span) -> Result<Expr, errors.TypeError> {
+    let _ = for_loop
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn dot_name(self, expr: Expression, name: string, span: span.Span) -> Result<Expr, errors.TypeError> {
+    let typ = expr.typ()
+    if let Type.Adt(def, args) = typ {
+      if let TypeKind.Struct(fields) = def.kind {
+        for (i, field) in fields.enumerate() {
+          if field.name == name { return Ok(Expr.FieldAccess(&expr, i)) }
+        }
+      }
+    }
+    self.call(name, [], [expr], span)
+  }
+
+  fn call(
+    self,
+    fname: string,
+    type_args: Slice<Type>,
+    args: Slice<Expression>,
+    span: span.Span,
+  ) -> Result<Expr, errors.TypeError> {
+    let _ = fname
+    let _ = type_args
+    let _ = args
+    let _ = span
+    panic("Oh my, overload resolution time!")
+  }
+}
+
+// ----------------------
+
+// pub struct TypeScope {
+//   names: Map<string, Variable>,
+//   parent: Option<Ref<TypeScope>>,
+// }
+
+// pub struct OldScope {
+//   next_var: int,
+//   vars: Slice<(string, int)>,
+//   parent: Option<Ref<Scope>>,
+// }
+
+// impl Scope {
+//   fn new() -> Scope {
+//     Scope { next_var: 0, vars: [], parent: None }
+//   }
+
+//   fn get(self, name: string) -> Option<int> {
+//     for (n, i) in self.vars {
+//       if n == name { return Some(i) }
+//     }
+//     if let Some(parent) = self.parent { parent.get(name) } else { None }
+//   }
+
+//   fn get_or_set(self: Ref<Scope>, name: string) -> int {
+//     if let Some(varid) = self.get(name) { return varid }
+//     let varid = self.next_var
+//     self.next_var += 1
+//     self.vars = self.vars.append((name, varid))
+//     varid
+//   }
+// }
+
+// impl TypeScope {
+//   fn from_params(params: Slice<Parameter>) -> TypeScope {
+//     let mut names = Map.new()
+//     for param in params {
+//       names[param.name] = Variable.from_param(param)
+//     }
+//     TypeScope { names, parent: None }
+//   }
+// }
+
+pub struct Variable {
+  mode: mode.Mode,
+  name: string,
+  typ: Type,
+  init: uint32,
+  consumed: Option<uint32>,
+}
+
+impl Variable {
+  fn from_param(param: Parameter) -> Variable {
+    Variable { 
+      mode: param.mode,
+      name: param.name,
+      typ: param.typ,
+      init: param.span.start,
+      consumed: None,
+    }
+  }
+
+  fn new(mode: mode.Mode, name: string, typ: Type, init: uint32) -> Variable {
+    Variable { mode, name, typ, init, consumed: None }
+  }
+
+  // fn hole() -> Variable {
+  //   Variable.new(mode.Mode.Var, "", Type.Never, 0)
+  // }
+}

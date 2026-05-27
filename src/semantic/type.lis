@@ -1,0 +1,46 @@
+import "mode"
+
+pub enum Type {
+  Never,
+  Nil,
+  Bool,
+  Nat,
+  Int,
+  Float,
+  String,
+  Array(Ref<Type>),
+  Tuple(Slice<Type>),
+  Fn(Slice<ParamType>, Ref<Type>),
+  Adt(Ref<TypeDef>, Slice<Type>),
+  Var(int),
+}
+
+pub struct ParamType {
+  pub mode: mode.Mode,
+  pub typ: Type,
+}
+
+impl ParamType {
+  pub fn substitute(self, args: Slice<Type>) -> ParamType {
+    ParamType { mode: self.mode, typ: self.typ.substitute(args) }
+  }
+}
+
+impl Type {
+  pub fn substitute(self, args: Slice<Type>) -> Type {
+    match self {
+      Type.Never => Type.Never,
+      Type.Nil => Type.Nil,
+      Type.Bool => Type.Bool,
+      Type.Nat => Type.Nat,
+      Type.Int => Type.Int,
+      Type.Float => Type.Float,
+      Type.String => Type.String,
+      Type.Array(typ) => Type.Array(&typ.substitute(args)),
+      Type.Tuple(fields) => Type.Tuple(fields.map(|f| f.substitute(args))),
+      Type.Fn(params, ret) => Type.Fn(params.map(|p| p.substitute(args)), ret),
+      Type.Adt(def, args) => Type.Adt(def, args.map(|a| a.substitute(args))),
+      Type.Var(i) => args[i],
+    }
+  }
+}

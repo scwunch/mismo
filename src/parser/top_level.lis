@@ -1,4 +1,4 @@
-import "ast"
+import "cst"
 import "lexer"
 
 impl Parser {
@@ -40,7 +40,7 @@ impl Parser {
     let fields = self.parse_fields()?
     let newline_span = self.next().span
     span = span.merge(newline_span)
-    self.defs.add_type(ast.TypeDecl.new_struct(span, name, type_params, fields))
+    self.defs.add_type(cst.TypeDecl.new_struct(span, name, type_params, fields))
     Ok(())
   }
 
@@ -56,7 +56,7 @@ impl Parser {
     let variants = self.parse_variants()?
     let newline_span = self.next().span
     span = span.merge(newline_span)
-    self.defs.add_type(ast.TypeDecl.new_enum(span, name, type_params, variants))
+    self.defs.add_type(cst.TypeDecl.new_enum(span, name, type_params, variants))
     Ok(())
   }
 
@@ -65,11 +65,11 @@ impl Parser {
     let sig = self.parse_signature()?
     let body = self.parse_function_body()?
     span = span.merge(body.span)
-    self.defs.add_function(ast.FunctionDecl.new(span, sig, body))
+    self.defs.add_function(cst.FunctionDecl.new(span, sig, body))
     Ok(())
   }
 
-  fn parse_signature(self: Ref<Parser>) -> Result<ast.Signature, ParseError> {
+  fn parse_signature(self: Ref<Parser>) -> Result<cst.Signature, ParseError> {
     let mut span = self.peek().span
     let name = self.consume_identifier()?
     let mut type_params = []
@@ -84,43 +84,43 @@ impl Parser {
     let _ = self.consume(lexer.TokenKind.Arrow)
     let ret_type = self.parse_type()?
     span = span.merge(ret_type.span)
-    Ok(ast.Signature.new(span, name, type_params, params, ret_type))
+    Ok(cst.Signature.new(span, name, type_params, params, ret_type))
   }
 
-  fn parse_function_params(self: Ref<Parser>) -> Result<Slice<ast.Parameter>, ParseError> {
+  fn parse_function_params(self: Ref<Parser>) -> Result<Slice<cst.Parameter>, ParseError> {
     self.parse_list(lexer.TokenKind.RightParen, self.parse_parameter)
   }
 
-  fn parse_parameter(self: Ref<Parser>) -> Result<ast.Parameter, ParseError> {
+  fn parse_parameter(self: Ref<Parser>) -> Result<cst.Parameter, ParseError> {
     let mut span = self.peek().span
     let mode = self.consume_mode()
     let name = self.consume_identifier()?
     let _ = self.consume(lexer.TokenKind.Colon)
     let typ = self.parse_type()?
     span = span.merge(typ.span)
-    Ok(ast.Parameter.new(span, mode, name, typ))
+    Ok(cst.Parameter.new(span, mode, name, typ))
   }
 
-  fn parse_function_body(self: Ref<Parser>) -> Result<ast.Expression, ParseError> {
+  fn parse_function_body(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
     let span = self.peek().span
-    Ok(ast.nil_lit(span))
+    Ok(cst.nil_lit(span))
   }
 
-  fn parse_type_param(self: Ref<Parser>) -> Result<ast.TypeParameter, ParseError> {
+  fn parse_type_param(self: Ref<Parser>) -> Result<cst.TypeParameter, ParseError> {
     let span = self.peek().span
     let name = self.consume_identifier()?
-    Ok(ast.TypeParameter { span, name })
+    Ok(cst.TypeParameter { span, name })
   }
 
-  fn parse_type_params(self: Ref<Parser>) -> Result<Slice<ast.TypeParameter>, ParseError> {
+  fn parse_type_params(self: Ref<Parser>) -> Result<Slice<cst.TypeParameter>, ParseError> {
     self.parse_list(lexer.TokenKind.RightBracket, self.parse_type_param)
   }
 
-  fn parse_variants(self: Ref<Parser>) -> Result<Slice<ast.Variant>, ParseError> {
+  fn parse_variants(self: Ref<Parser>) -> Result<Slice<cst.Variant>, ParseError> {
     self.parse_list(lexer.TokenKind.Newline(0), self.parse_variant)
   }
 
-  fn parse_variant(self: Ref<Parser>) -> Result<ast.Variant, ParseError> {
+  fn parse_variant(self: Ref<Parser>) -> Result<cst.Variant, ParseError> {
     let mut span = self.peek().span
     let name = self.consume_identifier()?
     let mut payload = []
@@ -129,10 +129,10 @@ impl Parser {
       let lparen = self.consume(lexer.TokenKind.RightParen)?
       span = span.merge(lparen)
     }
-    Ok(ast.Variant.new(span, name, payload))
+    Ok(cst.Variant.new(span, name, payload))
   }
 
-  fn parse_fields(self: Ref<Parser>) -> Result<Slice<ast.Field>, ParseError> {
+  fn parse_fields(self: Ref<Parser>) -> Result<Slice<cst.Field>, ParseError> {
     // let _ = self.consume_newline(0)
     self.parse_list(lexer.TokenKind.Newline(0), self.parse_field)
     // let mut fields = []
@@ -160,13 +160,13 @@ impl Parser {
     // Ok(fields)
   }
 
-  fn parse_field(self: Ref<Parser>) -> Result<ast.Field, ParseError> {
+  fn parse_field(self: Ref<Parser>) -> Result<cst.Field, ParseError> {
     let mut span = self.peek().span
     let name = self.consume_identifier()?
     let _ = self.consume(lexer.TokenKind.Colon)
     // optional colon
     span = span.merge(self.peek().span)
     let typ = self.parse_type()?
-    Ok(ast.Field { span, name, typ })
+    Ok(cst.Field { span, name, typ })
   }
 }

@@ -1,4 +1,4 @@
-import "ast"
+import "cst"
 import "errors"
 import "mode"
 import "span"
@@ -18,8 +18,8 @@ impl TypeEnv {
     }
   }
 
-  pub fn type_check_program(self: Ref<TypeEnv>, items: ast.Declarations) {
-    // populate @type_defs and @function_defs with names of types/functions and number and names of type parameters
+  pub fn type_check_program(self: Ref<TypeEnv>, items: cst.Declarations) {
+    // populate @type_defs and @function_defs with names of types and type parameters
     self.register_types(items.types)
     // evaluate fields and variants for structs and enums
     self.fill_out_type_info(items.types)
@@ -30,7 +30,7 @@ impl TypeEnv {
     self.type_check_functions()
   }
 
-  fn register_types(self: Ref<TypeEnv>, type_defs: Slice<ast.TypeDecl>) {
+  fn register_types(self: Ref<TypeEnv>, type_defs: Slice<cst.TypeDecl>) {
     for t in type_defs {
       match self.type_defs.get(t.name) {
         Some(def) => self.error(errors.DuplicateNameError.new(
@@ -40,8 +40,8 @@ impl TypeEnv {
         )),
         None => {
           let kind = match t.body {
-            ast.TypeBody.Struct(_) => TypeKind.Struct([]),
-            ast.TypeBody.Enum(_) => TypeKind.Enum([]),
+            cst.TypeBody.Struct(_) => TypeKind.Struct([]),
+            cst.TypeBody.Enum(_) => TypeKind.Enum([]),
           }
           let type_params = t.type_parameters.map(|param| {
             TypeParameter { span: param.span, name: param.name }
@@ -57,11 +57,11 @@ impl TypeEnv {
     }
   }
 
-  fn fill_out_type_info(self: Ref<TypeEnv>, types: Slice<ast.TypeDecl>) {
+  fn fill_out_type_info(self: Ref<TypeEnv>, types: Slice<cst.TypeDecl>) {
     for decl in types {
       let def = self.type_defs[decl.name]
       match decl.body {
-        ast.TypeBody.Struct(fields) => {
+        cst.TypeBody.Struct(fields) => {
           def.kind = TypeKind.Struct(fields.map(|field| {
             Field { 
               span: field.span,
@@ -75,7 +75,7 @@ impl TypeEnv {
             }
           }))
         },
-        ast.TypeBody.Enum(variants) => {
+        cst.TypeBody.Enum(variants) => {
           def.kind = TypeKind.Enum(variants.map(|variant| {
             Variant { 
               span: variant.span,
@@ -95,9 +95,9 @@ impl TypeEnv {
     }
   }
 
-  fn eval_type(self, typ: ast.Type) -> Result<Type, errors.TypeError> {
+  fn eval_type(self, typ: cst.Type) -> Result<Type, errors.TypeError> {
     match typ.kind {
-      ast.TypeKind.Tuple(types) => {
+      cst.TypeKind.Tuple(types) => {
         // Ok(Type.Tuple(slice.map_result(types, self.eval_type)))
         let mut ts = []
         for t in types {
@@ -105,7 +105,7 @@ impl TypeEnv {
         }
         Ok(Type.Tuple(ts))
       },
-      ast.TypeKind.Fn(params, ret) => {
+      cst.TypeKind.Fn(params, ret) => {
         // let params = slice.map_result(params, self.eval_param_type)?
         let mut param_types = []
         for p in params {
@@ -114,7 +114,7 @@ impl TypeEnv {
         let ret = self.eval_type(ret.*)?
         Ok(Type.Fn(param_types, &ret))
       },
-      ast.TypeKind.Nominal(name, type_args) => {
+      cst.TypeKind.Nominal(name, type_args) => {
         let primitive = match name {
           "Never" => Some(Type.Never),
           "Nil" => Some(Type.Nil),
@@ -167,7 +167,7 @@ impl TypeEnv {
     }
   }
 
-  pub fn eval_param(self, param: ast.Parameter) -> Result<Parameter, errors.TypeError> {
+  pub fn eval_param(self, param: cst.Parameter) -> Result<Parameter, errors.TypeError> {
     let typ = self.eval_type(param.typ)?
     Ok(
       Parameter { 
@@ -179,12 +179,12 @@ impl TypeEnv {
     )
   }
 
-  fn eval_param_type(self, param: ast.ParamType) -> Result<ParamType, errors.TypeError> {
+  fn eval_param_type(self, param: cst.ParamType) -> Result<ParamType, errors.TypeError> {
     let typ = self.eval_type(param.typ)?
     Ok(ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
   }
 
-  fn register_functions(self: Ref<TypeEnv>, functions: Slice<ast.FunctionDecl>) {
+  fn register_functions(self: Ref<TypeEnv>, functions: Slice<cst.FunctionDecl>) {
     for func in functions {
       match self.eval_function(func) {
         Ok(def) => {
@@ -204,7 +204,7 @@ impl TypeEnv {
     }
   }
 
-  fn eval_function(self, func: ast.FunctionDecl) -> Result<FunctionDef, errors.TypeError> {
+  fn eval_function(self, func: cst.FunctionDecl) -> Result<FunctionDef, errors.TypeError> {
     let span = func.span
     let name = func.signature.name
     let type_params = func.signature.type_parameters.map(|param| {

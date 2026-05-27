@@ -1,0 +1,77 @@
+import "mode"
+import "span"
+
+pub struct Expression {
+  pub span: span.Span,
+  pub kind: Expr,
+}
+
+pub enum Expr {
+  Nil,
+  BoolLiteral(bool),
+  IntLiteral(int),
+  FloatLiteral(float64),
+  StringLiteral(string),
+  ArrayLiteral(Slice<Expression>, Type),
+  TupleLiteral(Slice<Expression>),
+  Identifier(Ref<Variable>),
+  Assign(Ref<Variable>, Ref<Expression>),
+  Binding(mode.Mode, Ref<Expression>),
+  Call(FnCall),
+  SwitchIf(SwitchIf),
+  Match(Match),
+  Loop(Slice<Expression>, Type),
+  Block(Slice<Expression>, Type),
+  Return(Option<Ref<Expression>>),
+  Break(Option<Ref<Expression>>),
+  Continue,
+  FieldAccess(Ref<Expression>, int),
+}
+
+// pub struct VarId { id: int, typ: Type, mode: mode.Mode }
+
+pub struct FnCall { fun: FunctionDef, args: Slice<Expression> }
+
+pub struct SwitchIf { cases: Slice<(Expression, Expression)> }
+
+pub struct Match { subject: Ref<Expression>, cases: Slice<MatchCase> }
+
+pub struct MatchCase { pattern: Expression, expr: Expression }
+
+impl Expression {
+  fn typ(self) -> Type {
+    self.kind.typ()
+  }
+}
+
+impl Expr {
+  fn typ(self) -> Type {
+    match self {
+      Expr.Nil => Type.Nil,
+      Expr.BoolLiteral(bool) => Type.Bool,
+      Expr.IntLiteral(int) => Type.Int,
+      Expr.FloatLiteral(float64) => Type.Float,
+      Expr.StringLiteral(string) => Type.String,
+      Expr.ArrayLiteral(_, typ) => typ,
+      Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
+      Expr.Identifier(id) => id.typ,
+      Expr.Assign(id, _) => id.typ,
+      Expr.Binding(_, expr) => expr.typ(),
+      Expr.Call(call) => call.fun.return_type,
+      Expr.SwitchIf(cases) => cases.cases[0].1.typ(),
+      Expr.Match(cases) => cases.cases[0].expr.typ(),
+      Expr.Loop(_, typ) => typ,
+      Expr.Block(_, typ) => typ,
+      Expr.Return(_) => Type.Never,
+      Expr.Break(_) => Type.Never,
+      Expr.Continue => Type.Never,
+      Expr.FieldAccess(obj, i) => match obj.typ() {
+        Type.Adt(def, args) => match def.kind {
+          TypeKind.Struct(fields) => fields[i].typ.substitute(args),
+          TypeKind.Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
+        },
+        _ => panic("compiler bug 73: FieldAccess on non-ADT"),
+      },
+    }
+  }
+}

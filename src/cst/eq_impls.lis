@@ -115,7 +115,8 @@ impl Expr {
       (Expr.Not(e1), Expr.Not(e2)) => e1.eq(e2.*),
       (Expr.Return(Some(e1)), Expr.Return(Some(e2))) => e1.eq(e2.*),
       (Expr.Return(None), Expr.Return(None)) => true,
-      (Expr.Break, Expr.Break) => true,
+      (Expr.Break(None), Expr.Break(None)) => true,
+      (Expr.Break(Some(e1)), Expr.Break(Some(e2))) => e1.eq(e2.*),
       (Expr.Continue, Expr.Continue) => true,
       (Expr.Type(n1, a1), Expr.Type(n2, a2)) => {
         let type_args_eq = match (a1, a2) {

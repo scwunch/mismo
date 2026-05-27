@@ -1,4 +1,4 @@
-import "ast"
+import "cst"
 import "errors"
 import "lexer"
 import "mode"
@@ -41,7 +41,7 @@ impl StackOp {
 
 struct ExpressionParser {
   parser: Ref<Parser>,
-  terms: Slice<ast.Expression>,
+  terms: Slice<cst.Expression>,
   operators: Slice<StackOp>,
   expression_indent: uint32,
   stop: StopAt,
@@ -60,7 +60,7 @@ impl ExpressionParser {
     }
   }
 
-  fn parse(self: Ref<ExpressionParser>) -> Result<ast.Expression, ParseError> {
+  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     if self.expression_done() {
       let _ = self.parser.consume(lexer.TokenKind.Colon)
       return Err(self.parser.error(self.parser.peek().span, "Empty expression"))
@@ -137,11 +137,11 @@ impl ExpressionParser {
       StackOp.Neg(neg_span) => {
         let t1 = self.pop_term()?
         let span = neg_span.merge(t1.span)
-        self.terms = self.terms.append(ast.neg(span, &t1))
+        self.terms = self.terms.append(cst.neg(span, &t1))
       },
       StackOp.NotPrefix(not_span) => {
         let t1 = self.pop_term()?
-        self.terms = self.terms.append(ast.not_(not_span, &t1))
+        self.terms = self.terms.append(cst.not_(not_span, &t1))
       },
       StackOp.Comma => {
         let t2 = self.pop_term()?
@@ -152,19 +152,19 @@ impl ExpressionParser {
           tuple_terms = tuple_terms.append(elem)
         }
         let span = tuple_terms[0].span.merge(t2_span)
-        self.terms = self.terms.append(ast.tuple_lit(span, tuple_terms))
+        self.terms = self.terms.append(cst.tuple_lit(span, tuple_terms))
       },
       StackOp.Op(binop) => {
         let t2 = self.pop_term()?
         let t1 = self.pop_term()?
         let span = t1.span.merge(t2.span)
-        self.terms = self.terms.append(ast.binop_expr(span, t1, binop, t2))
+        self.terms = self.terms.append(cst.binop_expr(span, t1, binop, t2))
       },
     }
     Ok(())
   }
 
-  fn pop_term(self: Ref<ExpressionParser>) -> Result<ast.Expression, ParseError> {
+  fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     if self.terms.length() == 0 {
       return Err(self.parser.error(
         self.parser.peek().span,
@@ -257,35 +257,44 @@ impl ExpressionParser {
         )
         let val = expr_parser.parse()?
         let val_span = val.span
-        ast.return_(tok_span.merge(val_span), Some(&val))
+        cst.return_(tok_span.merge(val_span), Some(&val))
       },
-      TokenKind.Break => ast.break_(tok_span),
-      TokenKind.Continue => ast.continue_(tok_span),
+      TokenKind.Break => {
+        let mut expr_parser = ExpressionParser.new(
+          self.parser,
+          self.expression_indent,
+          self.stop,
+        )
+        let val = expr_parser.parse()?
+        let val_span = val.span
+        cst.break_(tok_span.merge(val_span), Some(&val))
+      },
+      TokenKind.Continue => cst.continue_(tok_span),
       TokenKind.Identifier(name) => {
         match name {
-          "true" => ast.bool_lit(tok_span, true),
-          "false" => ast.bool_lit(tok_span, false),
-          "nil" => ast.nil_lit(tok_span),
+          "true" => cst.bool_lit(tok_span, true),
+          "false" => cst.bool_lit(tok_span, false),
+          "nil" => cst.nil_lit(tok_span),
           _ => match self.parser.peek().kind {
             TokenKind.LeftParen | TokenKind.LeftBracket => self.function_call(
               tok_span,
               name,
             )?,
-            _ => ast.identifier(tok_span, name),
+            _ => cst.identifier(tok_span, name),
           },
         }
       },
       TokenKind.LeftParen => self.parse_paren_group(tok_span)?,
       TokenKind.LeftBracket => self.parse_array_literal(tok_span)?,
       TokenKind.Dot => {
-        self.terms = self.terms.append(ast.identifier(tok_span, "self"))
+        self.terms = self.terms.append(cst.identifier(tok_span, "self"))
         self.handle_dot()?
       },
-      TokenKind.IntLiteral(n) => ast.int_lit(tok_span, n),
-      TokenKind.FloatLiteral(n) => ast.float_lit(tok_span, n),
-      TokenKind.StringLiteral(s) => ast.string_lit(tok_span, s),
-      TokenKind.Nil => ast.nil_lit(tok_span),
-      TokenKind.Bool(b) => ast.bool_lit(tok_span, b),
+      TokenKind.IntLiteral(n) => cst.int_lit(tok_span, n),
+      TokenKind.FloatLiteral(n) => cst.float_lit(tok_span, n),
+      TokenKind.StringLiteral(s) => cst.string_lit(tok_span, s),
+      TokenKind.Nil => cst.nil_lit(tok_span),
+      TokenKind.Bool(b) => cst.bool_lit(tok_span, b),
       TokenKind.Error(msg) => return Err(self.parser.error(tok_span, msg)),
       _ => return Err(self.parser.error(
         tok_span,
@@ -297,17 +306,17 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn handle_prefix_minus(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn handle_prefix_minus(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let next = self.parser.peek()
     let next_span = next.span
     match next.kind {
       TokenKind.IntLiteral(n) => {
         let _ = self.parser.next()
-        Ok(ast.int_lit(span.merge(next_span), -n))
+        Ok(cst.int_lit(span.merge(next_span), -n))
       },
       TokenKind.FloatLiteral(n) => {
         let _ = self.parser.next()
-        Ok(ast.float_lit(span.merge(next_span), -n))
+        Ok(cst.float_lit(span.merge(next_span), -n))
       },
       _ => {
         self.push_operator(StackOp.Neg(span))?
@@ -368,7 +377,7 @@ impl ExpressionParser {
     }
   }
 
-  fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
     let mut expr_parser = ExpressionParser.new(
       self.parser,
       self.expression_indent,
@@ -384,7 +393,7 @@ impl ExpressionParser {
     Ok(expr)
   }
 
-  fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
     let indent = self.parser.current_line_indent
 
     self.skip_newline_unless_block_end(
@@ -394,7 +403,7 @@ impl ExpressionParser {
 
     if self.parser.peek().kind == lexer.TokenKind.RightBracket {
       let rbracket = self.parser.next()
-      return Ok(ast.array_lit(_span.merge(rbracket.span), []))
+      return Ok(cst.array_lit(_span.merge(rbracket.span), []))
     }
 
     let items = self.parse_list([])?
@@ -407,9 +416,9 @@ impl ExpressionParser {
     let span_end = _span.merge(rbracket_span)
 
     if items.length() == 0 {
-      Ok(ast.array_lit(span_end, []))
+      Ok(cst.array_lit(span_end, []))
     } else {
-      Ok(ast.array_lit(span_end, items))
+      Ok(cst.array_lit(span_end, items))
     }
   }
 
@@ -445,7 +454,7 @@ impl ExpressionParser {
     }
   }
 
-  fn handle_dot(self: Ref<ExpressionParser>) -> Result<ast.Expression, ParseError> {
+  fn handle_dot(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     let receiver = self.pop_term()?
     let start = receiver.span.start
     let name = self.parser.consume_identifier()?
@@ -460,14 +469,14 @@ impl ExpressionParser {
     if self.parser.peek().kind == lexer.TokenKind.LeftParen {
       let args = self.parse_args([])?
       end = self.parser.peek().span.start
-      let call = ast.Call { fn_name: name, type_args, args }
-      Ok(ast.dot_call(span.Span.new(start, end), &receiver, call))
+      let call = cst.Call { fn_name: name, type_args, args }
+      Ok(cst.dot_call(span.Span.new(start, end), &receiver, call))
     } else {
-      Ok(ast.dot_name(span.Span.new(start, end), &receiver, name))
+      Ok(cst.dot_name(span.Span.new(start, end), &receiver, name))
     }
   }
 
-  fn function_call(self: Ref<ExpressionParser>, span: Span, name: string) -> Result<ast.Expression, ParseError> {
+  fn function_call(self: Ref<ExpressionParser>, span: Span, name: string) -> Result<cst.Expression, ParseError> {
     let type_args_raw = self.parse_type_args()?
     let type_args = if type_args_raw.length() == 0 {
       None
@@ -475,10 +484,10 @@ impl ExpressionParser {
       Some(type_args_raw)
     }
     let args = self.parse_args([])?
-    Ok(ast.call_expr(span, name, type_args, args))
+    Ok(cst.call_expr(span, name, type_args, args))
   }
 
-  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Slice<ast.Type>, ParseError> {
+  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Type>, ParseError> {
     if self.parser.peek().kind != lexer.TokenKind.LeftBracket { return Ok([]) }
     let _ = self.parser.next()
     let mut types = []
@@ -494,7 +503,7 @@ impl ExpressionParser {
     Ok(types)
   }
 
-  fn parse_args(self: Ref<ExpressionParser>, args: Slice<ast.Expression>) -> Result<Slice<ast.Expression>, ParseError> {
+  fn parse_args(self: Ref<ExpressionParser>, args: Slice<cst.Expression>) -> Result<Slice<cst.Expression>, ParseError> {
     if self.parser.peek().kind != lexer.TokenKind.LeftParen { return Ok(args) }
     let _ = self.parser.next()
     self.skip_newline_unless_block_end(self.expression_indent, "")?
@@ -512,7 +521,7 @@ impl ExpressionParser {
     Ok(list)
   }
 
-  fn parse_list(self: Ref<ExpressionParser>, exprs: Slice<ast.Expression>) -> Result<Slice<ast.Expression>, ParseError> {
+  fn parse_list(self: Ref<ExpressionParser>, exprs: Slice<cst.Expression>) -> Result<Slice<cst.Expression>, ParseError> {
     let mut out = exprs
     loop {
       if self.expression_done() { break }
@@ -531,7 +540,7 @@ impl ExpressionParser {
     Ok(out)
   }
 
-  fn parse_let_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_let_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
@@ -549,9 +558,9 @@ impl ExpressionParser {
     )
     let value = expr_parser.parse()?
     let val_span = value.span
-    let id_expr = ast.identifier(name_span, name)
-    let binding = ast.binding(name_span, mode.Mode.Let, &id_expr)
-    Ok(ast.binop_expr(
+    let id_expr = cst.identifier(name_span, name)
+    let binding = cst.binding(name_span, mode.Mode.Let, &id_expr)
+    Ok(cst.binop_expr(
       span.merge(val_span),
       binding,
       operator.Operator.Assign,
@@ -559,7 +568,7 @@ impl ExpressionParser {
     ))
   }
 
-  fn parse_var_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_var_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
@@ -577,9 +586,9 @@ impl ExpressionParser {
     )
     let value = expr_parser.parse()?
     let val_span = value.span
-    let id_expr = ast.identifier(name_span, name)
-    let binding = ast.binding(name_span, mode.Mode.Var, &id_expr)
-    Ok(ast.binop_expr(
+    let id_expr = cst.identifier(name_span, name)
+    let binding = cst.binding(name_span, mode.Mode.Var, &id_expr)
+    Ok(cst.binop_expr(
       span.merge(val_span),
       binding,
       operator.Operator.Assign,
@@ -587,7 +596,7 @@ impl ExpressionParser {
     ))
   }
 
-  fn parse_while_expression(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_while_expression(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let mut cond_parser = ExpressionParser.new(
       self.parser,
       self.expression_indent,
@@ -596,11 +605,11 @@ impl ExpressionParser {
     let condition = cond_parser.parse()?
     let body = self.parser.parse_colon_and_block(self.expression_indent)?
     let body_span = body.span
-    let cond = ast.Conditional.Unary { expr: &condition, consequent: &body }
-    Ok(ast.while_(span.merge(body_span), cond))
+    let cond = cst.Conditional.Unary { expr: &condition, consequent: &body }
+    Ok(cst.while_(span.merge(body_span), cond))
   }
 
-  fn parse_for_expression(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_for_expression(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let var_tok = self.parser.peek()
     let var_tok_span = var_tok.span
     let var_name = match var_tok.kind {
@@ -629,15 +638,15 @@ impl ExpressionParser {
     let iterator = iter_parser.parse()?
     let body = self.parser.parse_colon_and_block(self.expression_indent)?
     let body_span = body.span
-    Ok(ast.for_(
+    Ok(cst.for_(
       span.merge(body_span),
-      ast.identifier(var_tok_span, var_name),
+      cst.identifier(var_tok_span, var_name),
       iterator,
       body,
     ))
   }
 
-  fn parse_if_expression(self: Ref<ExpressionParser>, span: Span) -> Result<ast.Expression, ParseError> {
+  fn parse_if_expression(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let condition_span = self.parser.peek().span
     let mut cond_parser = ExpressionParser.new(
       self.parser,
@@ -653,10 +662,10 @@ impl ExpressionParser {
         let _ = self.parser.next()
         let body = self.parser.parse_colon_and_block(self.expression_indent)?
         let body_span = body.span
-        ast.Expression { 
+        cst.Expression { 
           span: condition_span.merge(body_span),
-          kind: ast.Expr.If(ast.Conditional.Multi([
-            ast.Conditional.Unary { expr: &condition_expr, consequent: &body },
+          kind: cst.Expr.If(cst.Conditional.Multi([
+            cst.Conditional.Unary { expr: &condition_expr, consequent: &body },
           ])),
         }
       },
@@ -667,11 +676,11 @@ impl ExpressionParser {
     }
 
     let cons_span = consequent.span
-    let cond = ast.Conditional.Unary { 
+    let cond = cst.Conditional.Unary { 
       expr: &condition_expr,
       consequent: &consequent,
     }
-    Ok(ast.if_(span.merge(cons_span), cond))
+    Ok(cst.if_(span.merge(cons_span), cond))
   }
 }
 
@@ -680,12 +689,12 @@ impl Parser {
     self: Ref<Parser>,
     expression_indent: uint32,
     stop: StopAt,
-  ) -> Result<ast.Expression, ParseError> {
+  ) -> Result<cst.Expression, ParseError> {
     let mut expr_parser = ExpressionParser.new(self, expression_indent, stop)
     expr_parser.parse()
   }
 
-  fn parse_colon_and_block(self: Ref<Parser>, block_base_indent: uint32) -> Result<ast.Expression, ParseError> {
+  fn parse_colon_and_block(self: Ref<Parser>, block_base_indent: uint32) -> Result<cst.Expression, ParseError> {
     let Ok(_colon_span) = self.consume(lexer.TokenKind.Colon) else {
       return Err(self.error(self.peek().span, "Expected ':'"))
     }
@@ -710,13 +719,13 @@ impl Parser {
     }
 
     if statements.length() == 0 {
-      Ok(ast.block(self.peek().span, []))
+      Ok(cst.block(self.peek().span, []))
     } else if statements.length() == 1 {
       Ok(statements[0])
     } else {
       let first = statements[0].span
       let last = statements[statements.length() - 1].span
-      Ok(ast.block(first.merge(last), statements))
+      Ok(cst.block(first.merge(last), statements))
     }
   }
 }
@@ -753,9 +762,9 @@ fn is_indented_newline(kind: lexer.TokenKind, indent: uint32) -> bool {
   }
 }
 
-fn collect_tuple_terms(t1: ast.Expression) -> Slice<ast.Expression> {
+fn collect_tuple_terms(t1: cst.Expression) -> Slice<cst.Expression> {
   match t1.kind {
-    ast.Expr.TupleLiteral(elements) => elements,
+    cst.Expr.TupleLiteral(elements) => elements,
     _ => [t1],
   }
 }

@@ -1,4 +1,4 @@
-import "ast"
+import "cst"
 import "errors"
 import "lexer"
 import "mode"
@@ -18,18 +18,18 @@ pub struct Parser {
   lexer: Lexer,
   peeked: Token,
   current_line_indent: uint32,
-  pub defs: Ref<ast.Declarations>,
+  pub defs: Ref<cst.Declarations>,
 }
 
 impl Parser {
-  pub fn new(source: string, defs: Ref<ast.Declarations>) -> Parser {
+  pub fn new(source: string, defs: Ref<cst.Declarations>) -> Parser {
     let mut lexer = Lexer.new(source)
     let peeked = lexer.next()
     Parser { lexer, peeked, current_line_indent: 0, defs }
   }
 
   pub fn new_with_defs(source: string) -> Parser {
-    Parser.new(source, &ast.Declarations.new())
+    Parser.new(source, &cst.Declarations.new())
   }
 
   pub fn peek(self: Ref<Parser>) -> Token {
@@ -141,7 +141,7 @@ impl Parser {
     res
   }
 
-  fn parse_type(self: Ref<Parser>) -> Result<ast.Type, ParseError> {
+  fn parse_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
     let mut span = self.peek().span
     let Ok(name) = self.consume_identifier() else {
       return self.parse_tuple_or_fn_type()
@@ -151,20 +151,20 @@ impl Parser {
       type_args = self.parse_type_args()?
       span = span.merge(self.consume(lexer.TokenKind.RightBracket)?)
     }
-    Ok(ast.Type.new(span, name, type_args))
+    Ok(cst.Type.new(span, name, type_args))
   }
 
-  fn parse_type_args(self: Ref<Parser>) -> Result<Slice<ast.Type>, ParseError> {
+  fn parse_type_args(self: Ref<Parser>) -> Result<Slice<cst.Type>, ParseError> {
     self.parse_list(lexer.TokenKind.RightBracket, self.parse_type)
   }
 
-  fn parse_param_type(self: Ref<Parser>) -> Result<ast.ParamType, ParseError> {
+  fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, ParseError> {
     let mode = self.consume_mode()
     let typ = self.parse_type()?
-    Ok(ast.ParamType { mode, typ })
+    Ok(cst.ParamType { mode, typ })
   }
 
-  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<ast.Type, ParseError> {
+  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
     let mut span = self.peek().span
     let _ = self
       .consume(lexer.TokenKind.LeftParen)
@@ -182,10 +182,10 @@ impl Parser {
     if self.consume(lexer.TokenKind.Arrow).is_ok() {
       let ret_type = self.parse_type()?
       span = span.merge(ret_type.span)
-      Ok(ast.Type.fn_(span, params, &ret_type))
+      Ok(cst.Type.fn_(span, params, &ret_type))
     } else {
       let type_pargs = params.map(|p| p.typ)
-      Ok(ast.Type.tuple(span, type_pargs))
+      Ok(cst.Type.tuple(span, type_pargs))
     }
   }
 

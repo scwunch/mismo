@@ -1,17 +1,17 @@
-import "ast"
+import "cst"
 import "parser"
-import "typecheck"
+import "semantic/typecheck"
 
-pub struct Compiler { ast_defs: ast.Declarations }
+pub struct Compiler { cst_defs: cst.Declarations }
 
 impl Compiler {
-  pub fn parse(source: string) -> Ref<ast.Declarations> {
-    let mut parser = parser.Parser.new(source, &ast.Declarations.new())
+  pub fn parse(source: string) -> Ref<cst.Declarations> {
+    let mut parser = parser.Parser.new(source, &cst.Declarations.new())
     parser.parse()
     parser.defs
   }
 
-  pub fn type_check(defs: ast.Declarations) -> Result<(), ()> {
+  pub fn type_check(defs: cst.Declarations) -> Result<(), ()> {
     let mut env = typecheck.TypeEnv.new()
     env.type_check_program(defs)
     if env.errors.length() > 0 { Err(()) } else { Ok(()) }

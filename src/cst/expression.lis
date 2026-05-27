@@ -30,7 +30,7 @@ pub enum Expr {
   Neg(Ref<Expression>),
   Not(Ref<Expression>),
   Return(Option<Ref<Expression>>),
-  Break,
+  Break(Option<Ref<Expression>>),
   Continue,
   Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
@@ -203,8 +203,8 @@ pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
   Expression { span, kind: Expr.Return(expr) }
 }
 
-pub fn break_(span: span.Span) -> Expression {
-  Expression { span, kind: Expr.Break }
+pub fn break_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+  Expression { span, kind: Expr.Break(expr) }
 }
 
 pub fn continue_(span: span.Span) -> Expression {
@@ -239,7 +239,8 @@ impl Expr {
       Expr.Not(e) => f"Not({e.kind.string()})",
       Expr.Return(Some(e)) => f"Return({e.kind.string()})",
       Expr.Return(None) => "Return",
-      Expr.Break => "Break",
+      Expr.Break(None) => "Break",
+      Expr.Break(Some(e)) => f"Break({e.kind.string()})",
       Expr.Continue => "Continue",
       Expr.Type(name, _) => f"Type({name})",
       Expr.DotName(r, field) => f"DotName({r.kind.string()}.{field})",

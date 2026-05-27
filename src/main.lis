@@ -3,8 +3,8 @@ import "go:os"
 
 import "lexer"
 import "parser"
+import "semantic"
 import "span"
-import "typecheck"
 
 fn main() {
   match os.Args {
@@ -35,7 +35,7 @@ fn run_tests(tests: Slice<string>) {
     ("span", span.test),
     ("lexer", lexer.test),
     ("parser", parser.test),
-    ("typecheck", typecheck.test),
+    ("typecheck", semantic.test),
   ])
 
   if tests.is_empty() {

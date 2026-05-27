@@ -1,5 +1,0 @@
-import "error"
-
-pub fn analyze() -> bool {
-  true
-}

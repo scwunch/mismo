@@ -137,6 +137,29 @@ impl MissingNameError {
   }
 }
 
+pub struct InvalidAssignmentTargetError<Node> {
+  pub _s_: span.Span,
+  pub node: Node,
+}
+
+impl<Node> InvalidAssignmentTargetError<Node> {
+  pub fn new(span: span.Span, node: Node) -> InvalidAssignmentTargetError<Node> {
+    InvalidAssignmentTargetError { _s_: span, node }
+  }
+
+  pub fn code(self) -> int {
+    2004
+  }
+
+  pub fn message(self) -> string {
+    f"invalid assignment target: {self.node}"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
 pub struct TypeParameterArityError {
   pub _s_: span.Span,
   pub name: string,
@@ -155,6 +178,75 @@ impl TypeParameterArityError {
 
   pub fn message(self) -> string {
     f"\"{self.name}\" expects {self.expected} type arguments but {self.actual} were provided"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct EmptyArrayLiteralError {
+  pub _s_: span.Span,
+}
+
+impl EmptyArrayLiteralError {
+  pub fn new(span: span.Span) -> EmptyArrayLiteralError {
+    EmptyArrayLiteralError { _s_: span }
+  }
+
+  pub fn code(self) -> int {
+    2005
+  }
+
+  pub fn message(self) -> string {
+    "Cannot infer type of empty array literal.  Use `Array[Type].new` to create an empty array of a specific type."
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct HeterogeneousArrayLiteralError {
+  pub _s_: span.Span,
+  pub types: string,
+}
+
+impl HeterogeneousArrayLiteralError {
+  pub fn new(span: span.Span, types: string) -> HeterogeneousArrayLiteralError {
+    HeterogeneousArrayLiteralError { _s_: span, types }
+  }
+
+  pub fn code(self) -> int {
+    2006
+  }
+
+  pub fn message(self) -> string {
+    f"Array literals must have all elements of the same type.  Found: {self.types}."
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct TypeMismatchError {
+  pub _s_: span.Span,
+  pub expected: string,
+  pub actual: string,
+}
+
+impl TypeMismatchError {
+  pub fn new(span: span.Span, expected: string, actual: string) -> TypeMismatchError {
+    TypeMismatchError { _s_: span, expected, actual }
+  }
+
+  pub fn code(self) -> int {
+    2010
+  }
+
+  pub fn message(self) -> string {
+    f"Expected {self.expected} but got {self.actual}."
   }
 
   pub fn span(self) -> span.Span {
