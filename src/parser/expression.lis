@@ -249,7 +249,9 @@ impl ExpressionParser {
       TokenKind.If => self.parse_if_expression(tok_span)?,
       TokenKind.While => self.parse_while_expression(tok_span)?,
       TokenKind.For => self.parse_for_expression(tok_span)?,
-      TokenKind.Return => {
+      TokenKind.Return => if self.expression_done() {
+        cst.return_(tok_span, None)
+      } else {
         let mut expr_parser = ExpressionParser.new(
           self.parser,
           self.expression_indent,
@@ -259,7 +261,9 @@ impl ExpressionParser {
         let val_span = val.span
         cst.return_(tok_span.merge(val_span), Some(&val))
       },
-      TokenKind.Break => {
+      TokenKind.Break => if self.expression_done() {
+        cst.break_(tok_span, None)
+      } else {
         let mut expr_parser = ExpressionParser.new(
           self.parser,
           self.expression_indent,
