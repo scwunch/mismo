@@ -14,6 +14,23 @@ impl Mode {
       Mode.Var => "var",
     }
   }
+
+  fn ordinal(self) -> int {
+    match self {
+      Mode.Let => 0,
+      Mode.Mut => 1,
+      Mode.MutBang => 2,
+      Mode.Var => 3,
+    }
+  }
+
+  pub fn assignable_to(self, other: Mode) -> bool {
+    self.ordinal() >= other.ordinal()
+  }
+
+  pub fn union(self, other: Mode) -> Mode {
+    if self.assignable_to(other) { other } else { self }
+  }
 }
 
 pub fn parse(str: string) -> Option<Mode> {

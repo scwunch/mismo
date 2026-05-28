@@ -253,3 +253,74 @@ impl TypeMismatchError {
     self._s_
   }
 }
+
+pub struct UseAfterConsumeError {
+  pub name: string,
+  pub use: span.Span,
+  pub consumed: span.Span,
+}
+
+impl UseAfterConsumeError {
+  pub fn new(name: string, use: span.Span, consumed: span.Span) -> UseAfterConsumeError {
+    UseAfterConsumeError { name, use, consumed }
+  }
+
+  pub fn code(self) -> int {
+    2012
+  }
+
+  pub fn message(self) -> string {
+    f"Cannot use variable '{self.name}'; it has already been consumed at {self.consumed}."
+  }
+
+  pub fn span(self) -> span.Span {
+    self.use
+  }
+}
+
+pub struct ConsumeBorrowError {
+  pub borrow: string,
+  pub _s_: span.Span,
+}
+
+impl ConsumeBorrowError {
+  pub fn new(borrow: string, _s_: span.Span) -> ConsumeBorrowError {
+    ConsumeBorrowError { borrow, _s_ }
+  }
+
+  pub fn code(self) -> int {
+    2011
+  }
+
+  pub fn message(self) -> string {
+    f"Cannot consume borrow '{self.borrow}';"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct ModeMismatchError {
+  pub _s_: span.Span,
+  pub expected: string,
+  pub actual: string,
+}
+
+impl ModeMismatchError {
+  pub fn new(span: span.Span, expected: string, actual: string) -> ModeMismatchError {
+    ModeMismatchError { _s_: span, expected, actual }
+  }
+
+  pub fn code(self) -> int {
+    2013
+  }
+
+  pub fn message(self) -> string {
+    f"Expected mode {self.expected} but got {self.actual}."
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}

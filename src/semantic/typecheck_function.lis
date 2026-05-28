@@ -81,6 +81,17 @@ impl<T> List<T> {
 //   }
 // }
 
+impl List<Ref<Variable>> {
+  fn get(self, name: string) -> Option<Ref<Variable>> {
+    let mut current = self
+    while let List.Cons(binding, next) = current {
+      if binding.name == name { return Some(binding) }
+      current = next.*
+    }
+    None
+  }
+}
+
 impl TypeCheck {
   fn get(self, name: string) -> Option<Ref<Variable>> {
     let mut current = self.bindings

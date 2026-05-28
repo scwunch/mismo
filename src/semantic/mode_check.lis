@@ -1,0 +1,144 @@
+import "errors"
+import "mode"
+import "span"
+import "utils/slice"
+
+struct ModeCheck { env: Ref<TypeEnv>, bindings: List<Ref<Variable>> }
+
+impl ModeCheck {
+  fn new(env: Ref<TypeEnv>) -> ModeCheck {
+    ModeCheck { env, bindings: List.Nil }
+  }
+
+  fn infer(self, node: Expression) -> Result<mode.Mode, errors.TypeError> {
+    match node.kind {
+      Expr.Nil |
+      Expr.BoolLiteral(_) |
+      Expr.IntLiteral(_) |
+      Expr.FloatLiteral(_) |
+      Expr.StringLiteral(_) |
+      Expr.ArrayLiteral(_, _) |
+      Expr.TupleLiteral(_) => {
+        Ok(mode.Mode.Var)
+      },
+      Expr.Identifier(varid) => self.use_ident(varid, node.span),
+      Expr.Assign(varid, expr) => Ok(mode.Mode.Var),
+      Expr.Binding(mode.Mode.Var, expr) => self
+        .consume(expr.*)
+        .map(|_| mode.Mode.Var),
+      Expr.Binding(dest_mode, expr) => {
+        let src_mode = self.infer(expr.*)?
+        if src_mode.assignable_to(dest_mode) {
+          Ok(dest_mode)
+        } else {
+          Err(errors.ModeMismatchError.new(
+            expr.span,
+            dest_mode.string(),
+            src_mode.string(),
+          ))
+        }
+      },
+      Expr.FieldAccess(obj, _) => self.infer(obj.*),
+      Expr.Block(exprs, _) => self.infer_block(exprs),
+      Expr.Call(call) => self.call(call),
+      Expr.Return(None) => Ok(mode.Mode.Var),
+      Expr.Return(Some(expr)) => {
+        self.consume(expr.*)?
+        Ok(mode.Mode.Var)
+      },
+      Expr.Break(None) => Ok(mode.Mode.Var),
+      Expr.Break(Some(expr)) => {
+        let _ = self.infer(expr.*)?
+        Ok(mode.Mode.Var)
+      },
+      Expr.Continue => Ok(mode.Mode.Var),
+      Expr.SwitchIf(_) => panic("switchif not implemented"),
+      Expr.Match(_) => panic("match not implemented"),
+      Expr.Loop(_, _) => panic("loop not implemented"),
+    }
+  }
+
+  fn consume(self, node: Expression) -> Result<(), errors.TypeError> {
+    match node.kind {
+      Expr.Identifier(varid) => self.consume_ident(varid, node.span),
+      Expr.FieldAccess(obj, i) => {
+        self.consume(obj.*)?
+        Ok(())
+      },
+      Expr.Block(exprs, _) => self.consume_block(exprs),
+      _ => {
+        let m = self.infer(node)?
+        if m == mode.Mode.Var {
+          Ok(())
+        } else {
+          Err(errors.ConsumeBorrowError.new(f"{node.kind}", node.span))
+        }
+      },
+    }
+  }
+
+  fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, errors.TypeError> {
+    if let Some(consumed) = varid.consumed {
+      return Err(errors.UseAfterConsumeError.new(
+        varid.name,
+        used,
+        span.Span { 
+          start: consumed,
+          end: consumed + varid.name.length() as uint32,
+        },
+      ))
+    }
+    Ok(varid.mode)
+  }
+
+  fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), errors.TypeError> {
+    let _ = self.use_ident(varid, span)?
+    if varid.mode == mode.Mode.Var {
+      varid.consumed = Some(span.start)
+      Ok(())
+    } else {
+      Err(errors.ConsumeBorrowError.new(varid.name, span))
+    }
+  }
+
+  fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, errors.TypeError> {
+    let mut m = mode.Mode.Var
+    for expr in exprs[..exprs.length() - 1] {
+      if let Expr.Break(Some(expr)) = expr.kind {
+        m = m.union(self.infer(expr.*)?)
+      } else {
+        self.infer(expr)?
+      }
+    }
+    Ok(m.union(self.infer(exprs[exprs.length() - 1])?))
+  }
+
+  fn consume_block(self, exprs: Slice<Expression>) -> Result<(), errors.TypeError> {
+    for expr in exprs[..exprs.length() - 1] {
+      if let Expr.Break(Some(expr)) = expr.kind {
+        self.consume(expr.*)?
+      } else {
+        let _ = self.infer(expr)?
+      }
+    }
+    self.consume(exprs[exprs.length() - 1])
+  }
+
+  fn call(self, call: FnCall) -> Result<mode.Mode, errors.TypeError> {
+    for (arg, param) in slice.zip(call.args, call.fun.parameters) {
+      if param.mode == mode.Mode.Var {
+        self.consume(arg)?
+      } else {
+        let m = self.infer(arg)?
+        if !m.assignable_to(param.mode) {
+          return Err(errors.ModeMismatchError.new(
+            arg.span,
+            param.mode.string(),
+            m.string(),
+          ))
+        }
+      }
+    }
+    Ok(mode.Mode.Var)
+  }
+}
