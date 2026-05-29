@@ -7,8 +7,6 @@ import "utils/slice"
 
 impl TypeEnv {
   fn type_check_function(self: Ref<TypeEnv>, func: FunctionDef) {
-    // let scope = Scope.from_params(&TypeCheck.new(self), func.parameters)
-    // let res = scope.check(func.body, func.return_type)
     let res = TypeCheck.new(self, func).check(func.body, func.return_type)
     if let Err(err) = res { self.error(err) }
   }
@@ -38,8 +36,6 @@ impl TypeCheck {
   }
 }
 
-// pub struct Scope { typecheck: Ref<TypeCheck>, bindings: List<Ref<Variable>> }
-
 pub enum List<T> {
   Nil,
   Cons(T, Ref<List<T>>),
@@ -50,36 +46,6 @@ impl<T> List<T> {
     List.Cons(item, &self)
   }
 }
-
-// impl Scope {
-//   fn new(typecheck: Ref<TypeCheck>) -> Scope {
-//     Scope { typecheck, bindings: List.Nil }
-//   }
-
-//   fn from_params(typecheck: Ref<TypeCheck>, params: Slice<Parameter>) -> Scope {
-//     let mut scope = Scope.new(typecheck)
-//     for param in params {
-//       scope = scope.cons(&Variable.from_param(param))
-//     }
-//     scope
-//   }
-
-//   fn get(self, name: string) -> Option<Ref<Variable>> {
-//     let mut current = self.bindings
-//     while let List.Cons(binding, next) = current {
-//       if binding.name == name { return Some(binding) }
-//       current = next.*
-//     }
-//     None
-//   }
-
-//   fn cons(self, binding: Ref<Variable>) -> Scope {
-//     Scope {
-//       typecheck: self.typecheck,
-//       bindings: List.Cons(binding, &self.bindings),
-//     }
-//   }
-// }
 
 impl List<Ref<Variable>> {
   fn get(self, name: string) -> Option<Ref<Variable>> {
@@ -310,50 +276,6 @@ impl TypeCheck {
   }
 }
 
-// ----------------------
-
-// pub struct TypeScope {
-//   names: Map<string, Variable>,
-//   parent: Option<Ref<TypeScope>>,
-// }
-
-// pub struct OldScope {
-//   next_var: int,
-//   vars: Slice<(string, int)>,
-//   parent: Option<Ref<Scope>>,
-// }
-
-// impl Scope {
-//   fn new() -> Scope {
-//     Scope { next_var: 0, vars: [], parent: None }
-//   }
-
-//   fn get(self, name: string) -> Option<int> {
-//     for (n, i) in self.vars {
-//       if n == name { return Some(i) }
-//     }
-//     if let Some(parent) = self.parent { parent.get(name) } else { None }
-//   }
-
-//   fn get_or_set(self: Ref<Scope>, name: string) -> int {
-//     if let Some(varid) = self.get(name) { return varid }
-//     let varid = self.next_var
-//     self.next_var += 1
-//     self.vars = self.vars.append((name, varid))
-//     varid
-//   }
-// }
-
-// impl TypeScope {
-//   fn from_params(params: Slice<Parameter>) -> TypeScope {
-//     let mut names = Map.new()
-//     for param in params {
-//       names[param.name] = Variable.from_param(param)
-//     }
-//     TypeScope { names, parent: None }
-//   }
-// }
-
 pub struct Variable {
   mode: mode.Mode,
   name: string,
@@ -376,8 +298,4 @@ impl Variable {
   fn new(mode: mode.Mode, name: string, typ: Type, init: uint32) -> Variable {
     Variable { mode, name, typ, init, consumed: None }
   }
-
-  // fn hole() -> Variable {
-  //   Variable.new(mode.Mode.Var, "", Type.Never, 0)
-  // }
 }
