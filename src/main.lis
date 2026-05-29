@@ -35,7 +35,8 @@ fn run_tests(tests: Slice<string>) {
     ("span", span.test),
     ("lexer", lexer.test),
     ("parser", parser.test),
-    ("typecheck", semantic.test),
+    ("type_env", semantic.test_type_env),
+    ("typecheck", semantic.test_typecheck),
   ])
 
   if tests.is_empty() {
