@@ -8,6 +8,10 @@ pub struct Location {
   pub col: uint32,
 }
 
+pub fn new(start: uint32, end: uint32) -> Span {
+  Span { start, end }
+}
+
 impl Span {
   pub fn new(start: uint32, end: uint32) -> Span {
     Span { start, end }

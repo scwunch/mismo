@@ -11,6 +11,8 @@ impl ModeCheck {
   }
 
   fn infer(self, node: Expression) -> Result<mode.Mode, errors.TypeError> {
+    let _ = self.env
+    let _ = self.bindings
     match node.kind {
       Expr.Nil |
       Expr.BoolLiteral(_) |

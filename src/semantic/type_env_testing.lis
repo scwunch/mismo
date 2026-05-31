@@ -8,6 +8,7 @@ pub fn test_type_env() {
   let _ = testing.test_suite(
     "Type Env",
     [
+      test_type_equality,
       test_eval_type_primitives,
       test_eval_type_compound,
       test_eval_type_nominal,
@@ -23,6 +24,18 @@ pub fn test_type_env() {
   )
 }
 
+fn test_type_equality(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "type equality"
+  t.should_eq(Type.Nat, Type.Nat)?
+  t.should_eq(Type.Int, Type.Int)?
+  t.should_eq(Type.Float, Type.Float)?
+  t.should_eq(Type.String, Type.String)?
+  t.shouldnt_eq(Type.Nat, Type.Int)?
+  t.shouldnt_eq(Type.Int, Type.Float)?
+  t.shouldnt_eq(Type.Float, Type.String)?
+  Ok(())
+}
+
 fn test_eval_type_primitives(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_type primitives"
   let env = TypeEnv.new()
@@ -32,7 +45,7 @@ fn test_eval_type_primitives(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Err(e) => t.fail(e.message())?,
   }
   match env.eval_type(cst.typ(0, 3, "Nil", [])) {
-    Ok(typ) => t.should_eq(typ, Type.Nil)?,
+    Ok(typ) => t.should_eq(typ, Type.Tuple([]))?,
     Err(e) => t.fail(e.message())?,
   }
   match env.eval_type(cst.typ(0, 4, "Bool", [])) {
@@ -65,7 +78,7 @@ fn test_eval_type_compound(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Tuple type: (Int, Bool)
   match env.eval_type(cst.Type.tuple(
-    span.Span.new(0, 11),
+    span.new(0, 11),
     [cst.typ(1, 4, "Int", []), cst.typ(6, 10, "Bool", [])],
   )) {
     Ok(typ) => t.should_eq(typ, Type.Tuple([Type.Int, Type.Bool]))?,
@@ -73,14 +86,14 @@ fn test_eval_type_compound(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Empty tuple type: ()
-  match env.eval_type(cst.Type.tuple(span.Span.new(0, 2), [])) {
+  match env.eval_type(cst.Type.tuple(span.new(0, 2), [])) {
     Ok(typ) => t.should_eq(typ, Type.Tuple([]))?,
     Err(e) => t.fail(e.message())?,
   }
 
   // Function type: (Int) -> String
   match env.eval_type(cst.Type.fn_(
-    span.Span.new(0, 14),
+    span.new(0, 14),
     [cst.ParamType.none(cst.typ(1, 4, "Int", []))],
     &cst.typ(10, 16, "String", []),
   )) {
@@ -93,7 +106,7 @@ fn test_eval_type_compound(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Function type with let and mut! params
   match env.eval_type(cst.Type.fn_(
-    span.Span.new(0, 26),
+    span.new(0, 26),
     [
       cst.ParamType.let_(cst.typ(5, 11, "String", [])),
       cst.ParamType.mut_bang(cst.typ(18, 21, "Int", [])),
@@ -121,16 +134,12 @@ fn test_eval_type_nominal(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut env = TypeEnv.new()
   env.register_types([
     cst.TypeDecl.new_enum(
-      span.Span.new(0, 18),
+      span.new(0, 18),
       "Option",
-      [cst.TypeParameter.new(span.Span.new(7, 8), "T")],
+      [cst.TypeParameter.new(span.new(7, 8), "T")],
       [
-        cst.Variant.new(
-          span.Span.new(10, 14),
-          "Some",
-          [cst.typ(15, 16, "T", [])],
-        ),
-        cst.Variant.new(span.Span.new(17, 21), "None", []),
+        cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
+        cst.Variant.new(span.new(17, 21), "None", []),
       ],
     ),
   ])
@@ -184,16 +193,12 @@ fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // Register Option[T] for ADT arity test
   env.register_types([
     cst.TypeDecl.new_enum(
-      span.Span.new(0, 18),
+      span.new(0, 18),
       "Option",
-      [cst.TypeParameter.new(span.Span.new(7, 8), "T")],
+      [cst.TypeParameter.new(span.new(7, 8), "T")],
       [
-        cst.Variant.new(
-          span.Span.new(10, 14),
-          "Some",
-          [cst.typ(15, 16, "T", [])],
-        ),
-        cst.Variant.new(span.Span.new(17, 21), "None", []),
+        cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
+        cst.Variant.new(span.new(17, 21), "None", []),
       ],
     ),
   ])
@@ -252,7 +257,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(param) => t.should_eq(
       param,
       Parameter { 
-        span: span.Span.new(0, 10),
+        span: span.new(0, 10),
         mode: mode.Mode.Let,
         name: "x",
         typ: Type.Int,
@@ -272,7 +277,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(param) => t.should_eq(
       param,
       Parameter { 
-        span: span.Span.new(0, 14),
+        span: span.new(0, 14),
         mode: mode.Mode.Let,
         name: "s",
         typ: Type.String,
@@ -292,7 +297,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(param) => t.should_eq(
       param,
       Parameter { 
-        span: span.Span.new(0, 12),
+        span: span.new(0, 12),
         mode: mode.Mode.Var,
         name: "y",
         typ: Type.Int,
@@ -309,7 +314,7 @@ fn test_register_and_fill_struct(t: Ref<testing.TestRunner>) -> Result<(), strin
   let mut env = TypeEnv.new()
 
   let decl = cst.TypeDecl.new_struct(
-    span.Span.new(0, 22),
+    span.new(0, 22),
     "Point",
     [],
     [
@@ -324,12 +329,12 @@ fn test_register_and_fill_struct(t: Ref<testing.TestRunner>) -> Result<(), strin
   t.should_eq(
     def.*,
     TypeDef.new(
-      span.Span.new(0, 22),
+      span.new(0, 22),
       "Point",
       [],
       TypeKind.Struct([
-        Field { span: span.Span.new(8, 14), name: "x", typ: Type.Int },
-        Field { span: span.Span.new(15, 21), name: "y", typ: Type.Int },
+        Field { span: span.new(8, 14), name: "x", typ: Type.Int },
+        Field { span: span.new(15, 21), name: "y", typ: Type.Int },
       ]),
     ),
   )?
@@ -342,16 +347,12 @@ fn test_register_and_fill_enum(t: Ref<testing.TestRunner>) -> Result<(), string>
   let mut env = TypeEnv.new()
 
   let decl = cst.TypeDecl.new_enum(
-    span.Span.new(0, 30),
+    span.new(0, 30),
     "Color",
     [],
     [
-      cst.Variant.new(span.Span.new(13, 16), "Red", []),
-      cst.Variant.new(
-        span.Span.new(19, 25),
-        "Green",
-        [cst.typ(25, 28, "Int", [])],
-      ),
+      cst.Variant.new(span.new(13, 16), "Red", []),
+      cst.Variant.new(span.new(19, 25), "Green", [cst.typ(25, 28, "Int", [])]),
     ],
   )
   env.register_types([decl])
@@ -361,16 +362,12 @@ fn test_register_and_fill_enum(t: Ref<testing.TestRunner>) -> Result<(), string>
   t.should_eq(
     def.*,
     TypeDef.new(
-      span.Span.new(0, 30),
+      span.new(0, 30),
       "Color",
       [],
       TypeKind.Enum([
-        Variant { span: span.Span.new(13, 16), name: "Red", fields: [] },
-        Variant { 
-          span: span.Span.new(19, 25),
-          name: "Green",
-          fields: [Type.Int],
-        },
+        Variant { span: span.new(13, 16), name: "Red", fields: [] },
+        Variant { span: span.new(19, 25), name: "Green", fields: [Type.Int] },
       ]),
     ),
   )?
@@ -383,8 +380,8 @@ fn test_duplicate_name_error(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut env = TypeEnv.new()
 
   env.register_types([
-    cst.TypeDecl.new_struct(span.Span.new(0, 10), "Point", [], []),
-    cst.TypeDecl.new_struct(span.Span.new(10, 20), "Point", [], []),
+    cst.TypeDecl.new_struct(span.new(0, 10), "Point", [], []),
+    cst.TypeDecl.new_struct(span.new(10, 20), "Point", [], []),
   ])
 
   t.should_be_true(
@@ -405,28 +402,28 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // fn foo() Int
   let sig = cst.Signature.new(
-    span.Span.new(0, 18),
+    span.new(0, 18),
     "foo",
     [],
     [],
     cst.typ(14, 17, "Int", []),
   )
   let decl = cst.FunctionDecl.new(
-    span.Span.new(0, 22),
+    span.new(0, 22),
     sig,
-    cst.int_lit(span.Span.new(20, 22), 42),
+    cst.int_lit(span.new(20, 22), 42),
   )
 
   match env.eval_function(decl) {
     Ok(func) => t.should_eq(
       func,
       FunctionDef.new(
-        span.Span.new(0, 22),
+        span.new(0, 22),
         "foo",
         [],
         [],
         Type.Int,
-        cst.int_lit(span.Span.new(20, 22), 42),
+        cst.int_lit(span.new(20, 22), 42),
       ),
     )?,
     Err(e) => t.fail(e.message())?,
@@ -438,16 +435,16 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.param(14, 20, None, "b", cst.typ(17, 20, "Int", [])),
   ]
   let add_sig = cst.Signature.new(
-    span.Span.new(0, 29),
+    span.new(0, 29),
     "add",
     [],
     params,
     cst.typ(26, 29, "Int", []),
   )
   let add_decl = cst.FunctionDecl.new(
-    span.Span.new(0, 29),
+    span.new(0, 29),
     add_sig,
-    cst.nil_lit(span.Span.new(0, 0)),
+    cst.nil_lit(span.new(0, 0)),
   )
 
   match env.eval_function(add_decl) {
@@ -460,7 +457,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(
         func.parameters[0],
         Parameter { 
-          span: span.Span.new(6, 12),
+          span: span.new(6, 12),
           mode: mode.Mode.Let,
           name: "a",
           typ: Type.Int,
@@ -473,16 +470,16 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // `fn bad() Wobble` => Error: unknown return type Wobble
   let bad_sig = cst.Signature.new(
-    span.Span.new(0, 20),
+    span.new(0, 20),
     "bad",
     [],
     [],
     cst.typ(14, 19, "Wobble", []),
   )
   let bad_decl = cst.FunctionDecl.new(
-    span.Span.new(0, 20),
+    span.new(0, 20),
     bad_sig,
-    cst.nil_lit(span.Span.new(0, 0)),
+    cst.nil_lit(span.new(0, 0)),
   )
 
   match env.eval_function(bad_decl) {
@@ -502,16 +499,16 @@ fn test_register_functions(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Register fn foo() Int: 42
   let foo_sig = cst.Signature.new(
-    span.Span.new(0, 18),
+    span.new(0, 18),
     "foo",
     [],
     [],
     cst.typ(14, 17, "Int", []),
   )
   let foo_decl = cst.FunctionDecl.new(
-    span.Span.new(0, 22),
+    span.new(0, 22),
     foo_sig,
-    cst.int_lit(span.Span.new(20, 22), 42),
+    cst.int_lit(span.new(20, 22), 42),
   )
   env.register_functions([foo_decl])
 
@@ -525,16 +522,16 @@ fn test_register_functions(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Overload: register another fn foo(x Int) Int
   let foo2_sig = cst.Signature.new(
-    span.Span.new(0, 22),
+    span.new(0, 22),
     "foo",
     [],
     [cst.param(7, 13, None, "x", cst.typ(10, 13, "Int", []))],
     cst.typ(18, 21, "Int", []),
   )
   let foo2_decl = cst.FunctionDecl.new(
-    span.Span.new(0, 22),
+    span.new(0, 22),
     foo2_sig,
-    cst.nil_lit(span.Span.new(0, 0)),
+    cst.nil_lit(span.new(0, 0)),
   )
   env.register_functions([foo2_decl])
 
@@ -546,16 +543,16 @@ fn test_register_functions(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Register a function with error (unknown return type)
   let bad_sig = cst.Signature.new(
-    span.Span.new(0, 16),
+    span.new(0, 16),
     "bad",
     [],
     [],
     cst.typ(12, 16, "Wobble", []),
   )
   let bad_decl = cst.FunctionDecl.new(
-    span.Span.new(0, 16),
+    span.new(0, 16),
     bad_sig,
-    cst.nil_lit(span.Span.new(0, 0)),
+    cst.nil_lit(span.new(0, 0)),
   )
   env.register_functions([bad_decl])
 

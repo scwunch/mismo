@@ -47,7 +47,7 @@ impl Expression {
 impl Expr {
   fn typ(self) -> Type {
     match self {
-      Expr.Nil => Type.Nil,
+      Expr.Nil => Type.Tuple([]),
       Expr.BoolLiteral(bool) => Type.Bool,
       Expr.IntLiteral(int) => Type.Int,
       Expr.FloatLiteral(float64) => Type.Float,

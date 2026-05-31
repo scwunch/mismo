@@ -16,16 +16,16 @@ pub struct TypeCheck {
   env: Ref<TypeEnv>,
   next_var: Ref<int>,
   return_type: Type,
-  bindings: List<Ref<Variable>>,
+  bindings: Ref<List<Ref<Variable>>>,
 }
 
 impl TypeCheck {
   fn new(env: Ref<TypeEnv>, func: FunctionDef) -> TypeCheck {
     let zero = 0
-    let mut scope = List.Nil
+    let mut scope = &List.Nil
     for param in func.parameters {
-      let prev = &scope
-      scope = List.Cons(&Variable.from_param(param), prev)
+      let v = &Variable.from_param(param)
+      scope = &List.Cons(v, scope)
     }
     TypeCheck { 
       env,
@@ -41,12 +41,6 @@ pub enum List<T> {
   Cons(T, Ref<List<T>>),
 }
 
-impl<T> List<T> {
-  fn cons(self, item: T) -> List<T> {
-    List.Cons(item, &self)
-  }
-}
-
 impl List<Ref<Variable>> {
   fn get(self, name: string) -> Option<Ref<Variable>> {
     let mut current = self
@@ -60,7 +54,7 @@ impl List<Ref<Variable>> {
 
 impl TypeCheck {
   fn get(self, name: string) -> Option<Ref<Variable>> {
-    let mut current = self.bindings
+    let mut current = self.bindings.*
     while let List.Cons(binding, next) = current {
       if binding.name == name { return Some(binding) }
       current = next.*
@@ -160,9 +154,12 @@ impl TypeCheck {
       let expr = self.infer(node)?
       expressions = expressions.append(expr)
       match expr.kind {
-        Expr.Assign(varid, _) => self.bindings = self.bindings.cons(varid),
+        Expr.Assign(varid, _) => self.bindings = &List.Cons(
+          varid,
+          self.bindings,
+        ),
         Expr.Return(opt_expr) => {
-          let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Nil)
+          let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
           if !self.return_type.eq(actual) {
             return Err(errors.TypeMismatchError.new(
               span,
@@ -172,7 +169,7 @@ impl TypeCheck {
           }
         },
         Expr.Break(opt_expr) => {
-          let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.Nil)
+          let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
           types = types.append(ty)
         },
         _ => (),
@@ -182,21 +179,33 @@ impl TypeCheck {
     Ok(Expr.Block(expressions, types[0]))
   }
 
+  fn type_of_elements(elems: Slice<Expression>, span: span.Span) -> Result<Type, Slice<Type>> {
+    if elems.length() == 0 { return Err([]) }
+    let typ = elems[0].typ()
+    for elem in elems {
+      if !elem.typ().eq(typ) { return Err(elems.map(|e| e.typ())) }
+    }
+    Ok(typ)
+  }
+
   fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
     if elems.length() == 0 {
       return Err(errors.EmptyArrayLiteralError.new(span))
     }
     let inferred = slice.map_result(elems, self.infer)?
 
-    let typ = inferred[0].typ()
+    let mut elem_type = inferred[0].typ()
     for elem in inferred {
-      if !elem.typ().eq(typ) {
-        let types = inferred.map(|e| f"{e.typ()}").join(", ")
-        return Err(errors.HeterogeneousArrayLiteralError.new(span, types))
+      match elem.typ().least_upper_bound(elem_type) {
+        Some(t) => elem_type = t,
+        None => {
+          let types = inferred.map(|e| f"{e.typ()}").join(", ")
+          return Err(errors.HeterogeneousArrayLiteralError.new(span, types))
+        },
       }
     }
 
-    Ok(Expr.ArrayLiteral(inferred, typ))
+    Ok(Expr.ArrayLiteral(inferred, elem_type))
   }
 
   fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, errors.TypeError> {

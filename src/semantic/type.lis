@@ -1,8 +1,8 @@
 import "mode"
+import "utils/slice"
 
 pub enum Type {
   Never,
-  Nil,
   Bool,
   Nat,
   Int,
@@ -24,13 +24,16 @@ impl ParamType {
   pub fn substitute(self, args: Slice<Type>) -> ParamType {
     ParamType { mode: self.mode, typ: self.typ.substitute(args) }
   }
+
+  pub fn assignable_to(self, other: ParamType) -> bool {
+    self.mode.assignable_to(other.mode) && self.typ.assignable_to(other.typ)
+  }
 }
 
 impl Type {
   pub fn substitute(self, args: Slice<Type>) -> Type {
     match self {
       Type.Never => Type.Never,
-      Type.Nil => Type.Nil,
       Type.Bool => Type.Bool,
       Type.Nat => Type.Nat,
       Type.Int => Type.Int,
@@ -42,5 +45,25 @@ impl Type {
       Type.Adt(def, args) => Type.Adt(def, args.map(|a| a.substitute(args))),
       Type.Var(i) => args[i],
     }
+  }
+
+  pub fn assignable_to(self, other: Type) -> bool {
+    match (self, other) {
+      (Type.Never, _) => true,
+      (_, Type.Tuple([])) => true, // this rule means a callback slot typed Fn() -> Nil could silently accept a Fn() -> Int and throw away its result.
+      (Type.Fn(params, ret), Type.Fn(params2, ret2)) => {
+        // parameters are contravariant, return type is covariant
+        params.length() == params2.length() &&
+        slice.zip(params, params2).all(|p| p.1.assignable_to(p.0)) &&
+        ret.assignable_to(ret2.*)
+      },
+      _ => self.eq(other),
+    }
+  }
+
+  pub fn least_upper_bound(self, other: Type) -> Option<Type> {
+    if self.assignable_to(other) {
+      Some(other)
+    } else if other.assignable_to(self) { Some(self) } else { None }
   }
 }

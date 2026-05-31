@@ -1,17 +1,517 @@
 import "cst"
 import "errors"
 import "mode"
+import "operator"
 import "span"
 import "testing"
 
 pub fn test_typecheck() {
-  let _ = testing.test_suite("Type Check", [test_dummy])
+  let _ = testing.test_suite(
+    "Type Check",
+    [
+      test_new_and_get,
+      test_infer_literals,
+      test_infer_identifier,
+      test_infer_tuple,
+      test_infer_array,
+      test_infer_block,
+      test_infer_binding_and_assign,
+      test_infer_return_break_continue,
+      test_check,
+      test_dot_name,
+    ],
+  )
 }
 
-fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "dummy"
-  t.should_eq(Type.Nil, Type.Nil)?
-  t.should_eq_repr("value", "value")?
-  t.should_be_true(true, "expected true")?
+fn test_new_and_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "new and get"
+  let env = TypeEnv.new()
+  let params = [
+    Parameter { 
+      span: span.new(0, 1),
+      mode: mode.Mode.Let,
+      name: "a",
+      typ: Type.Int,
+    },
+    Parameter { 
+      span: span.new(2, 3),
+      mode: mode.Mode.Var,
+      name: "b",
+      typ: Type.Bool,
+    },
+  ]
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    params,
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  match tc.get("a") {
+    Some(var_ref) => t.should_eq_repr(var_ref.name, "a")?,
+    None => t.fail("expected to find 'a'")?,
+  }
+
+  match tc.get("b") {
+    Some(var_ref) => t.should_eq_repr(var_ref.name, "b")?,
+    None => t.fail("expected to find 'b'")?,
+  }
+
+  match tc.get("z") {
+    Some(_) => t.fail("did not expect to find 'z'")?,
+    None => (),
+  }
+
+  Ok(())
+}
+
+fn test_infer_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer literals"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  match tc.infer(cst.nil_lit(span.new(0, 3))) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.Nil)?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.bool_lit(span.new(0, 4), true)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.BoolLiteral(true))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.bool_lit(span.new(0, 5), false)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.BoolLiteral(false))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.int_lit(span.new(0, 2), 42)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.IntLiteral(42))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.int_lit(span.new(0, 1), 0)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.IntLiteral(0))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.float_lit(span.new(0, 3), 1.0)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.FloatLiteral(1.0))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.string_lit(span.new(0, 5), "hello")) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.StringLiteral("hello"))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  match tc.infer(cst.string_lit(span.new(0, 2), "")) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.StringLiteral(""))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer identifier"
+  let env = TypeEnv.new()
+  let params = [
+    Parameter { 
+      span: span.new(0, 1),
+      mode: mode.Mode.Let,
+      name: "a",
+      typ: Type.Int,
+    },
+  ]
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    params,
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Known identifier "a"
+  match tc.infer(cst.identifier(span.new(0, 1), "a")) {
+    Ok(expr) => match expr.kind {
+      Expr.Identifier(v) => t.should_eq(v.typ, Type.Int)?,
+      _ => t.fail(f"expected Identifier, got {expr.kind}")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Unknown identifier "unknown"
+  match tc.infer(cst.identifier(span.new(0, 7), "unknown")) {
+    Ok(_) => t.fail("expected error for unknown identifier")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2002,
+      f"expected code 2002, got {e.code()}",
+    )?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_tuple(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer tuple"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Empty tuple: ()
+  match tc.infer(cst.tuple_lit(span.new(0, 2), [])) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.TupleLiteral([]))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Non-empty tuple: (1, true)
+  match tc.infer(cst.tuple_lit(
+    span.new(0, 8),
+    [cst.int_lit(span.new(1, 2), 1), cst.bool_lit(span.new(4, 8), true)],
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.TupleLiteral(elems) => {
+        t.should_be_true(
+          elems.length() == 2,
+          f"expected 2 elements, got {elems.length()}",
+        )?
+        t.should_eq(elems[0].typ(), Type.Int)?
+        t.should_eq(elems[1].typ(), Type.Bool)?
+        t.should_eq(expr.typ(), Type.Tuple([Type.Int, Type.Bool]))?
+      },
+      _ => t.fail("expected TupleLiteral")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_array(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer array"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Homogeneous array: [1, 2, 3]
+  match tc.infer(cst.array_lit(
+    span.new(0, 9),
+    [
+      cst.int_lit(span.new(1, 2), 1),
+      cst.int_lit(span.new(4, 5), 2),
+      cst.int_lit(span.new(7, 8), 3),
+    ],
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.ArrayLiteral(_, typ) => t.should_eq(typ, Type.Int)?,
+      _ => t.fail("expected ArrayLiteral")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Empty array: []
+  match tc.infer(cst.array_lit(span.new(0, 2), [])) {
+    Ok(_) => t.fail("expected error for empty array")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2005,
+      f"expected code 2005, got {e.code()}",
+    )?,
+  }
+
+  match tc.infer(cst.array_lit(
+    span.new(0, 8),
+    [cst.int_lit(span.new(1, 2), 1), cst.bool_lit(span.new(4, 8), true)],
+  )) {
+    Ok(expr) => t.fail("expected error for heterogeneous array")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2006,
+      f"expected code 2006, got {e.code()}",
+    )?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_block(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer block"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Int,
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Empty block: {}
+  match tc.infer(cst.block(span.new(0, 2), [])) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.Nil)?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Block with expressions: { 1; 2 }
+  match tc.infer(cst.block(
+    span.new(0, 7),
+    [cst.int_lit(span.new(2, 3), 1), cst.int_lit(span.new(5, 6), 2)],
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.Block(exprs, typ) => {
+        t.should_be_true(
+          exprs.length() == 2,
+          f"expected 2 exprs, got {exprs.length()}",
+        )?
+        t.should_eq(typ, Type.Int)?
+      },
+      _ => t.fail("expected Block")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer binding and assign"
+  let env = TypeEnv.new()
+  let params = [
+    Parameter { 
+      span: span.new(0, 1),
+      mode: mode.Mode.Var,
+      name: "x",
+      typ: Type.Int,
+    },
+  ]
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    params,
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Binding: let y = 5
+  match tc.infer(cst.binding(
+    span.new(0, 8),
+    mode.Mode.Let,
+    &cst.int_lit(span.new(4, 5), 5),
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.Binding(m, _) => t.should_be_true(
+        m == mode.Mode.Let,
+        f"expected Let, got {m}",
+      )?,
+      _ => t.fail("expected Binding")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Binding: var z = 10
+  match tc.infer(cst.binding(
+    span.new(0, 9),
+    mode.Mode.Var,
+    &cst.int_lit(span.new(5, 7), 10),
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.Binding(m, _) => t.should_be_true(
+        m == mode.Mode.Var,
+        f"expected Var, got {m}",
+      )?,
+      _ => t.fail("expected Binding")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Assignment: x = 42
+  match tc.infer(cst.binop_expr(
+    span.new(0, 6),
+    cst.identifier(span.new(0, 1), "x"),
+    operator.Operator.Assign,
+    cst.int_lit(span.new(5, 6), 42),
+  )) {
+    Ok(expr) => match expr.kind {
+      Expr.Assign(var_ref, _) => t.should_eq_repr(var_ref.name, "x")?,
+      _ => t.fail("expected Assign")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Assignment to unknown variable: z = 99
+  match tc.infer(cst.binop_expr(
+    span.new(0, 6),
+    cst.identifier(span.new(0, 1), "z"),
+    operator.Operator.Assign,
+    cst.int_lit(span.new(5, 6), 99),
+  )) {
+    Ok(_) => t.should_be_true(
+      env.errors.length() >= 1,
+      "expected error for unknown variable in assignment",
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_infer_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "infer return/break/continue"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Int,
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // return (no value)
+  match tc.infer(cst.return_(span.new(0, 6), None)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.Return(None))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // return 42
+  let ret_val = cst.int_lit(span.new(7, 9), 42)
+  match tc.infer(cst.return_(span.new(0, 9), Some(&ret_val))) {
+    Ok(expr) => match expr.kind {
+      Expr.Return(Some(e)) => t.should_eq(e.typ(), Type.Int)?,
+      _ => t.fail("expected Return(Some(...))")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // break
+  match tc.infer(cst.break_(span.new(0, 5), None)) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.Break(None))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // break 1
+  let break_val = cst.int_lit(span.new(6, 7), 1)
+  match tc.infer(cst.break_(span.new(0, 7), Some(&break_val))) {
+    Ok(expr) => match expr.kind {
+      Expr.Break(Some(e)) => t.should_eq(e.typ(), Type.Int)?,
+      _ => t.fail("expected Break(Some(...))")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // continue
+  match tc.infer(cst.continue_(span.new(0, 8))) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.Continue)?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_check(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "check"
+  let env = TypeEnv.new()
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Int,
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // check 42 against Int — should succeed
+  match tc.check(cst.int_lit(span.new(0, 2), 42), Type.Int) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.IntLiteral(42))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // check true against Bool — should succeed
+  match tc.check(cst.bool_lit(span.new(0, 4), true), Type.Bool) {
+    Ok(expr) => t.should_eq(expr.kind, Expr.BoolLiteral(true))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_dot_name(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "dot_name field access"
+  let mut env = TypeEnv.new()
+
+  // Create Point struct with field x of type Int
+  let point_def = TypeDef.new(
+    span.new(0, 0),
+    "Point",
+    [],
+    TypeKind.Struct([
+      Field { span: span.new(0, 0), name: "x", typ: Type.Int },
+      Field { span: span.new(0, 0), name: "y", typ: Type.Int },
+    ]),
+  )
+  env.type_defs["Point"] = &point_def
+
+  let func = FunctionDef.new(
+    span.new(0, 0),
+    "f",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, func)
+
+  // Create a Variable of type Point
+  let point_var = Variable.new(mode.Mode.Let, "p", Type.Adt(&point_def, []), 0)
+
+  // Create an expression: identifier "p" (which has type Point)
+  let receiver = Expression { 
+    span: span.new(0, 1),
+    kind: Expr.Identifier(&point_var),
+  }
+
+  // Access field "x" — should return FieldAccess(_, 0)
+  match tc.dot_name(receiver, "x", span.new(0, 3)) {
+    Ok(expr) => match expr {
+      Expr.FieldAccess(_, idx) => t.should_be_true(
+        idx == 0,
+        f"expected field index 0, got {idx}",
+      )?,
+      _ => t.fail(f"expected FieldAccess, got {expr}")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
   Ok(())
 }

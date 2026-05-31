@@ -194,5 +194,5 @@ pub fn param(
   name: string,
   typ: Type,
 ) -> Parameter {
-  Parameter.new(span.Span.new(start, end), mode, name, typ)
+  Parameter.new(span.new(start, end), mode, name, typ)
 }

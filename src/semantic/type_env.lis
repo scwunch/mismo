@@ -117,7 +117,7 @@ impl TypeEnv {
       cst.TypeKind.Nominal(name, type_args) => {
         let primitive = match name {
           "Never" => Some(Type.Never),
-          "Nil" => Some(Type.Nil),
+          "Nil" => Some(Type.Tuple([])),
           "Bool" => Some(Type.Bool),
           "Nat" => Some(Type.Nat),
           "Int" => Some(Type.Int),

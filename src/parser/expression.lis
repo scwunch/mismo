@@ -474,9 +474,9 @@ impl ExpressionParser {
       let args = self.parse_args([])?
       end = self.parser.peek().span.start
       let call = cst.Call { fn_name: name, type_args, args }
-      Ok(cst.dot_call(span.Span.new(start, end), &receiver, call))
+      Ok(cst.dot_call(span.new(start, end), &receiver, call))
     } else {
-      Ok(cst.dot_name(span.Span.new(start, end), &receiver, name))
+      Ok(cst.dot_name(span.new(start, end), &receiver, name))
     }
   }
 

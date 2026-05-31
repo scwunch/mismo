@@ -105,7 +105,7 @@ impl TestRunner {
     expected: B,
   ) -> Result<(), string> {
     if val.eq(expected) {
-      self.fail(f"Expected valueto not be {expected}")
+      self.fail(f"Expected {val} to not be {expected}")
     } else {
       Ok(())
     }
