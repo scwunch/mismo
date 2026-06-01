@@ -34,6 +34,19 @@ impl TypeCheck {
       bindings: scope,
     }
   }
+
+  fn new_blank() -> TypeCheck {
+    let env = &TypeEnv.new()
+    let dummy = FunctionDef.new(
+      span.new(0, 0),
+      "dummy",
+      [],
+      [],
+      Type.Tuple([]),
+      cst.nil_lit(span.new(0, 0)),
+    )
+    TypeCheck.new(env, dummy)
+  }
 }
 
 pub enum List<T> {
@@ -306,8 +319,8 @@ impl TypeCheck {
         Err(errors.NoMatchError.new(
           span,
           candidates.map(|fun| match fun {
+            Err(def, e) => (def.signature(), e),
             Ok(_) => panic("unreachable"),
-            Err(_, e) => e,
           }),
         ))
       } else {

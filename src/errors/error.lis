@@ -187,11 +187,11 @@ impl TypeParameterArityError {
 
 pub struct NoMatchError {
   pub _s_: span.Span,
-  pub errs: Slice<TypeError>,
+  pub errs: Slice<(string, TypeError)>,
 }
 
 impl NoMatchError {
-  pub fn new(span: span.Span, errs: Slice<TypeError>) -> NoMatchError {
+  pub fn new(span: span.Span, errs: Slice<(string, TypeError)>) -> NoMatchError {
     NoMatchError { _s_: span, errs }
   }
 
@@ -200,7 +200,7 @@ impl NoMatchError {
   }
 
   pub fn message(self) -> string {
-    let errs = self.errs.map(|e| e.message()).join("\n\t")
+    let errs = self.errs.map(|fun| f"{fun.0}: {fun.1.message()}").join("\n\t")
     f"No matching overloads found.  Errors:\n\t{errs}"
   }
 

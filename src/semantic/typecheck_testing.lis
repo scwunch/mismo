@@ -497,7 +497,6 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: simple type-based resolution"
 
   // Example 1: fn foo(s: String), fn foo(i: Int)
-  let mut env = TypeEnv.new()
   let foo1 = FunctionDef.new(
     span.new(0, 0),
     "foo",
@@ -514,17 +513,9 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  env.function_defs["foo"] = [foo1, foo2]
 
-  let dummy = FunctionDef.new(
-    span.new(0, 0),
-    "dummy",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
-  let tc = TypeCheck.new(&env, dummy)
+  let mut tc = TypeCheck.new_blank()
+  tc.env.function_defs["foo"] = [foo1, foo2]
 
   // foo("hi") => selects overload 0 (String)
   let arg_str = Expression { 
@@ -569,8 +560,8 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match tc.call("foo", [], [], span.new(0, 3)) {
     Ok(_) => t.fail("expected ArgArityError")?,
     Err(e) => t.should_be_true(
-      e.code() == 2007,
-      f"expected code 2007, got {e.code()}",
+      e.code() == 2102,
+      f"expected code 2102, got E{e.code()}: {e.message()}",
     )?,
   }
 
@@ -581,8 +572,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: specificity"
 
   // Example 3: fn foo[T](a: T), fn foo(i: Int)
-  let mut env3 = TypeEnv.new()
-  let foo3_0 = FunctionDef.new(
+  let foo1 = FunctionDef.new(
     span.new(0, 0),
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
@@ -590,7 +580,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  let foo3_1 = FunctionDef.new(
+  let foo2 = FunctionDef.new(
     span.new(0, 0),
     "foo",
     [],
@@ -598,17 +588,9 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  env3.function_defs["foo"] = [foo3_0, foo3_1]
 
-  let dummy = FunctionDef.new(
-    span.new(0, 0),
-    "dummy",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
-  let tc3 = TypeCheck.new(&env3, dummy)
+  let mut tc3 = TypeCheck.new_blank()
+  tc3.env.function_defs["foo"] = [foo1, foo2]
 
   // foo(63) => selects overload 1 (concrete Int beats type var)
   let arg_int = Expression { span: span.new(0, 2), kind: Expr.IntLiteral(63) }
@@ -644,7 +626,6 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Example 8: fn foo[T](a: Array[Array[T]]), fn foo(a: Array[Array[Int]])
-  let mut env8 = TypeEnv.new()
   let foo8_0 = FunctionDef.new(
     span.new(0, 0),
     "foo",
@@ -661,8 +642,8 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  env8.function_defs["foo"] = [foo8_0, foo8_1]
-  let tc8 = TypeCheck.new(&env8, dummy)
+  let mut tc8 = TypeCheck.new_blank()
+  tc8.env.function_defs["foo"] = [foo8_0, foo8_1]
 
   // foo([[1, 2], [3, 4]]) => selects overload 1 (more specific: Array[Array[Int]])
   let arr_arr_int = Variable.new(
@@ -713,11 +694,8 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Example 10: fn foo[T](f: Fn(T) -> T), fn foo(f: Fn(Int) -> Int)
-  let int_typ = Type.Int
-  let str_typ = Type.String
-  let int_ref = &int_typ
-  let str_ref = &str_typ
-  let mut env10 = TypeEnv.new()
+  let int_ref = &Type.Int
+  let str_ref = &Type.String
   let foo10_0 = FunctionDef.new(
     span.new(0, 0),
     "foo",
@@ -741,20 +719,20 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [
       Parameter.let_(
         "f",
-        Type.Fn([ParamType { mode: mode.Mode.Let, typ: int_typ }], int_ref),
+        Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.Int }], int_ref),
       ),
     ],
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  env10.function_defs["foo"] = [foo10_0, foo10_1]
-  let tc10 = TypeCheck.new(&env10, dummy)
+  let mut tc10 = TypeCheck.new_blank()
+  tc10.env.function_defs["foo"] = [foo10_0, foo10_1]
 
   // foo(fn(x: Int) => x + 1) => selects overload 1 (more specific)
   let fn_int = Variable.new(
     mode.Mode.Let,
     "f",
-    Type.Fn([ParamType { mode: mode.Mode.Let, typ: int_typ }], int_ref),
+    Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.Int }], int_ref),
     0,
   )
   let arg_fn_int = Expression { 
@@ -778,7 +756,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let fn_str = Variable.new(
     mode.Mode.Let,
     "f",
-    Type.Fn([ParamType { mode: mode.Mode.Let, typ: str_typ }], str_ref),
+    Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.String }], str_ref),
     0,
   )
   let arg_fn_str = Expression { 
@@ -799,7 +777,6 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Example 11: fn foo[T](t: (T, Int)), fn foo(t: (String, Int))
-  let mut env11 = TypeEnv.new()
   let foo11_0 = FunctionDef.new(
     span.new(0, 0),
     "foo",
@@ -816,8 +793,8 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
     cst.nil_lit(span.new(0, 0)),
   )
-  env11.function_defs["foo"] = [foo11_0, foo11_1]
-  let tc11 = TypeCheck.new(&env11, dummy)
+  let mut tc11 = TypeCheck.new_blank()
+  tc11.env.function_defs["foo"] = [foo11_0, foo11_1]
 
   // foo(("hi", 5)) => selects overload 1 (concrete)
   let tup_str = Variable.new(
