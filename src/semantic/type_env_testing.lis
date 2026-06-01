@@ -256,12 +256,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match env.eval_param(cst.param(0, 10, None, "x", cst.typ(6, 9, "Int", []))) {
     Ok(param) => t.should_eq(
       param,
-      Parameter { 
-        span: span.new(0, 10),
-        mode: mode.Mode.Let,
-        name: "x",
-        typ: Type.Int,
-      },
+      Parameter.let_("x", Type.Int),
     )?,
     Err(e) => t.fail(e.message())?,
   }
@@ -276,12 +271,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )) {
     Ok(param) => t.should_eq(
       param,
-      Parameter { 
-        span: span.new(0, 14),
-        mode: mode.Mode.Let,
-        name: "s",
-        typ: Type.String,
-      },
+      Parameter.let_("s", Type.String),
     )?,
     Err(e) => t.fail(e.message())?,
   }
@@ -296,12 +286,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )) {
     Ok(param) => t.should_eq(
       param,
-      Parameter { 
-        span: span.new(0, 12),
-        mode: mode.Mode.Var,
-        name: "y",
-        typ: Type.Int,
-      },
+      Parameter.var_("y", Type.Int),
     )?,
     Err(e) => t.fail(e.message())?,
   }
@@ -456,12 +441,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
       )?
       t.should_eq(
         func.parameters[0],
-        Parameter { 
-          span: span.new(6, 12),
-          mode: mode.Mode.Let,
-          name: "a",
-          typ: Type.Int,
-        },
+        Parameter.let_("a", Type.Int),
       )?
       t.should_eq(func.return_type, Type.Int)?
     },

@@ -19,6 +19,10 @@ pub fn test_typecheck() {
       test_infer_return_break_continue,
       test_check,
       test_dot_name,
+      test_call_simple,
+      test_call_specificity,
+      test_call_type_vars,
+      test_call_edge,
     ],
   )
 }
@@ -26,20 +30,7 @@ pub fn test_typecheck() {
 fn test_new_and_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "new and get"
   let env = TypeEnv.new()
-  let params = [
-    Parameter { 
-      span: span.new(0, 1),
-      mode: mode.Mode.Let,
-      name: "a",
-      typ: Type.Int,
-    },
-    Parameter { 
-      span: span.new(2, 3),
-      mode: mode.Mode.Var,
-      name: "b",
-      typ: Type.Bool,
-    },
-  ]
+  let params = [Parameter.let_("a", Type.Int), Parameter.var_("b", Type.Bool)]
   let func = FunctionDef.new(
     span.new(0, 0),
     "f",
@@ -127,14 +118,7 @@ fn test_infer_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer identifier"
   let env = TypeEnv.new()
-  let params = [
-    Parameter { 
-      span: span.new(0, 1),
-      mode: mode.Mode.Let,
-      name: "a",
-      typ: Type.Int,
-    },
-  ]
+  let params = [Parameter.let_("a", Type.Int)]
   let func = FunctionDef.new(
     span.new(0, 0),
     "f",
@@ -303,14 +287,7 @@ fn test_infer_block(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer binding and assign"
   let env = TypeEnv.new()
-  let params = [
-    Parameter { 
-      span: span.new(0, 1),
-      mode: mode.Mode.Var,
-      name: "x",
-      typ: Type.Int,
-    },
-  ]
+  let params = [Parameter.var_("x", Type.Int)]
   let func = FunctionDef.new(
     span.new(0, 0),
     "f",
@@ -511,6 +488,734 @@ fn test_dot_name(t: Ref<testing.TestRunner>) -> Result<(), string> {
       _ => t.fail(f"expected FieldAccess, got {expr}")?,
     },
     Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "overload resolution: simple type-based resolution"
+
+  // Example 1: fn foo(s: String), fn foo(i: Int)
+  let mut env = TypeEnv.new()
+  let foo1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("s", Type.String)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo2 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("i", Type.Int)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env.function_defs["foo"] = [foo1, foo2]
+
+  let dummy = FunctionDef.new(
+    span.new(0, 0),
+    "dummy",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc = TypeCheck.new(&env, dummy)
+
+  // foo("hi") => selects overload 0 (String)
+  let arg_str = Expression { 
+    span: span.new(0, 4),
+    kind: Expr.StringLiteral("hi"),
+  }
+  match tc.call("foo", [], [arg_str], span.new(0, 4)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => t.should_eq(
+        fncall.fun.parameters[0].typ,
+        Type.String,
+      )?,
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo(4) => selects overload 1 (Int)
+  let arg_int = Expression { span: span.new(0, 1), kind: Expr.IntLiteral(4) }
+  match tc.call("foo", [], [arg_int], span.new(0, 1)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => t.should_eq(fncall.fun.parameters[0].typ, Type.Int)?,
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo(true) => NoMatchError
+  let arg_bool = Expression { 
+    span: span.new(0, 4),
+    kind: Expr.BoolLiteral(true),
+  }
+  match tc.call("foo", [], [arg_bool], span.new(0, 4)) {
+    Ok(_) => t.fail("expected NoMatchError")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2102,
+      f"expected code 2102, got {e.code()}",
+    )?,
+  }
+
+  // foo() => ArgArityError (wrong arity)
+  match tc.call("foo", [], [], span.new(0, 3)) {
+    Ok(_) => t.fail("expected ArgArityError")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2007,
+      f"expected code 2007, got {e.code()}",
+    )?,
+  }
+
+  Ok(())
+}
+
+fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "overload resolution: specificity"
+
+  // Example 3: fn foo[T](a: T), fn foo(i: Int)
+  let mut env3 = TypeEnv.new()
+  let foo3_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("a", Type.Var(0))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo3_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("i", Type.Int)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env3.function_defs["foo"] = [foo3_0, foo3_1]
+
+  let dummy = FunctionDef.new(
+    span.new(0, 0),
+    "dummy",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let tc3 = TypeCheck.new(&env3, dummy)
+
+  // foo(63) => selects overload 1 (concrete Int beats type var)
+  let arg_int = Expression { span: span.new(0, 2), kind: Expr.IntLiteral(63) }
+  match tc3.call("foo", [], [arg_int], span.new(0, 2)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 0,
+          "expected concrete overload (no type params)",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo("hi") => selects overload 0 (only type var matches String)
+  let arg_str = Expression { 
+    span: span.new(0, 4),
+    kind: Expr.StringLiteral("hi"),
+  }
+  match tc3.call("foo", [], [arg_str], span.new(0, 4)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 1,
+          "expected generic overload (1 type param)",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Example 8: fn foo[T](a: Array[Array[T]]), fn foo(a: Array[Array[Int]])
+  let mut env8 = TypeEnv.new()
+  let foo8_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("a", Type.Array(&Type.Array(&Type.Var(0))))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo8_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("a", Type.Array(&Type.Array(&Type.Int)))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env8.function_defs["foo"] = [foo8_0, foo8_1]
+  let tc8 = TypeCheck.new(&env8, dummy)
+
+  // foo([[1, 2], [3, 4]]) => selects overload 1 (more specific: Array[Array[Int]])
+  let arr_arr_int = Variable.new(
+    mode.Mode.Let,
+    "a",
+    Type.Array(&Type.Array(&Type.Int)),
+    0,
+  )
+  let arg_arr = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&arr_arr_int),
+  }
+  match tc8.call("foo", [], [arg_arr], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 0,
+          "expected concrete overload for nested array",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo([["a", "b"]]) => selects overload 0 (only generic matches String)
+  let arr_arr_str = Variable.new(
+    mode.Mode.Let,
+    "a",
+    Type.Array(&Type.Array(&Type.String)),
+    0,
+  )
+  let arg_arr_str = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&arr_arr_str),
+  }
+  match tc8.call("foo", [], [arg_arr_str], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 1,
+          "expected generic overload for string nested array",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Example 10: fn foo[T](f: Fn(T) -> T), fn foo(f: Fn(Int) -> Int)
+  let int_typ = Type.Int
+  let str_typ = Type.String
+  let int_ref = &int_typ
+  let str_ref = &str_typ
+  let mut env10 = TypeEnv.new()
+  let foo10_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [
+      Parameter.let_(
+        "f",
+        Type.Fn(
+          [ParamType { mode: mode.Mode.Let, typ: Type.Var(0) }],
+          &Type.Var(0),
+        ),
+      ),
+    ],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo10_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [
+      Parameter.let_(
+        "f",
+        Type.Fn([ParamType { mode: mode.Mode.Let, typ: int_typ }], int_ref),
+      ),
+    ],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env10.function_defs["foo"] = [foo10_0, foo10_1]
+  let tc10 = TypeCheck.new(&env10, dummy)
+
+  // foo(fn(x: Int) => x + 1) => selects overload 1 (more specific)
+  let fn_int = Variable.new(
+    mode.Mode.Let,
+    "f",
+    Type.Fn([ParamType { mode: mode.Mode.Let, typ: int_typ }], int_ref),
+    0,
+  )
+  let arg_fn_int = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&fn_int),
+  }
+  match tc10.call("foo", [], [arg_fn_int], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 0,
+          "expected concrete overload for Fn(Int)->Int",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo(fn(x: String) => x) => selects overload 0 (only generic matches)
+  let fn_str = Variable.new(
+    mode.Mode.Let,
+    "f",
+    Type.Fn([ParamType { mode: mode.Mode.Let, typ: str_typ }], str_ref),
+    0,
+  )
+  let arg_fn_str = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&fn_str),
+  }
+  match tc10.call("foo", [], [arg_fn_str], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 1,
+          "expected generic overload for Fn(String)->String",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Example 11: fn foo[T](t: (T, Int)), fn foo(t: (String, Int))
+  let mut env11 = TypeEnv.new()
+  let foo11_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("t", Type.Tuple([Type.Var(0), Type.Int]))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo11_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("t", Type.Tuple([Type.String, Type.Int]))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env11.function_defs["foo"] = [foo11_0, foo11_1]
+  let tc11 = TypeCheck.new(&env11, dummy)
+
+  // foo(("hi", 5)) => selects overload 1 (concrete)
+  let tup_str = Variable.new(
+    mode.Mode.Let,
+    "t",
+    Type.Tuple([Type.String, Type.Int]),
+    0,
+  )
+  let arg_tup_str = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&tup_str),
+  }
+  match tc11.call("foo", [], [arg_tup_str], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 0,
+          "expected concrete overload for (String, Int)",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo((true, 5)) => selects overload 0 (only generic matches (Bool, Int))
+  let tup_bool = Variable.new(
+    mode.Mode.Let,
+    "t",
+    Type.Tuple([Type.Bool, Type.Int]),
+    0,
+  )
+  let arg_tup_bool = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&tup_bool),
+  }
+  match tc11.call("foo", [], [arg_tup_bool], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 1,
+          "expected generic overload for (Bool, Int)",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "overload resolution: type variable binding"
+
+  let dummy = FunctionDef.new(
+    span.new(0, 0),
+    "dummy",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+
+  // Example 4: fn foo[T](opt: Option[T], t: T),
+  //            fn foo(opt: Option[Int], i: Int),
+  //            fn foo(s: String)
+  let mut env4 = TypeEnv.new()
+  let option_def = TypeDef.new(
+    span.new(0, 0),
+    "Option",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    TypeKind.Enum([]),
+  )
+  env4.type_defs["Option"] = &option_def
+
+  let foo4_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [
+      Parameter.let_("opt", Type.Adt(&option_def, [Type.Var(0)])),
+      Parameter.let_("t", Type.Var(0)),
+    ],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo4_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [
+      Parameter.let_("opt", Type.Adt(&option_def, [Type.Int])),
+      Parameter.let_("i", Type.Int),
+    ],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo4_2 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("s", Type.String)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env4.function_defs["foo"] = [foo4_0, foo4_1, foo4_2]
+  let tc4 = TypeCheck.new(&env4, dummy)
+
+  // foo(Option.Some("hello"), "world") => selects overload 0 (T = String)
+  let opt_str = Variable.new(
+    mode.Mode.Let,
+    "opt",
+    Type.Adt(&option_def, [Type.String]),
+    0,
+  )
+  let arg_opt_str = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&opt_str),
+  }
+  let arg_world = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.StringLiteral("world"),
+  }
+  match tc4.call("foo", [], [arg_opt_str, arg_world], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 1,
+          "expected generic overload for Option[String]",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo(Option.Some("hello"), 55) => DoubleTypeArgBoundError (T would be String and Int)
+  let arg_55 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(55) }
+  match tc4.call("foo", [], [arg_opt_str, arg_55], span.new(0, 0)) {
+    Ok(_) => t.fail("expected error for double type arg bind")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2100,
+      f"expected code 2100 (DoubleTypeArgBoundError), got {e.code()}",
+    )?,
+  }
+
+  // foo(Option.Some(55), 0) => selects overload 1 (concrete Option[Int], Int)
+  let opt_int = Variable.new(
+    mode.Mode.Let,
+    "opt",
+    Type.Adt(&option_def, [Type.Int]),
+    0,
+  )
+  let arg_opt_int = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&opt_int),
+  }
+  let arg_0 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(0) }
+  match tc4.call("foo", [], [arg_opt_int, arg_0], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 0,
+          "expected concrete overload for Option[Int], Int",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Example 5: fn foo[T](t: T, i: Int), fn foo[T](i: Int, t: T)
+  let mut env5 = TypeEnv.new()
+  let foo5_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("t", Type.Var(0)), Parameter.let_("i", Type.Int)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo5_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("i", Type.Int), Parameter.let_("t", Type.Var(0))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env5.function_defs["foo"] = [foo5_0, foo5_1]
+  let tc5 = TypeCheck.new(&env5, dummy)
+
+  // foo(3, 5) => AmbiguousFnCallError (both match Int,Int equally)
+  let arg_3 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(3) }
+  let arg_5 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(5) }
+  match tc5.call("foo", [], [arg_3, arg_5], span.new(0, 0)) {
+    Ok(_) => t.fail("expected AmbiguousFnCallError")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2103,
+      f"expected code 2103 (AmbiguousFnCallError), got {e.code()}",
+    )?,
+  }
+
+  // foo("hi", 1) => selects overload 0 (T = String matches first param)
+  let arg_hi = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.StringLiteral("hi"),
+  }
+  let arg_1 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
+  match tc5.call("foo", [], [arg_hi, arg_1], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        let param0_typ = fncall.fun.parameters[0].typ
+        match param0_typ {
+          Type.Var(_) => (),
+          _ => t.fail("expected T (Var) for first param of overload 0")?,
+        }
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // foo(0, "hi") => selects overload 1 (T = String matches second param)
+  let arg_0b = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(0) }
+  let arg_hib = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.StringLiteral("hi"),
+  }
+  match tc5.call("foo", [], [arg_0b, arg_hib], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        let param1_typ = fncall.fun.parameters[1].typ
+        match param1_typ {
+          Type.Var(_) => (),
+          _ => t.fail("expected T (Var) for second param of overload 1")?,
+        }
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  // Example 6: fn foo[T]() -> T
+  let mut env6 = TypeEnv.new()
+  let foo6_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [],
+    Type.Var(0),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env6.function_defs["foo"] = [foo6_0]
+  let tc6 = TypeCheck.new(&env6, dummy)
+
+  // foo() => UnboundTypeParamError (T only appears in return type)
+  match tc6.call("foo", [], [], span.new(0, 3)) {
+    Ok(_) => t.fail("expected error for unbound type param")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2101,
+      f"expected code 2101 (UnboundTypeParamError), got {e.code()}",
+    )?,
+  }
+
+  // Example 9: fn foo[T, U](a: T, b: U), fn foo[T](a: T, b: T)
+  let mut env9 = TypeEnv.new()
+  let foo9_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [
+      TypeParameter { span: span.new(0, 0), name: "T" },
+      TypeParameter { span: span.new(0, 0), name: "U" },
+    ],
+    [Parameter.let_("a", Type.Var(0)), Parameter.let_("b", Type.Var(1))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo9_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [TypeParameter { span: span.new(0, 0), name: "T" }],
+    [Parameter.let_("a", Type.Var(0)), Parameter.let_("b", Type.Var(0))],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env9.function_defs["foo"] = [foo9_0, foo9_1]
+  let tc9 = TypeCheck.new(&env9, dummy)
+
+  // foo(1, 2) => AmbiguousFnCallError
+  let arg9_1 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
+  let arg9_2 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(2) }
+  match tc9.call("foo", [], [arg9_1, arg9_2], span.new(0, 0)) {
+    Ok(_) => t.fail("expected AmbiguousFnCallError")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2103,
+      f"expected code 2103, got {e.code()}",
+    )?,
+  }
+
+  // foo(1, "hi") => selects overload 0 (two params: T=Int, U=String)
+  let arg9_int = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
+  let arg9_str = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.StringLiteral("hi"),
+  }
+  match tc9.call("foo", [], [arg9_int, arg9_str], span.new(0, 0)) {
+    Ok(expr) => match expr {
+      Expr.Call(fncall) => {
+        t.should_be_true(
+          fncall.fun.type_parameters.length() == 2,
+          "expected overload 0 (two type params) for (Int, String)",
+        )?
+      },
+      _ => t.fail("expected Call")?,
+    },
+    Err(e) => t.fail(e.message())?,
+  }
+
+  Ok(())
+}
+
+fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "overload resolution: edge cases"
+
+  let dummy = FunctionDef.new(
+    span.new(0, 0),
+    "dummy",
+    [],
+    [],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+
+  // Example 7: Never argument — fn foo(a: Int), fn foo(a: String)
+  let mut env7 = TypeEnv.new()
+  let foo7_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("a", Type.Int)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo7_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [Parameter.let_("a", Type.String)],
+    Type.Tuple([]),
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env7.function_defs["foo"] = [foo7_0, foo7_1]
+  let tc7 = TypeCheck.new(&env7, dummy)
+
+  // foo(never) => NoMatchError (Never ≠ Int, Never ≠ String)
+  let never_var = Variable.new(mode.Mode.Let, "n", Type.Never, 0)
+  let arg_never = Expression { 
+    span: span.new(0, 0),
+    kind: Expr.Identifier(&never_var),
+  }
+  match tc7.call("foo", [], [arg_never], span.new(0, 0)) {
+    Ok(_) => t.fail("expected NoMatchError for Never argument")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2102,
+      f"expected code 2102, got {e.code()}",
+    )?,
+  }
+
+  // Example 12: fn foo() -> Int, fn foo() -> String
+  let mut env12 = TypeEnv.new()
+  let foo12_0 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [],
+    Type.Int,
+    cst.nil_lit(span.new(0, 0)),
+  )
+  let foo12_1 = FunctionDef.new(
+    span.new(0, 0),
+    "foo",
+    [],
+    [],
+    Type.String,
+    cst.nil_lit(span.new(0, 0)),
+  )
+  env12.function_defs["foo"] = [foo12_0, foo12_1]
+  let tc12 = TypeCheck.new(&env12, dummy)
+
+  // foo() => AmbiguousFnCallError (identical params, return type doesn't break tie)
+  match tc12.call("foo", [], [], span.new(0, 3)) {
+    Ok(_) => t.fail("expected AmbiguousFnCallError for zero-arity ambiguity")?,
+    Err(e) => t.should_be_true(
+      e.code() == 2103,
+      f"expected code 2103, got {e.code()}",
+    )?,
   }
 
   Ok(())

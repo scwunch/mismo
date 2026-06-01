@@ -48,6 +48,28 @@ pub struct Parameter {
   pub typ: Type,
 }
 
+impl Parameter {
+  pub fn new(span: span.Span, mode: mode.Mode, name: string, typ: Type) -> Parameter {
+    Parameter { span, mode, name, typ }
+  }
+
+  pub fn let_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Let, name, typ }
+  }
+
+  pub fn mut_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Mut, name, typ }
+  }
+
+  pub fn mutbang(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.MutBang, name, typ }
+  }
+
+  pub fn var_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
+  }
+}
+
 impl TypeDef {
   pub fn new(
     span: span.Span,
