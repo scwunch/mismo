@@ -132,7 +132,7 @@ impl TypeEnv {
 
         match self.type_defs.get(name) {
           None => {
-            return Err(errors.MissingNameError.new(name, typ.span))
+            Err(errors.MissingNameError.new(name, typ.span))
           },
           Some(def) => {
             // let type_args = slice.map_result(type_args, self.eval_type)?

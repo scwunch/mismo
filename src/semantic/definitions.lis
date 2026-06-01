@@ -1,6 +1,7 @@
 import "cst"
 import "mode"
 import "span"
+import "utils/slice"
 
 pub struct TypeDef {
   pub span: span.Span,
@@ -68,5 +69,11 @@ impl FunctionDef {
     body: cst.Expression,
   ) -> FunctionDef {
     FunctionDef { span, name, type_parameters, parameters, return_type, body }
+  }
+
+  fn better_than(self: FunctionDef, other: FunctionDef) -> bool {
+    let pairs = slice.zip(self.parameters, other.parameters)
+    pairs.all(|p| p.0.typ.specificity_ge(p.1.typ)) &&
+    pairs.any(|p| p.0.typ.specificity_gt(p.1.typ))
   }
 }

@@ -28,9 +28,11 @@ pub enum Expr {
   FieldAccess(Ref<Expression>, int),
 }
 
-// pub struct VarId { id: int, typ: Type, mode: mode.Mode }
-
-pub struct FnCall { fun: FunctionDef, args: Slice<Expression> }
+pub struct FnCall {
+  fun: FunctionDef,
+  type_args: Slice<Type>,
+  args: Slice<Expression>,
+}
 
 pub struct SwitchIf { cases: Slice<(Expression, Expression)> }
 

@@ -185,6 +185,79 @@ impl TypeParameterArityError {
   }
 }
 
+pub struct NoMatchError {
+  pub _s_: span.Span,
+  pub errs: Slice<TypeError>,
+}
+
+impl NoMatchError {
+  pub fn new(span: span.Span, errs: Slice<TypeError>) -> NoMatchError {
+    NoMatchError { _s_: span, errs }
+  }
+
+  pub fn code(self) -> int {
+    2102
+  }
+
+  pub fn message(self) -> string {
+    let errs = self.errs.map(|e| e.message()).join("\n\t")
+    f"No matching overloads found.  Errors:\n\t{errs}"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct AmbiguousFunctionCallError {
+  pub _s_: span.Span,
+  pub calls: Slice<string>,
+}
+
+impl AmbiguousFunctionCallError {
+  pub fn new(span: span.Span, calls: Slice<string>) -> AmbiguousFunctionCallError {
+    AmbiguousFunctionCallError { _s_: span, calls }
+  }
+
+  pub fn code(self) -> int {
+    2103
+  }
+
+  fn span(self) -> span.Span {
+    self._s_
+  }
+
+  fn message(self) -> string {
+    let alts = self.calls.join("\n")
+    f"Cannot determine single best overload from alternatives: {alts}"
+  }
+}
+
+pub struct ArgArityError {
+  pub _s_: span.Span,
+  pub name: string,
+  pub expected: int,
+  pub actual: int,
+}
+
+impl ArgArityError {
+  pub fn new(span: span.Span, name: string, expected: int, actual: int) -> ArgArityError {
+    ArgArityError { _s_: span, name, expected, actual }
+  }
+
+  pub fn code(self) -> int {
+    2007
+  }
+
+  pub fn message(self) -> string {
+    f"\"{self.name}\" expects {self.expected} arguments but {self.actual} were provided"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
 pub struct EmptyArrayLiteralError {
   pub _s_: span.Span,
 }
@@ -254,6 +327,58 @@ impl TypeMismatchError {
   }
 }
 
+pub struct DoubleTypeArgBoundError {
+  pub _s_: span.Span,
+  pub type_param: int,
+  pub type1: string,
+  pub type2: string,
+}
+
+impl DoubleTypeArgBoundError {
+  pub fn new(span: span.Span, type_param: int, type1: string, type2: string) -> DoubleTypeArgBoundError {
+    DoubleTypeArgBoundError { _s_: span, type_param, type1, type2 }
+  }
+
+  pub fn code(self) -> int {
+    2100
+  }
+
+  pub fn message(self) -> string {
+    f"Type parameter {self.type_param} bound to more than one type: {self.type1} and {self.type2}"
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub struct UnboundTypeParamError {
+  pub _s_: span.Span,
+  pub type_param: string,
+}
+
+impl UnboundTypeParamError {
+  pub fn new(span: span.Span, type_param: string) -> UnboundTypeParamError {
+    UnboundTypeParamError { _s_: span, type_param }
+  }
+
+  pub fn code(self) -> int {
+    2101
+  }
+
+  pub fn message(self) -> string {
+    f"Type parameter {self.type_param} could not be inferred from call."
+  }
+
+  pub fn span(self) -> span.Span {
+    self._s_
+  }
+}
+
+pub interface ModeError {
+  impl Diagnostic
+}
+
 pub struct UseAfterConsumeError {
   pub name: string,
   pub use: span.Span,
@@ -266,7 +391,7 @@ impl UseAfterConsumeError {
   }
 
   pub fn code(self) -> int {
-    2012
+    3012
   }
 
   pub fn message(self) -> string {
@@ -289,7 +414,7 @@ impl ConsumeBorrowError {
   }
 
   pub fn code(self) -> int {
-    2011
+    3011
   }
 
   pub fn message(self) -> string {
@@ -313,7 +438,7 @@ impl ModeMismatchError {
   }
 
   pub fn code(self) -> int {
-    2013
+    3013
   }
 
   pub fn message(self) -> string {

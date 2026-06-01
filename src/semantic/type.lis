@@ -31,6 +31,38 @@ impl ParamType {
 }
 
 impl Type {
+  pub fn type_args(self) -> Slice<Type> {
+    match self {
+      Type.Never |
+      Type.Bool |
+      Type.Nat |
+      Type.Int |
+      Type.Float |
+      Type.String |
+      Type.Var(_) => [],
+      Type.Array(typ) => [typ.*],
+      Type.Tuple(fields) => fields,
+      Type.Fn(params, ret) => params.map(|p| p.typ).append(ret.*),
+      Type.Adt(_, args) => args,
+    }
+  }
+
+  pub fn constructor_and_arity_eq(self, other: Type) -> bool {
+    match (self, other) {
+      (Type.Never, Type.Never) => true,
+      (Type.Bool, Type.Bool) => true,
+      (Type.Nat, Type.Nat) => true,
+      (Type.Int, Type.Int) => true,
+      (Type.Float, Type.Float) => true,
+      (Type.String, Type.String) => true,
+      (Type.Tuple(a), Type.Tuple(b)) => a.length() == b.length(),
+      (Type.Fn(a, b), Type.Fn(c, d)) => a.length() == c.length(),
+      (Type.Adt(a, b), Type.Adt(c, d)) => b.length() == d.length(),
+      (Type.Var(a), Type.Var(b)) => a == b,
+      _ => false,
+    }
+  }
+
   pub fn substitute(self, args: Slice<Type>) -> Type {
     match self {
       Type.Never => Type.Never,
@@ -65,5 +97,29 @@ impl Type {
     if self.assignable_to(other) {
       Some(other)
     } else if other.assignable_to(self) { Some(self) } else { None }
+  }
+
+  pub fn specificity_ge(self, other: Type) -> bool {
+    match (self, other) {
+      (_, Type.Var(_)) => true, // anything >= type var
+      (Type.Var(_), _) => false, // type var < concrete
+      _ => // both concrete — if both matched the same arg, constructors must agree
+      slice
+        .zip(self.type_args(), other.type_args())
+        .all(|pair| pair.0.specificity_ge(pair.1)),
+    }
+  }
+
+  pub fn specificity_gt(self, other: Type) -> bool {
+    match (self, other) {
+      (Type.Var(_), _) => false,
+      (_, Type.Var(_)) => true,
+      _ => {
+        let a_args = self.type_args()
+        let b_args = other.type_args()
+        slice.zip(a_args, b_args).all(|pair| pair.0.specificity_ge(pair.1)) &&
+        slice.zip(a_args, b_args).any(|pair| pair.0.specificity_gt(pair.1))
+      },
+    }
   }
 }
