@@ -27,7 +27,7 @@ impl TypeCheck {
       let v = &Variable.from_param(param)
       scope = &List.Cons(v, scope)
     }
-    TypeCheck { 
+    TypeCheck {
       env,
       next_var: &zero,
       return_type: func.return_type,
@@ -310,9 +310,9 @@ impl TypeCheck {
         matches = matches.append(call)
       }
     }
-    let maximal = matches.filter(|call| !matches.any(|other| other.fun.better_than(
-      call.fun,
-    )))
+    let maximal = matches.filter(|call| {
+      !matches.any(|other| other.fun.better_than(call.fun))
+    })
     match maximal {
       [call] => Ok(Expr.Call(call)),
       _ => if matches.length() == 0 {
@@ -352,7 +352,7 @@ pub struct Variable {
 
 impl Variable {
   fn from_param(param: Parameter) -> Variable {
-    Variable { 
+    Variable {
       mode: param.mode,
       name: param.name,
       typ: param.typ,
@@ -404,7 +404,7 @@ fn try_match_candidate(
   OverloadCandidate.Ok(FnCall { fun, type_args: bindings, args })
 }
 
-// Returns updated bindings if the arg type matches the param type, None if no match
+// Updates bindings and returns Ok if the arg type matches the param type, Err if no match
 fn match_types(
   param: Type,
   arg: Type,
@@ -438,29 +438,4 @@ fn match_types(
       Err(errors.TypeMismatchError.new(span, f"{param}", f"{arg}"))
     }
   }
-  // Type.Tuple(fields) => match arg {
-  //   Type.Tuple(fields2) if fields.length() == fields2.length() => slice
-  //     .zip(fields, fields2)
-  //     .fold(
-  //       Some(bindings),
-  //       |acc, pair| acc.and_then(|b| match_types(pair.0, pair.1, b)),
-  //     ),
-  //   _ => None,
-  // },
-  // Type.Array(elem) => match arg {
-  //   Type.Array(elem2) => match_types(elem, elem2, bindings),
-  //   _ => None,
-  // },
-  // Type.Fn(params, ret) => match arg {
-  //   Type.Fn(params2, ret2) if params.length() == params2.length() => slice
-  //     .zip(params, params2)
-  //     .fold(
-  //       Some(bindings),
-  //       |acc, pair| acc.and_then(|b| match_types(pair.0, pair.1, b)),
-  //     )
-  //     .and_then(|b| match_types(ret, ret2.*, b)),
-  //   _ => None,
-  // },
-  // _ => if param.eq(arg) { Some(bindings) } else { None },
-  // }
 }

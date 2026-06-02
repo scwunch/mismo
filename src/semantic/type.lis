@@ -28,9 +28,33 @@ impl ParamType {
   pub fn assignable_to(self, other: ParamType) -> bool {
     self.mode.assignable_to(other.mode) && self.typ.assignable_to(other.typ)
   }
+
+  pub fn string(self) -> string {
+    f"{self.mode} {self.typ}"
+  }
 }
 
 impl Type {
+  pub fn nil() -> Type {
+    Type.Tuple([])
+  }
+
+  pub fn string(self) -> string {
+    match self {
+      Never => "Never",
+      Bool => "Bool",
+      Nat => "Nat",
+      Int => "Int",
+      Float => "Float",
+      String => "String",
+      Array(t) => f"Array[{t}]",
+      Tuple(fields) => f"({fields.map(Type.string).join(", ")})",
+      Fn(params, ret) => f"({params.map(ParamType.string).join(", ")})->{ret}",
+      Adt(def, args) => def.name + f"{args}",
+      Var(int) => if int >= 0 {f"T{int}"} else { "T_"},
+    }
+  }
+
   pub fn type_args(self) -> Slice<Type> {
     match self {
       Never | Bool | Nat | Int | Float | String | Var(_) => [],
@@ -43,17 +67,28 @@ impl Type {
 
   pub fn constructor_and_arity_eq(self, other: Type) -> bool {
     match (self, other) {
-      (Never, Never) => true,
-      (Bool, Bool) => true,
-      (Nat, Nat) => true,
-      (Int, Int) => true,
-      (Float, Float) => true,
-      (String, String) => true,
+      (Never, Never) |
+      (Bool, Bool) |
+      (Nat, Nat) |
+      (Int, Int) |
+      (Float, Float) |
+      (String, String) |
+      (Array(_), Array(_)) => true,
       (Tuple(a), Tuple(b)) => a.length() == b.length(),
-      (Fn(a, b), Fn(c, d)) => a.length() == c.length(),
-      (Adt(a, b), Adt(c, d)) => b.length() == d.length(),
+      (Fn(a, _), Fn(b, _)) => a.length() == b.length(),
+      (Adt(def1, _), Adt(def2, _)) => def1 == def2,
       (Var(a), Var(b)) => a == b,
-      _ => false,
+      (Never, _) |
+      (Bool, _) |
+      (Nat, _) |
+      (Int, _) |
+      (Float, _) |
+      (String, _) |
+      (Array(_), _) |
+      (Tuple(_), _) |
+      (Fn(_, _), _) |
+      (Adt(_, _), _) |
+      (Var(_), _) => false,
     }
   }
 
