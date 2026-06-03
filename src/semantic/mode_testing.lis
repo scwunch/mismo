@@ -1,0 +1,15 @@
+import "cst"
+import "errors"
+import "mode"
+import "operator"
+import "span"
+import "testing"
+
+pub fn test_modecheck() {
+  let _ = testing.test_suite("Mode Check", [test_dummy])
+}
+
+fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "dummy"
+  Ok(())
+}

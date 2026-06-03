@@ -1,6 +1,6 @@
 import "cst"
 import "parser"
-import "semantic/typecheck"
+import "semantic"
 
 pub struct Compiler { cst_defs: cst.Declarations }
 
@@ -12,8 +12,10 @@ impl Compiler {
   }
 
   pub fn type_check(defs: cst.Declarations) -> Result<(), ()> {
-    let mut env = typecheck.TypeEnv.new()
+    let mut env = semantic.TypeEnv.new()
     env.type_check_program(defs)
     if env.errors.length() > 0 { Err(()) } else { Ok(()) }
   }
+
+  pub fn monomorphize() {}
 }
