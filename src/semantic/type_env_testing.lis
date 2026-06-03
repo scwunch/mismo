@@ -254,10 +254,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // No mode → defaults to Let
   match env.eval_param(cst.param(0, 10, None, "x", cst.typ(6, 9, "Int", []))) {
-    Ok(param) => t.should_eq(
-      param,
-      Parameter.let_("x", Type.Int),
-    )?,
+    Ok(param) => t.should_eq(param, Parameter.let_("x", Type.Int))?,
     Err(e) => t.fail(e.message())?,
   }
 
@@ -269,10 +266,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
     "s",
     cst.typ(10, 14, "String", []),
   )) {
-    Ok(param) => t.should_eq(
-      param,
-      Parameter.let_("s", Type.String),
-    )?,
+    Ok(param) => t.should_eq(param, Parameter.let_("s", Type.String))?,
     Err(e) => t.fail(e.message())?,
   }
 
@@ -284,10 +278,7 @@ fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
     "y",
     cst.typ(8, 11, "Int", []),
   )) {
-    Ok(param) => t.should_eq(
-      param,
-      Parameter.var_("y", Type.Int),
-    )?,
+    Ok(param) => t.should_eq(param, Parameter.var_("y", Type.Int))?,
     Err(e) => t.fail(e.message())?,
   }
 
@@ -439,10 +430,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
         func.parameters.length() == 2,
         f"expected 2 params, got {func.parameters.length()}",
       )?
-      t.should_eq(
-        func.parameters[0],
-        Parameter.let_("a", Type.Int),
-      )?
+      t.should_eq(func.parameters[0], Parameter.let_("a", Type.Int))?
       t.should_eq(func.return_type, Type.Int)?
     },
     Err(e) => t.fail(e.message())?,

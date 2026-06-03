@@ -51,7 +51,7 @@ impl Type {
       Tuple(fields) => f"({fields.map(Type.string).join(", ")})",
       Fn(params, ret) => f"({params.map(ParamType.string).join(", ")})->{ret}",
       Adt(def, args) => def.name + f"{args}",
-      Var(int) => if int >= 0 {f"T{int}"} else { "T_"},
+      Var(int) => if int >= 0 { f"T{int}" } else { "T_" },
     }
   }
 
