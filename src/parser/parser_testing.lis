@@ -291,7 +291,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let s = parser.defs.types.get(0).ok_or("no struct found")?
   t.should_eq_repr(s.name, "Point")?
   t.should_be_true(
-    s.type_parameters.length() == 0,
+    s.type_parameters.is_empty(),
     "type parameters should be empty",
   )?
   let cst.TypeBody.Struct(fields) = s.body else {
@@ -614,7 +614,7 @@ fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.ArrayLiteral(elems) => {
-      t.should_be_true(elems.length() == 0, "Expected empty array")?
+      t.should_be_true(elems.is_empty(), "Expected empty array")?
     },
     _ => return t.fail(f"Expected ArrayLiteral; got {expr.kind}"),
   }

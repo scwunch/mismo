@@ -27,7 +27,7 @@ impl TypeCheck {
       let v = &Variable.from_param(param)
       scope = &List.Cons(v, scope)
     }
-    TypeCheck {
+    TypeCheck { 
       env,
       next_var: &zero,
       return_type: func.return_type,
@@ -160,7 +160,7 @@ impl TypeCheck {
 
   fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
     let mut self = self
-    if exprs.length() == 0 { return Ok(Expr.Nil) }
+    if exprs.is_empty() { return Ok(Expr.Nil) }
     let mut expressions = []
     let mut types = []
     for node in exprs {
@@ -193,9 +193,7 @@ impl TypeCheck {
   }
 
   fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
-    if elems.length() == 0 {
-      return Err(errors.EmptyArrayLiteralError.new(span))
-    }
+    if elems.is_empty() { return Err(errors.EmptyArrayLiteralError.new(span)) }
     let inferred = slice.map_result(elems, self.infer)?
 
     let mut elem_type = inferred[0].typ()
@@ -281,7 +279,7 @@ impl TypeCheck {
     args: Slice<Expression>,
     span: span.Span,
   ) -> Result<Expr, errors.TypeError> {
-    if type_args.length() == 0 {
+    if type_args.is_empty() {
       let local_funs = self.get_local_functions(fname)
       for fun in local_funs {
         if let Type.Fn(params, _) = fun.typ {
@@ -299,7 +297,7 @@ impl TypeCheck {
         }
       }
     }
-    if type_args.length() != 0 { panic("not handling explicit type args yet") }
+    if !type_args.is_empty() { panic("not handling explicit type args yet") }
     let candidates = match self.env.function_defs.get(fname) {
       None => return Err(errors.MissingNameError.new(fname, span)),
       Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
@@ -315,7 +313,7 @@ impl TypeCheck {
     })
     match maximal {
       [call] => Ok(Expr.Call(call)),
-      _ => if matches.length() == 0 {
+      _ => if matches.is_empty() {
         Err(errors.NoMatchError.new(
           span,
           candidates.map(|fun| match fun {
@@ -352,7 +350,7 @@ pub struct Variable {
 
 impl Variable {
   fn from_param(param: Parameter) -> Variable {
-    Variable {
+    Variable { 
       mode: param.mode,
       name: param.name,
       typ: param.typ,

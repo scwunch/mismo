@@ -6,6 +6,7 @@ pub struct Expression {
   pub kind: Expr,
 }
 
+#[displayable]
 pub enum Expr {
   Nil,
   BoolLiteral(bool),
@@ -28,6 +29,7 @@ pub enum Expr {
   FieldAccess(Ref<Expression>, int),
 }
 
+#[displayable]
 pub struct FnCall {
   fun: FunctionDef,
   type_args: Slice<Type>,

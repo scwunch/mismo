@@ -11,6 +11,7 @@ pub struct Expression {
   pub kind: Expr,
 }
 
+#[displayable]
 pub enum Expr {
   Nil,
   BoolLiteral(bool),

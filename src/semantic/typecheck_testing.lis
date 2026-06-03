@@ -473,7 +473,7 @@ fn test_dot_name(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let point_var = Variable.new(mode.Mode.Let, "p", Type.Adt(&point_def, []), 0)
 
   // Create an expression: identifier "p" (which has type Point)
-  let receiver = Expression {
+  let receiver = Expression { 
     span: span.new(0, 1),
     kind: Expr.Identifier(&point_var),
   }
@@ -518,7 +518,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   tc.env.function_defs["foo"] = [foo1, foo2]
 
   // foo("hi") => selects overload 0 (String)
-  let arg_str = Expression {
+  let arg_str = Expression { 
     span: span.new(0, 4),
     kind: Expr.StringLiteral("hi"),
   }
@@ -544,7 +544,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // foo(true) => NoMatchError
-  let arg_bool = Expression {
+  let arg_bool = Expression { 
     span: span.new(0, 4),
     kind: Expr.BoolLiteral(true),
   }
@@ -598,7 +598,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
-          fncall.fun.type_parameters.length() == 0,
+          fncall.fun.type_parameters.is_empty(),
           "expected concrete overload (no type params)",
         )?
       },
@@ -608,7 +608,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // foo("hi") => selects overload 0 (only type var matches String)
-  let arg_str = Expression {
+  let arg_str = Expression { 
     span: span.new(0, 4),
     kind: Expr.StringLiteral("hi"),
   }
@@ -652,7 +652,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Array(&Type.Array(&Type.Int)),
     0,
   )
-  let arg_arr = Expression {
+  let arg_arr = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&arr_arr_int),
   }
@@ -660,7 +660,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
-          fncall.fun.type_parameters.length() == 0,
+          fncall.fun.type_parameters.is_empty(),
           "expected concrete overload for nested array",
         )?
       },
@@ -676,7 +676,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Array(&Type.Array(&Type.String)),
     0,
   )
-  let arg_arr_str = Expression {
+  let arg_arr_str = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&arr_arr_str),
   }
@@ -735,7 +735,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.Int }], int_ref),
     0,
   )
-  let arg_fn_int = Expression {
+  let arg_fn_int = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&fn_int),
   }
@@ -743,7 +743,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
-          fncall.fun.type_parameters.length() == 0,
+          fncall.fun.type_parameters.is_empty(),
           "expected concrete overload for Fn(Int)->Int",
         )?
       },
@@ -759,7 +759,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Fn([ParamType { mode: mode.Mode.Let, typ: Type.String }], str_ref),
     0,
   )
-  let arg_fn_str = Expression {
+  let arg_fn_str = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&fn_str),
   }
@@ -803,7 +803,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([Type.String, Type.Int]),
     0,
   )
-  let arg_tup_str = Expression {
+  let arg_tup_str = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&tup_str),
   }
@@ -811,7 +811,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
-          fncall.fun.type_parameters.length() == 0,
+          fncall.fun.type_parameters.is_empty(),
           "expected concrete overload for (String, Int)",
         )?
       },
@@ -827,7 +827,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([Type.Bool, Type.Int]),
     0,
   )
-  let arg_tup_bool = Expression {
+  let arg_tup_bool = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&tup_bool),
   }
@@ -911,11 +911,11 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Adt(&option_def, [Type.String]),
     0,
   )
-  let arg_opt_str = Expression {
+  let arg_opt_str = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&opt_str),
   }
-  let arg_world = Expression {
+  let arg_world = Expression { 
     span: span.new(0, 0),
     kind: Expr.StringLiteral("world"),
   }
@@ -936,8 +936,14 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let arg_55 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(55) }
   match tc4.call("foo", [], [arg_opt_str, arg_55], span.new(0, 0)) {
     Ok(_) => t.fail("expected error for double type arg bind")?,
-    Err(errors.NoMatchError{errs, ..}) => t.fail(f"{errs}"),
-    Err(e) => t.fail(f"expected `NoMatchError`; got {e}")?
+    // Err(errors.NoMatchError{errs, ..}) => t.fail(f"{errs}"),
+    Err(e) => {
+      match e {
+        errors.NoMatchError => panic("GOOD"),
+        _ => t.fail(f"expected `NoMatchError`; got {e}")?,
+      }
+    },
+
     // t.should_be_true(
     //   e.code() == 2100,
     //   f"expected code 2100 (DoubleTypeArgBoundError), got {e.message()}",
@@ -951,7 +957,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Adt(&option_def, [Type.Int]),
     0,
   )
-  let arg_opt_int = Expression {
+  let arg_opt_int = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&opt_int),
   }
@@ -960,7 +966,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
-          fncall.fun.type_parameters.length() == 0,
+          fncall.fun.type_parameters.is_empty(),
           "expected concrete overload for Option[Int], Int",
         )?
       },
@@ -1002,7 +1008,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // foo("hi", 1) => selects overload 0 (T = String matches first param)
-  let arg_hi = Expression {
+  let arg_hi = Expression { 
     span: span.new(0, 0),
     kind: Expr.StringLiteral("hi"),
   }
@@ -1023,7 +1029,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(0, "hi") => selects overload 1 (T = String matches second param)
   let arg_0b = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(0) }
-  let arg_hib = Expression {
+  let arg_hib = Expression { 
     span: span.new(0, 0),
     kind: Expr.StringLiteral("hi"),
   }
@@ -1100,7 +1106,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(1, "hi") => selects overload 0 (two params: T=Int, U=String)
   let arg9_int = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
-  let arg9_str = Expression {
+  let arg9_str = Expression { 
     span: span.new(0, 0),
     kind: Expr.StringLiteral("hi"),
   }
@@ -1155,7 +1161,7 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(never) => NoMatchError (Never ≠ Int, Never ≠ String)
   let never_var = Variable.new(mode.Mode.Let, "n", Type.Never, 0)
-  let arg_never = Expression {
+  let arg_never = Expression { 
     span: span.new(0, 0),
     kind: Expr.Identifier(&never_var),
   }

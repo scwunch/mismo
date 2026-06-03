@@ -109,9 +109,5 @@ impl FunctionDef {
 }
 
 fn type_params_to_string(type_params: Slice<TypeParameter>) -> string {
-  if type_params.length() == 0 {
-    ""
-  } else {
-    f"{type_params.map(|tp| tp.name)}"
-  }
+  if type_params.is_empty() { "" } else { f"{type_params.map(|tp| tp.name)}" }
 }

@@ -78,7 +78,7 @@ impl ExpressionParser {
     }
 
     if self.expecting == Expecting.Term {
-      let op_str = if self.operators.length() > 0 {
+      let op_str = if !self.operators.is_empty() {
         self.operators[self.operators.length() - 1].string()
       } else {
         "<noop>"
@@ -89,11 +89,11 @@ impl ExpressionParser {
       ))
     }
 
-    while self.operators.length() > 0 {
+    while !self.operators.is_empty() {
       self.compress()?
     }
 
-    if self.operators.length() != 0 || self.terms.length() != 1 {
+    if !self.operators.is_empty() || self.terms.length() != 1 {
       return Err(self.parser.error(
         self.parser.peek().span,
         "operators and terms did not add up",
@@ -111,7 +111,7 @@ impl ExpressionParser {
 
   fn push_operator(self: Ref<ExpressionParser>, right_op: StackOp) -> Result<(), ParseError> {
     loop {
-      if self.operators.length() == 0 { break }
+      if self.operators.is_empty() { break }
       let left_op = self.operators[self.operators.length() - 1]
       match stack_relative_precedence(left_op, right_op) {
         Bind.Tighter => self.compress()?,
@@ -129,7 +129,7 @@ impl ExpressionParser {
   }
 
   fn compress(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
-    if self.operators.length() == 0 { return Ok(()) }
+    if self.operators.is_empty() { return Ok(()) }
     let last = self.operators.length() - 1
     let op = self.operators[last]
     self.operators = self.operators[..last]
@@ -165,7 +165,7 @@ impl ExpressionParser {
   }
 
   fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
-    if self.terms.length() == 0 {
+    if self.terms.is_empty() {
       return Err(self.parser.error(
         self.parser.peek().span,
         "Not enough terms to complete expression",
@@ -419,7 +419,7 @@ impl ExpressionParser {
     }
     let span_end = _span.merge(rbracket_span)
 
-    if items.length() == 0 {
+    if items.is_empty() {
       Ok(cst.array_lit(span_end, []))
     } else {
       Ok(cst.array_lit(span_end, items))
@@ -463,7 +463,7 @@ impl ExpressionParser {
     let start = receiver.span.start
     let name = self.parser.consume_identifier()?
     let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.length() == 0 {
+    let type_args = if type_args_raw.is_empty() {
       None
     } else {
       Some(type_args_raw)
@@ -482,7 +482,7 @@ impl ExpressionParser {
 
   fn function_call(self: Ref<ExpressionParser>, span: Span, name: string) -> Result<cst.Expression, ParseError> {
     let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.length() == 0 {
+    let type_args = if type_args_raw.is_empty() {
       None
     } else {
       Some(type_args_raw)
@@ -722,7 +722,7 @@ impl Parser {
       }
     }
 
-    if statements.length() == 0 {
+    if statements.is_empty() {
       Ok(cst.block(self.peek().span, []))
     } else if statements.length() == 1 {
       Ok(statements[0])
