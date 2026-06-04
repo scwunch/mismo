@@ -19,6 +19,7 @@ pub enum Expr {
   Assign(Ref<Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(FnCall),
+  ConcreteCall(int, Slice<Expression>),
   SwitchIf(SwitchIf),
   Match(Match),
   Loop(Slice<Expression>, Type),
@@ -31,9 +32,19 @@ pub enum Expr {
 
 #[displayable]
 pub struct FnCall {
-  fun: FunctionDef,
-  type_args: Slice<Type>,
-  args: Slice<Expression>,
+  pub fun: Ref<FunctionDef>,
+  pub type_args: Slice<Type>,
+  pub args: Slice<Expression>,
+}
+
+impl FnCall {
+  pub fn new(
+    fun: Ref<FunctionDef>,
+    type_args: Slice<Type>,
+    args: Slice<Expression>,
+  ) -> FnCall {
+    FnCall { fun, type_args, args }
+  }
 }
 
 pub struct SwitchIf { cases: Slice<(Expression, Expression)> }
@@ -43,6 +54,14 @@ pub struct Match { subject: Ref<Expression>, cases: Slice<MatchCase> }
 pub struct MatchCase { pattern: Expression, expr: Expression }
 
 impl Expression {
+  pub fn new(span: span.Span, kind: Expr) -> Expression {
+    Expression { span, kind }
+  }
+
+  pub fn blank() -> Expression {
+    Expression.new(span.new(0, 0), Expr.Nil)
+  }
+
   fn typ(self) -> Type {
     self.kind.typ()
   }

@@ -3,6 +3,112 @@ import "utils/slice"
 
 type FnCall = semantic.FnCall
 
-pub struct Specializer { queue: Slice<FnCall> }
+pub fn specialize(reg: semantic.TypeEnv) -> ConcreteRegistry {
+  let main = match reg.signatures.get("main") {
+    Some([main]) => main,
+    Some(funs) => panic("multiple main functions found"),
+    None => panic("no main function found"),
+  }
 
-impl Specializer {}
+  let mut spec = Specializer.new()
+  let _ = spec.add_function(FnCall { fun: main, type_args: [], args: [] })
+
+  spec.run()
+
+  ConcreteRegistry { type_defs: reg.type_defs, functions: spec.functions }
+}
+
+/// careful, even if this compiles, I'm not sure if the hash and eq implementations will be okay
+struct MonoMorphKey { fun: Ref<semantic.FunctionDef>, type_args: Slice<Type> }
+
+impl MonoMorphKey {
+  fn from_call(call: FnCall) -> MonoMorphKey {
+    MonoMorphKey { fun: call.fun, type_args: call.type_args as Slice<Type> }
+  }
+}
+
+type FuncAndTypeArgs = (int, Slice<Type>)
+
+pub struct Specializer {
+  queue: Slice<FuncAndTypeArgs>,
+  functions: Slice<Function>,
+  function_map: Map<MonoMorphKey, int>,
+  errors: Slice<error>,
+}
+
+impl Specializer {
+  fn new() -> Specializer {
+    Specializer { 
+      queue: [],
+      functions: [],
+      function_map: Map.new(),
+      errors: [],
+    }
+  }
+
+  fn run(self: Ref<Specializer>) {
+    while !self.queue.is_empty() {
+      let func = self.queue[0]
+      self.queue = self.queue[1..]
+      self.specialize(func)
+    }
+  }
+
+  fn specialize(self: Ref<Specializer>, item: FuncAndTypeArgs) {
+    let func = &self.functions[item.0]
+    func.body = self.substitute(func.body, item.1)
+  }
+
+  fn index_of(self: Ref<Specializer>, call: FnCall) -> int {
+    self.function_map
+      .get(MonoMorphKey.from_call(call))
+      .unwrap_or_else(|| self.add_function(call))
+  }
+
+  fn add_function(self: Ref<Specializer>, call: FnCall) -> int {
+    let i = self.functions.length()
+    let parameters = call.fun.parameters.map(|p| p.substitute(call.type_args))
+    let return_type = call.fun.return_type.substitute(call.type_args)
+    self.functions = self.functions.append(
+      Function { 
+        span: call.fun.span,
+        name: call.fun.name,
+        parameters,
+        return_type,
+        body: call.fun.body,
+      },
+    )
+    let item: FuncAndTypeArgs = (i, call.type_args as Slice<Type>)
+    self.queue = self.queue.append(item)
+    i
+  }
+
+  fn substitute(
+    self: Ref<Specializer>,
+    expr: Expression,
+    type_args: Slice<Type>,
+  ) -> Expression {
+    match expr.kind {
+      Call(call) => {
+        let i = self.index_of(call)
+        Expression.new(
+          expr.span,
+          semantic.Expr.ConcreteCall(
+            i,
+            call.args.map(|a| self.substitute(a, type_args)),
+          ),
+        )
+      },
+      _ => panic("TODO"),
+    }
+  }
+
+  fn error(self: Ref<Specializer>, e: error) {
+    self.errors = self.errors.append(e)
+  }
+}
+
+pub struct ConcreteRegistry {
+  pub type_defs: Map<string, Ref<semantic.TypeDef>>,
+  pub functions: Slice<Function>,
+}

@@ -1,4 +1,3 @@
-import "cst"
 import "mode"
 import "span"
 import "utils/slice"
@@ -45,7 +44,7 @@ pub struct FunctionDef {
   pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
   pub return_type: Type,
-  pub body: cst.Expression,
+  pub body: Expression,
 }
 
 pub struct Parameter {
@@ -75,6 +74,15 @@ impl Parameter {
   pub fn var_(name: string, typ: Type) -> Parameter {
     Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
   }
+
+  pub fn substitute(self, type_args: Slice<Type>) -> Parameter {
+    Parameter.new(
+      self.span,
+      self.mode,
+      self.name,
+      self.typ.substitute(type_args),
+    )
+  }
 }
 
 impl TypeDef {
@@ -96,7 +104,7 @@ impl FunctionDef {
     type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
     return_type: Type,
-    body: cst.Expression,
+    body: Expression,
   ) -> FunctionDef {
     FunctionDef { 
       span,
@@ -130,7 +138,7 @@ impl FunctionDef {
       type_parameters,
       parameters,
       return_type,
-      body: cst.nil_lit(span.new(0, 0)),
+      body: Expression.blank(),
     }
   }
 

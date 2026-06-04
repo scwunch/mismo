@@ -5,31 +5,19 @@ import "span"
 
 pub struct TypeEnv {
   pub type_defs: Map<string, Ref<TypeDef>>,
-  pub function_defs: Map<string, Slice<FunctionDef>>,
+  pub function_defs: Slice<FunctionDef>,
+  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
   pub errors: Slice<errors.TypeError>,
-  last_fn_id: int,
 }
 
 impl TypeEnv {
   pub fn new() -> TypeEnv {
     TypeEnv { 
       type_defs: Map.new(),
-      function_defs: Map.new(),
+      function_defs: Slice.new(),
+      signatures: Map.new(),
       errors: Slice.new(),
-      last_fn_id: -1,
     }
-  }
-
-  pub fn type_check_program(self: Ref<TypeEnv>, items: cst.Declarations) -> Slice<(FunctionDef, Expression)> {
-    // populate @type_defs and @function_defs with names of types and type parameters
-    self.register_types(items.types)
-    // evaluate fields and variants for structs and enums
-    self.fill_out_type_info(items.types)
-
-    // register signatures of all functions
-    self.register_functions(items.functions)
-
-    self.type_check_functions()
   }
 
   fn register_types(self: Ref<TypeEnv>, type_defs: Slice<cst.TypeDecl>) {
@@ -187,31 +175,36 @@ impl TypeEnv {
   }
 
   fn register_functions(self: Ref<TypeEnv>, functions: Slice<cst.FunctionDecl>) {
-    for func in functions {
-      match self.eval_function(func, self.next_fn_id()) {
-        Ok(def) => {
-          match self.function_defs.get(def.name) {
-            Some(existing) => {
-              self.function_defs[def.name] = existing.append(def)
-            },
-            None => {
-              self.function_defs[def.name] = [def]
-            },
-          }
+    self.function_defs = functions.map(self.eval_function)
+    for i in 0..self.function_defs.length() {
+      let def = &self.function_defs[i]
+      match self.signatures.get(def.name) {
+        Some(existing) => {
+          self.signatures[def.name] = existing.append(def)
         },
-        Err(err) => {
-          self.error(err)
-        },
+        None => self.signatures[def.name] = [def],
       }
     }
   }
 
-  fn next_fn_id(self: Ref<TypeEnv>) -> int {
-    self.last_fn_id += 1
-    self.last_fn_id
+  fn eval_function(self: Ref<TypeEnv>, func: cst.FunctionDecl) -> FunctionDef {
+    self
+      .try_eval_function(func)
+      .unwrap_or_else(|e| {
+        self.error(e)
+        FunctionDef.new(
+          func.span,
+          -1,
+          func.signature.name,
+          [],
+          [],
+          Type.nil(),
+          Expression.blank(),
+        )
+      })
   }
 
-  fn eval_function(self, func: cst.FunctionDecl, id: int) -> Result<FunctionDef, errors.TypeError> {
+  fn try_eval_function(self, func: cst.FunctionDecl) -> Result<FunctionDef, errors.TypeError> {
     let span = func.span
     let name = func.signature.name
     let type_params = func.signature.type_parameters.map(|param| {
@@ -222,21 +215,8 @@ impl TypeEnv {
       params = params.append(self.eval_param(param)?)
     }
     let return_type = self.eval_type(func.signature.return_type)?
-    let body = func.body
-    Ok(FunctionDef.new(span, id, name, type_params, params, return_type, body))
-  }
-
-  fn type_check_functions(self: Ref<TypeEnv>) -> Slice<(FunctionDef, Expression)> {
-    let mut results = []
-    for (_name, funcs) in self.function_defs {
-      for func in funcs {
-        match TypeCheck.new(self, func).check(func.body, func.return_type) {
-          Ok(expr) => results = results.append((func, expr)),
-          Err(e) => self.error(e),
-        }
-      }
-    }
-    results
+    let body = Expression.blank()
+    Ok(FunctionDef.new(span, -1, name, type_params, params, return_type, body))
   }
 
   fn error(self: Ref<TypeEnv>, err: errors.TypeError) {
