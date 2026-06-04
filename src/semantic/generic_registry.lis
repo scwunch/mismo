@@ -1,0 +1,7 @@
+import "errors"
+
+pub struct GenericRegistry {
+  pub type_defs: Map<string, Ref<TypeDef>>,
+  pub function_defs: Map<string, Slice<FunctionDef>>,
+  pub errors: Slice<errors.TypeError>,
+}

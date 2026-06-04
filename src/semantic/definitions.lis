@@ -32,8 +32,15 @@ pub struct Variant {
   pub fields: Slice<Type>,
 }
 
+pub struct Signature {
+  pub type_parameters: Slice<TypeParameter>,
+  pub parameters: Slice<Parameter>,
+  pub return_type: Type,
+}
+
 pub struct FunctionDef {
   pub span: span.Span,
+  pub id: int,
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
@@ -84,13 +91,22 @@ impl TypeDef {
 impl FunctionDef {
   pub fn new(
     span: span.Span,
+    id: int,
     name: string,
     type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
     return_type: Type,
     body: cst.Expression,
   ) -> FunctionDef {
-    FunctionDef { span, name, type_parameters, parameters, return_type, body }
+    FunctionDef { 
+      span,
+      id,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body,
+    }
   }
 
   pub fn signature(self) -> string {
@@ -99,6 +115,23 @@ impl FunctionDef {
       .map(|p| f"{p.mode} {p.name} {p.typ}")
       .join(", ")
     f"fn {self.name}{type_params}({params}) {self.return_type}"
+  }
+
+  fn mock(
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    parameters: Slice<Parameter>,
+    return_type: Type,
+  ) -> FunctionDef {
+    FunctionDef { 
+      span: span.new(0, 0),
+      id: -1,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body: cst.nil_lit(span.new(0, 0)),
+    }
   }
 
   fn better_than(self: FunctionDef, other: FunctionDef) -> bool {

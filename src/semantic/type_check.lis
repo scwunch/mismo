@@ -1,0 +1,15 @@
+import "cst"
+
+pub fn type_check_program(items: cst.Declarations) -> GenericRegistry {
+  let mut env = TypeEnv.new()
+  env.register_types(items.types)
+  env.register_functions(items.functions)
+
+  // type env needs a map of signatures
+  // FnCall node needs a reference to fully-fledged FunctionDef... and it needs to get it from the sig_map
+  // therefore, sig_map needs those references too, and I guess in the form of indices
+  //
+  // so what if we store our FunctionDef's in a flat array, and let the signature map just point to that one?
+  // either by real reference
+  GenericRegistry.new()
+}

@@ -390,18 +390,8 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.int_lit(span.new(20, 22), 42),
   )
 
-  match env.eval_function(decl) {
-    Ok(func) => t.should_eq(
-      func,
-      FunctionDef.new(
-        span.new(0, 22),
-        "foo",
-        [],
-        [],
-        Type.Int,
-        cst.int_lit(span.new(20, 22), 42),
-      ),
-    )?,
+  match env.eval_function(decl, 0) {
+    Ok(func) => t.should_eq(func, FunctionDef.mock("foo", [], [], Type.Int))?,
     Err(e) => t.fail(e.message())?,
   }
 
@@ -423,7 +413,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.nil_lit(span.new(0, 0)),
   )
 
-  match env.eval_function(add_decl) {
+  match env.eval_function(add_decl, 0) {
     Ok(func) => {
       t.should_eq_repr(func.name, "add")?
       t.should_be_true(
@@ -450,7 +440,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.nil_lit(span.new(0, 0)),
   )
 
-  match env.eval_function(bad_decl) {
+  match env.eval_function(bad_decl, 0) {
     Ok(_) => t.fail("expected error for unknown return type")?,
     Err(e) => t.should_be_true(
       e.code() == 2002,

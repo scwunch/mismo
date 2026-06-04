@@ -1,0 +1,70 @@
+import "semantic"
+import "span"
+
+pub type TypeParameter = semantic.TypeParameter
+
+pub type Parameter = semantic.Parameter
+
+pub type Type = semantic.Type
+
+pub type Expression = semantic.Expression
+
+pub struct FunctionTemplate {
+  pub span: span.Span,
+  pub name: string,
+  pub type_parameters: Slice<TypeParameter>,
+  pub parameters: Slice<Parameter>,
+  pub return_type: Type,
+  pub body: Expression,
+}
+
+pub struct Function {
+  pub span: span.Span,
+  pub name: string,
+  pub parameters: Slice<Parameter>,
+  pub return_type: Type,
+  pub body: Expression,
+}
+
+impl FunctionTemplate {
+  pub fn from_def(def: semantic.FunctionDef, body: Expression) -> FunctionTemplate {
+    FunctionTemplate { 
+      span: def.span,
+      name: def.name,
+      type_parameters: def.type_parameters,
+      parameters: def.parameters,
+      return_type: def.return_type,
+      body,
+    }
+  }
+
+  fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    parameters: Slice<Parameter>,
+    return_type: Type,
+    body: Expression,
+  ) -> FunctionTemplate {
+    FunctionTemplate { 
+      span,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body,
+    }
+  }
+
+  pub fn signature(self) -> string {
+    let type_params = type_params_to_string(self.type_parameters)
+    let params = self.parameters
+      .map(|p| f"{p.mode} {p.name} {p.typ}")
+      .join(", ")
+    f"fn {self.name}{type_params}({params}) {self.return_type}"
+  }
+}
+
+fn type_params_to_string(type_params: Slice<TypeParameter>) -> string {
+  if type_params.is_empty() { "" } else { f"{type_params.map(|tp| tp.name)}" }
+}

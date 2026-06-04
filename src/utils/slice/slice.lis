@@ -25,3 +25,17 @@ pub fn map_result<T, R, E>(s: Slice<T>, f: fn(T) -> Result<R, E>) -> Result<Slic
   }
   Ok(result)
 }
+
+pub fn push<T>(s: Ref<Slice<T>>, item: T) {
+  s.* = s.*.append(item)
+}
+
+pub fn pop_front<T>(s: Ref<Slice<T>>) -> Option<T> {
+  match s.get(0) {
+    Some(item) => {
+      s.* = s.*[1..]
+      Some(item)
+    },
+    None => None,
+  }
+}

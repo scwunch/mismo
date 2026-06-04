@@ -1,0 +1,8 @@
+import "semantic"
+import "utils/slice"
+
+type FnCall = semantic.FnCall
+
+pub struct Specializer { queue: Slice<FnCall> }
+
+impl Specializer {}

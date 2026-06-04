@@ -31,14 +31,7 @@ fn test_new_and_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "new and get"
   let env = TypeEnv.new()
   let params = [Parameter.let_("a", Type.Int), Parameter.var_("b", Type.Bool)]
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    params,
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], params, Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   match tc.get("a") {
@@ -62,14 +55,7 @@ fn test_new_and_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer literals"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   match tc.infer(cst.nil_lit(span.new(0, 3))) {
@@ -119,14 +105,7 @@ fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer identifier"
   let env = TypeEnv.new()
   let params = [Parameter.let_("a", Type.Int)]
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    params,
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], params, Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   // Known identifier "a"
@@ -153,14 +132,7 @@ fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_tuple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer tuple"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   // Empty tuple: ()
@@ -195,14 +167,7 @@ fn test_infer_tuple(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_array(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer array"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   // Homogeneous array: [1, 2, 3]
@@ -247,14 +212,7 @@ fn test_infer_array(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_infer_block(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer block"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Int,
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Int)
   let tc = TypeCheck.new(&env, func)
 
   // Empty block: {}
@@ -288,14 +246,7 @@ fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), strin
   t.test_name = "infer binding and assign"
   let env = TypeEnv.new()
   let params = [Parameter.var_("x", Type.Int)]
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    params,
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], params, Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   // Binding: let y = 5
@@ -364,14 +315,7 @@ fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), strin
 fn test_infer_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "infer return/break/continue"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Int,
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Int)
   let tc = TypeCheck.new(&env, func)
 
   // return (no value)
@@ -418,14 +362,7 @@ fn test_infer_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
 fn test_check(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "check"
   let env = TypeEnv.new()
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Int,
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Int)
   let tc = TypeCheck.new(&env, func)
 
   // check 42 against Int — should succeed
@@ -459,14 +396,7 @@ fn test_dot_name(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
   env.type_defs["Point"] = &point_def
 
-  let func = FunctionDef.new(
-    span.new(0, 0),
-    "f",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let func = FunctionDef.mock("f", [], [], Type.Tuple([]))
   let tc = TypeCheck.new(&env, func)
 
   // Create a Variable of type Point
@@ -497,21 +427,17 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: simple type-based resolution"
 
   // Example 1: fn foo(s: String), fn foo(i: Int)
-  let foo1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo1 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("s", Type.String)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo2 = FunctionDef.new(
-    span.new(0, 0),
+  let foo2 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("i", Type.Int)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
 
   let mut tc = TypeCheck.new_blank()
@@ -572,21 +498,17 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: specificity"
 
   // Example 3: fn foo[T](a: T), fn foo(i: Int)
-  let foo1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo1 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("a", Type.Var(0))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo2 = FunctionDef.new(
-    span.new(0, 0),
+  let foo2 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("i", Type.Int)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
 
   let mut tc3 = TypeCheck.new_blank()
@@ -626,21 +548,17 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Example 8: fn foo[T](a: Array[Array[T]]), fn foo(a: Array[Array[Int]])
-  let foo8_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo8_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("a", Type.Array(&Type.Array(&Type.Var(0))))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo8_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo8_1 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("a", Type.Array(&Type.Array(&Type.Int)))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   let mut tc8 = TypeCheck.new_blank()
   tc8.env.function_defs["foo"] = [foo8_0, foo8_1]
@@ -696,8 +614,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // Example 10: fn foo[T](f: Fn(T) -> T), fn foo(f: Fn(Int) -> Int)
   let int_ref = &Type.Int
   let str_ref = &Type.String
-  let foo10_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo10_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [
@@ -710,10 +627,8 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
       ),
     ],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo10_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo10_1 = FunctionDef.mock(
     "foo",
     [],
     [
@@ -723,7 +638,6 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
       ),
     ],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   let mut tc10 = TypeCheck.new_blank()
   tc10.env.function_defs["foo"] = [foo10_0, foo10_1]
@@ -777,21 +691,17 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Example 11: fn foo[T](t: (T, Int)), fn foo(t: (String, Int))
-  let foo11_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo11_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("t", Type.Tuple([Type.Var(0), Type.Int]))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo11_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo11_1 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("t", Type.Tuple([Type.String, Type.Int]))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   let mut tc11 = TypeCheck.new_blank()
   tc11.env.function_defs["foo"] = [foo11_0, foo11_1]
@@ -850,14 +760,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: type variable binding"
 
-  let dummy = FunctionDef.new(
-    span.new(0, 0),
-    "dummy",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let dummy = FunctionDef.mock("dummy", [], [], Type.Tuple([]))
 
   // Example 4: fn foo[T](opt: Option[T], t: T),
   //            fn foo(opt: Option[Int], i: Int),
@@ -871,8 +774,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
   env4.type_defs["Option"] = &option_def
 
-  let foo4_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo4_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [
@@ -880,10 +782,8 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
       Parameter.let_("t", Type.Var(0)),
     ],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo4_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo4_1 = FunctionDef.mock(
     "foo",
     [],
     [
@@ -891,15 +791,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
       Parameter.let_("i", Type.Int),
     ],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo4_2 = FunctionDef.new(
-    span.new(0, 0),
+  let foo4_2 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("s", Type.String)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   env4.function_defs["foo"] = [foo4_0, foo4_1, foo4_2]
   let tc4 = TypeCheck.new(&env4, dummy)
@@ -979,21 +876,17 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Example 5: fn foo[T](t: T, i: Int), fn foo[T](i: Int, t: T)
   let mut env5 = TypeEnv.new()
-  let foo5_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo5_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("t", Type.Var(0)), Parameter.let_("i", Type.Int)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo5_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo5_1 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("i", Type.Int), Parameter.let_("t", Type.Var(0))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   env5.function_defs["foo"] = [foo5_0, foo5_1]
   let tc5 = TypeCheck.new(&env5, dummy)
@@ -1051,13 +944,11 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Example 6: fn foo[T]() -> T
   let mut env6 = TypeEnv.new()
-  let foo6_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo6_0 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [],
     Type.Var(0),
-    cst.nil_lit(span.new(0, 0)),
   )
   env6.function_defs["foo"] = [foo6_0]
   let tc6 = TypeCheck.new(&env6, dummy)
@@ -1083,8 +974,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Example 9: fn foo[T, U](a: T, b: U), fn foo[T](a: T, b: T)
   let mut env9 = TypeEnv.new()
-  let foo9_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo9_0 = FunctionDef.mock(
     "foo",
     [
       TypeParameter { span: span.new(0, 0), name: "T" },
@@ -1092,15 +982,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ],
     [Parameter.let_("a", Type.Var(0)), Parameter.let_("b", Type.Var(1))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo9_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo9_1 = FunctionDef.mock(
     "foo",
     [TypeParameter { span: span.new(0, 0), name: "T" }],
     [Parameter.let_("a", Type.Var(0)), Parameter.let_("b", Type.Var(0))],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   env9.function_defs["foo"] = [foo9_0, foo9_1]
   let tc9 = TypeCheck.new(&env9, dummy)
@@ -1141,32 +1028,21 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "overload resolution: edge cases"
 
-  let dummy = FunctionDef.new(
-    span.new(0, 0),
-    "dummy",
-    [],
-    [],
-    Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let dummy = FunctionDef.mock("dummy", [], [], Type.Tuple([]))
 
   // Example 7: Never argument — fn foo(a: Int), fn foo(a: String)
   let mut env7 = TypeEnv.new()
-  let foo7_0 = FunctionDef.new(
-    span.new(0, 0),
+  let foo7_0 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("a", Type.Int)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
-  let foo7_1 = FunctionDef.new(
-    span.new(0, 0),
+  let foo7_1 = FunctionDef.mock(
     "foo",
     [],
     [Parameter.let_("a", Type.String)],
     Type.Tuple([]),
-    cst.nil_lit(span.new(0, 0)),
   )
   env7.function_defs["foo"] = [foo7_0, foo7_1]
   let tc7 = TypeCheck.new(&env7, dummy)
@@ -1187,22 +1063,8 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // Example 12: fn foo() -> Int, fn foo() -> String
   let mut env12 = TypeEnv.new()
-  let foo12_0 = FunctionDef.new(
-    span.new(0, 0),
-    "foo",
-    [],
-    [],
-    Type.Int,
-    cst.nil_lit(span.new(0, 0)),
-  )
-  let foo12_1 = FunctionDef.new(
-    span.new(0, 0),
-    "foo",
-    [],
-    [],
-    Type.String,
-    cst.nil_lit(span.new(0, 0)),
-  )
+  let foo12_0 = FunctionDef.mock("foo", [], [], Type.Int)
+  let foo12_1 = FunctionDef.mock("foo", [], [], Type.String)
   env12.function_defs["foo"] = [foo12_0, foo12_1]
   let tc12 = TypeCheck.new(&env12, dummy)
 

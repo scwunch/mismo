@@ -5,12 +5,13 @@ import "operator"
 import "span"
 import "utils/slice"
 
-impl TypeEnv {
-  fn type_check_function(self: Ref<TypeEnv>, func: FunctionDef) {
-    let res = TypeCheck.new(self, func).check(func.body, func.return_type)
-    if let Err(err) = res { self.error(err) }
-  }
-}
+// impl TypeEnv {
+//   fn type_check_function(self: Ref<TypeEnv>, func: FunctionDef) -> Result<Expression, errors.TypeError> {
+//     let res = TypeCheck.new(self, func).check(func.body, func.return_type)
+//     if let Err(err) = res { self.error(err) }
+//     res
+//   }
+// }
 
 pub struct TypeCheck {
   env: Ref<TypeEnv>,
@@ -39,6 +40,7 @@ impl TypeCheck {
     let env = &TypeEnv.new()
     let dummy = FunctionDef.new(
       span.new(0, 0),
+      0,
       "dummy",
       [],
       [],
