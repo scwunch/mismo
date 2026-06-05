@@ -55,6 +55,7 @@ impl ModeCheck {
       Expr.SwitchIf(_) => panic("switchif not implemented"),
       Expr.Match(_) => panic("match not implemented"),
       Expr.Loop(_, _) => panic("loop not implemented"),
+      Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
     }
   }
 

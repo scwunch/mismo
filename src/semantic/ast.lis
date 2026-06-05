@@ -95,6 +95,9 @@ impl Expr {
         },
         _ => panic("compiler bug 73: FieldAccess on non-ADT"),
       },
+      Expr.ConcreteCall(_, _) => panic(
+        "compiler bug 75: concrete call should never have 'type' method called on it",
+      ),
     }
   }
 }

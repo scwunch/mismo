@@ -147,8 +147,7 @@ impl Expr {
 
 impl FnCall {
   pub fn eq(self, other: FnCall) -> bool {
-    self.fun.eq(other.fun) &&
-    slice.compare(self.args, other.args, Expression.eq)
+    self.fun == other.fun && slice.compare(self.args, other.args, Expression.eq)
   }
 }
 

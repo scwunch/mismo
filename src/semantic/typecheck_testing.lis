@@ -441,7 +441,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 
   let mut tc = TypeCheck.new_blank()
-  tc.env.function_defs["foo"] = [foo1, foo2]
+  tc.env.signatures["foo"] = [&foo1, &foo2]
 
   // foo("hi") => selects overload 0 (String)
   let arg_str = Expression { 
@@ -512,7 +512,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 
   let mut tc3 = TypeCheck.new_blank()
-  tc3.env.function_defs["foo"] = [foo1, foo2]
+  tc3.env.signatures["foo"] = [&foo1, &foo2]
 
   // foo(63) => selects overload 1 (concrete Int beats type var)
   let arg_int = Expression { span: span.new(0, 2), kind: Expr.IntLiteral(63) }
@@ -561,7 +561,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc8 = TypeCheck.new_blank()
-  tc8.env.function_defs["foo"] = [foo8_0, foo8_1]
+  tc8.env.signatures["foo"] = [&foo8_0, &foo8_1]
 
   // foo([[1, 2], [3, 4]]) => selects overload 1 (more specific: Array[Array[Int]])
   let arr_arr_int = Variable.new(
@@ -640,7 +640,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc10 = TypeCheck.new_blank()
-  tc10.env.function_defs["foo"] = [foo10_0, foo10_1]
+  tc10.env.signatures["foo"] = [&foo10_0, &foo10_1]
 
   // foo(fn(x: Int) => x + 1) => selects overload 1 (more specific)
   let fn_int = Variable.new(
@@ -704,7 +704,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc11 = TypeCheck.new_blank()
-  tc11.env.function_defs["foo"] = [foo11_0, foo11_1]
+  tc11.env.signatures["foo"] = [&foo11_0, &foo11_1]
 
   // foo(("hi", 5)) => selects overload 1 (concrete)
   let tup_str = Variable.new(
@@ -798,7 +798,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [Parameter.let_("s", Type.String)],
     Type.Tuple([]),
   )
-  env4.function_defs["foo"] = [foo4_0, foo4_1, foo4_2]
+  env4.signatures["foo"] = [&foo4_0, &foo4_1, &foo4_2]
   let tc4 = TypeCheck.new(&env4, dummy)
 
   // foo(Option.Some("hello"), "world") => selects overload 0 (T = String)
@@ -888,7 +888,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [Parameter.let_("i", Type.Int), Parameter.let_("t", Type.Var(0))],
     Type.Tuple([]),
   )
-  env5.function_defs["foo"] = [foo5_0, foo5_1]
+  env5.signatures["foo"] = [&foo5_0, &foo5_1]
   let tc5 = TypeCheck.new(&env5, dummy)
 
   // foo(3, 5) => AmbiguousFnCallError (both match Int,Int equally)
@@ -950,7 +950,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [],
     Type.Var(0),
   )
-  env6.function_defs["foo"] = [foo6_0]
+  env6.signatures["foo"] = [&foo6_0]
   let tc6 = TypeCheck.new(&env6, dummy)
 
   // foo() => UnboundTypeParamError (T only appears in return type)
@@ -989,7 +989,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [Parameter.let_("a", Type.Var(0)), Parameter.let_("b", Type.Var(0))],
     Type.Tuple([]),
   )
-  env9.function_defs["foo"] = [foo9_0, foo9_1]
+  env9.signatures["foo"] = [&foo9_0, &foo9_1]
   let tc9 = TypeCheck.new(&env9, dummy)
 
   // foo(1, 2) => AmbiguousFnCallError
@@ -1044,7 +1044,7 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
     [Parameter.let_("a", Type.String)],
     Type.Tuple([]),
   )
-  env7.function_defs["foo"] = [foo7_0, foo7_1]
+  env7.signatures["foo"] = [&foo7_0, &foo7_1]
   let tc7 = TypeCheck.new(&env7, dummy)
 
   // foo(never) => NoMatchError (Never ≠ Int, Never ≠ String)
@@ -1065,7 +1065,7 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut env12 = TypeEnv.new()
   let foo12_0 = FunctionDef.mock("foo", [], [], Type.Int)
   let foo12_1 = FunctionDef.mock("foo", [], [], Type.String)
-  env12.function_defs["foo"] = [foo12_0, foo12_1]
+  env12.signatures["foo"] = [&foo12_0, &foo12_1]
   let tc12 = TypeCheck.new(&env12, dummy)
 
   // foo() => AmbiguousFnCallError (identical params, return type doesn't break tie)
