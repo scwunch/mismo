@@ -1,0 +1,22 @@
+---
+created: 2026-05-02 16:38
+related:
+  - "[[Mismo]]"
+---
+- Syntax
+	- significant whitespace 
+- Algebraic Data Types
+- Control Flow
+	- Ultimate Conditional Syntax
+- The Mode System 
+- Second-class references
+- Closures & Coroutines
+- Function Overloading
+	- Mismo doesn't support methods, rather it leans into type-based function overloading
+- Generics
+	- Parametric Polymorphism 
+	- Dictionary Passing
+		- no way to put constraints on type parameters, instead we pass in the functions that we use on generic types
+- Implicit Parameters
+	- for ergonomics, callbacks can be passed implicitly at the callsite.  The compiler looks for a matching overload in scope.
+- Concurrency: Actor Model

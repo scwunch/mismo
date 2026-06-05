@@ -1,0 +1,240 @@
+struct Array[T]
+  var _buffer: Pointer[T]
+  var _len: UInt
+  var _cap: UInt
+
+  def len UInt: _len
+  def cap UInt: _cap
+
+  def opt(index: UInt) -> let Option[let T]:
+    if index < _len
+      Some(_buffer.deref(index))
+    else
+      None
+
+  def mut opt(index: UInt): mut Option[mut T]
+    if index < _len
+      Some(_buffer.deref_mut(index))
+    else
+      None
+    
+  def get(index: UInt): let T
+    _buffer.deref(index)
+  
+  def mut get(index: UInt): mut T
+    _buffer.deref_mut(index)
+
+  def slice(start: UInt, end: UInt) -> let Array[T]:
+    Array(._buffer + start, end - start, ._cap - start)
+
+  def slice(start UInt, end UInt) -> self.Array[T]:
+
+struct Array[T]
+  var _buffer: Pointer[T]
+  var _len: UInt
+  var _cap: UInt
+
+  def 
+    len UInt: _len
+    cap UInt: _cap
+
+    opt(index: UInt) -> let Option[let T]
+      if index < _len:
+        Option.Some(_buffer.deref(index))
+      else:
+        None
+
+    mut opt(index: UInt): mut Option[mut T]
+      if index < _len
+        Some(_buffer.deref_mut(index))
+      else
+        None
+    
+    get(index: UInt): let T
+      _buffer.deref(index)
+  
+    mut get(index: UInt): mut T
+      """ panics """
+      _buffer.deref_mut(index)
+    
+
+enum Result[T, E]
+  Ok(T)
+  Err(E)
+
+
+enum Option[T]
+  Some(T)
+  None
+
+trait Monad[T]
+  def map[U](fn: T -> U) Self[U]
+
+  def flat_map[U](fn: T -> Self[U]) Self[U]
+
+
+extend[T] Option[T] is Monad[T]
+  def map[U](fn: T -> U) Option[U]
+    if self is
+      Some(t): Some(fn(t))
+      None: None
+
+
+-- binding downcast functions
+def[T]
+  as_mut(mut self T) -> mut T:
+    self
+  
+  as_let(self T) -> let T:
+    self
+  
+  to_ref(move self T) -> ref T:
+    self
+  
+  to_box(move self T) -> box T:
+    self
+
+trait Iterator[T]
+  def next -> Option[T]
+
+trait Iterable[T, Iter: Iterator[T]]
+  def iter -> Iter
+
+extend[T] Array[T] is Iterable[T, ArrayIterator[T]]
+  def iter -> ArrayIterator[T]:
+    ArrayIterator(self)
+
+
+struct ArrayIterator[T]
+  var _array: #T Array[T]
+  var _index: UInt
+
+  constructor(#T array: Array[T]):
+    _array = array
+    _index = 0
+
+  def mut next -> Option[T]
+    if _index < _array.len
+      Option.Some(_array.get(_index += 1))
+    else
+      Option.None
+
+trait Iterator[Self, T]
+  def next(mut self Self) -> Option[T]
+
+impl[T] Iterator[ArrayIterator[T], T]
+  def next(mut self ArrayIterator[T]) -> Option[T]
+    self.next
+
+
+trait BitwiseCopy is ImplicitCopy
+  """
+  Automatically applied to types that can safely be copied by 
+  simply copying their bits.  Such types are implicitly copied when assigned
+  to variables or passed to functions.
+
+  Only primitive types and types containing only primitive types can implement
+  BitwiseCopy.
+  """
+
+Nil is BitwiseCopy
+Bool is BitwiseCopy
+Int is BitwiseCopy
+Float is BitwiseCopy
+UInt is BitwiseCopy
+Pointer[T] is BitwiseCopy
+
+
+trait ImplicitCopy is Clone
+  """
+  For types that can be trivially cloned/copied.  `box` types and types that contain
+  `box` fields are not allowed to implement ImplicitCopy.  ImplicitCopy also requires
+  that all fields implement ImplicitCopy.
+
+  All copyable fields are copied, and all `ref`s are cloned.
+  """
+  def clone(self) Self: self
+  
+
+
+struct Array[T]
+  def slice(start: UInt, end: UInt) -> Array[T]:
+    Array()
+
+
+
+
+
+
+def need_iterator[I: Iterator[T], T](iter: I) -> T
+  iter.next.or_panic("iterator is empty")
+
+def need_iterator[I, T](iter: I) -> T with Iterator[I, T]
+  iter.next.or_panic("iterator is empty")
+handle next(mut self I) -> Option[T]
+  Option.None
+
+def main:
+  var array = [1, 2, 3]
+  var iter = array.iter
+  need_iterator(iter)
+
+
+def main:
+  var array = [1, 2, 3]
+  var iter = array.iter
+  
+
+def foo[T: Inter[String]](msg: String):
+  let t = bar(msg)
+  t.count
+
+
+implement Result[T = String, E = String]
+
+implement String.Result[E = String]
+
+def foo[T.Stringable, R.Any](msg: T) -> R:
+  let t = bar(msg)
+  t.count
+
+def foo(msg: T#Stringable) -> R#Any:
+  let t = bar(msg)
+  t.count
+
+enum Option
+  Some(T#)
+  None
+
+enum Result
+  Ok(#)
+  Error(#)
+
+---
+binding restriction notations:
+<no annotation> => any binding
+let: only let binding
+let+: let/ref binding
+ref: only ref binding
+mut: only mut binding
+mut+: mut/box/var binding
+box+: box/var binding
+store: box/ref/var binding
+var: var binding
+#T+: binding that is a super-type of T's binding
+
+
+...
+share: let/mut/box/ref
+mut+: mut/box/var
+store: box/ref/var
+send: var/ref
+
+
+
+
+
+
+
+
+

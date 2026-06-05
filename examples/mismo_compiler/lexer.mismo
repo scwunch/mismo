@@ -1,0 +1,293 @@
+struct Location
+   var line: UInt
+   var column: UInt
+
+enum Token is ImplicitCopy
+   Nil
+   Int(Int)
+   Float(Float)
+   String(ref String)
+   Op(Operator)
+   Identifier(ref String)
+   Keyword(KeyWord)
+   Dot
+   Colon
+   Comma
+   LParen
+   RParen
+   LBrace
+   RBrace
+   LBracket
+   RBracket
+   Newline
+   EOF
+   
+
+struct Reader
+   ref source: String
+   var index: UInt
+   var line: UInt
+   var column: UInt
+
+   constructor(source String):
+      self.source = source
+      self.index = 0
+      self.line = 1
+      self.column = 1
+
+   fn next Byte:
+      if source.bytes(index) is
+         Some(b): 
+            index += 1
+            b
+         None: 
+            '\0'
+
+   fn peek Byte:
+      source.bytes(index).or_else('\0')
+
+   fn peek_str(count UInt) let String:
+      source.bytes(index, index + count).string  -- I guess the compiler should infer a `let String` return type for this too
+   
+trait ByteStream
+   fn mut next Byte
+   fn peek Byte
+   fn peek_str(count UInt) let String
+
+
+trait Iterator[T]
+   fn mut next Option[T]
+
+
+trait Peekable[T] is Iterator[T]
+   fn peek Option[T]
+
+
+struct Peekable[T, Iter: Iterator[T]]
+   var iter: Iter
+   var _peeked: Option[T]
+
+   constructor(iter Iter):
+      ._peeked = iter.next
+      .iter = iter
+
+   fn mut next Option[T]:
+      ._peeked = .iter.next   
+
+   fn peek Option[T]:
+      ._peeked
+
+
+struct File
+   var path: String
+   var file_handle: FileHandle
+
+   constructor(path String):
+      .path = path
+      .file_handle = FileHandle.open(path)
+
+   fn move bytes FileByteIterator:
+      FileByteIterator(self)
+
+
+struct FileByteIterator is Iterator[Byte] & Peekable[Byte]
+   var file File
+   var index: UInt
+
+   constructor(move file File):
+      .file = file
+      .index = 0
+
+   fn mut next Byte:
+      file.bytes(index += 1) 
+         or ((index -= 1) and Option.None)
+
+   fn peek Byte:
+      file.bytes(index)
+
+
+struct Lexer[S Peekable[Byte]]
+   var stream: S
+   var log: Logger
+
+   constructor(move stream S):
+      .stream = stream
+      .log = Logger.new
+
+   static fn from_file(file_path String) Lexer:
+      Lexer(File.open(file_path).bytes))
+
+   static fn from_source(source String) Lexer:
+      Lexer(
+         Peekable(source.bytes)
+      )
+
+   fn mut lex Array[Token]:
+      var toks = Array[Token].new
+      -- for char in .stream:
+      while .stream.peek is Some(char):
+         if char 
+            .numeric?:
+               .number(char, toks)
+            .alpha?:
+               .identifier(char, toks)
+            in {'"' , '\''}:
+               .string(char, toks)
+            else:
+               .stream.next
+               if char == 
+                  ':':
+                     toks.push(Token.Colon)
+                  '.':
+                     toks.push(Token.Dot)
+                  ',':
+                     toks.push(Token.Comma)
+                  '(':
+                     toks.push(Token.LParen)
+                  ')':
+                     toks.push(Token.RParen)
+                  '[':
+                     toks.push(Token.LBracket)
+                  ']':
+                     toks.push(Token.RBracket)
+                  '{':
+                     toks.push(Token.LBrace)
+                  '}':
+                     toks.push(Token.RBrace)
+                  '\n':
+                     toks.push(Token.Newline)
+                  ' ':
+                     continue
+                  '\t':
+                     continue
+                  '\0':
+                     break
+                  else:
+                     .log.error("unrecognized token: " + char)
+      toks
+
+   fn mut number(char Byte, mut toks Array[Token]):
+      var int = int(char - '0')
+      -- for char in .stream:
+      while .stream.peek is Some(char):
+         if char
+            .numeric?:
+               int *= 10
+               int += char - '0'
+               .stream.next   
+            == '.':
+               -- read float
+               .stream.next
+               var float = int.float
+               var scale = 0.1
+               while .stream.peek is Some(char) 
+                  and char.numeric?:
+                     float += float(char - '0') * scale
+                     scale /= 10
+                     .stream.next
+               if scale == 0.1:
+                  -- no numeral after radix point => interpret as dot
+                  toks.push(Token.Int(int))
+                  toks.push(Token.Dot)
+               else:
+                  toks.push(Token.Float(float))
+               return
+            else:
+               toks.push(Token.Int(int))
+               return
+
+   fn mut identifier(char Byte, mut toks Array[Token]): Token:
+      var str = String.new
+      while .stream.next is Some(char)
+         and char.alpha?:
+            str.push(char)
+      Token.Identifier(str)
+
+   fn mut string(quote Byte, mut toks Array[Token]):
+      var str = String.new
+      for char in .stream:
+         if char == 
+            quote:
+               break
+            '\\':
+               str.push('\\') 
+               str.push(.stream.next or '\0')
+            else:
+               str.push(char)
+      Token.String(str)
+   
+fn numeric?(char Byte) Bool:
+   char >= '0' and char <= '9'
+
+
+fn alpha?(char Byte) Bool:
+   (char >= 'a' and char <= 'z')
+      or (char >= 'A' and char <= 'Z')
+      or char == '_'
+
+
+struct Parser
+   var tokens: Array[Token]
+   var index: UInt
+   var log: Logger
+
+   constructor(tokens Array[Token]):
+      .tokens = tokens
+      .index = 0
+      .log = Logger.new
+
+   fn peek Token:
+      .tokens.get(index).clone
+   
+   fn next Token:
+      .tokens.get(index += 1).clone
+
+   fn parse Array[Ast]:
+      var items = Array[Ast].new
+      while .peek is Some(token):
+         if token is
+            Newline:
+               continue
+            EOF:
+               break
+            Identifier(str):
+               .next
+               .parse_top_level_item(str)
+            else:
+               .log.error("unrecognized token: " + token.string)
+               .recover_to_next_top_level_item
+      items
+
+   fn parse_top_level_item(str String):
+      if str ==
+         "import":
+            .parse_import
+         "struct":
+            .parse_struct
+         "enum":
+            .parse_enum
+         "trait":
+            .parse_trait
+         "impl":
+            .parse_impl
+         "fn":
+            .parse_fn
+         else:
+            .log.error("unrecognized top-level item: " + str)
+            .recover_to_next_top_level_item
+
+   fn parse_import:
+      
+   fn parse_struct:
+
+      
+   fn parse_enum:
+      
+   fn parse_trait:
+      
+   fn parse_impl:
+      
+   fn parse_fn:
+      
+   fn parse_
+      

@@ -1,0 +1,83 @@
+-- binary tree
+struct Node[T]
+    left: Option[Box[Node[T]]]
+    right: Option[Box[Node[T]]]
+    value: T
+
+fn Node.new[T](value: T) -> Node[T]:
+    Node[T](left: None, right: None, value: value)
+
+fn in_order[T](mut! node: Node[T]) -> Coro[T]:
+    if node.left is Some(left):
+        yield from in_order(left.*)
+    yield node.value
+    if node.right is Some(right):
+        yield from in_order(right.*)
+
+fn main():
+    var tree = Node.new(2)
+    tree.left = Some(Box.new(Node.new(1)))
+    tree.right = Some(Box.new(Node.new(3)))
+
+    var coro = in_order(tree)  -- tree is borrowed as `mut!`
+    let result = coro.next     -- result is borrowed from `coro`
+    -- problem: what is the type of `result`?
+
+co in_order[T, R](mut! node: Node[T], ?some(mut! T)->R, ?none()->R) -> R:
+    if node.left is Some(left):
+        yield from in_order(left.*)
+    yield some(node.value)
+    if node.right is Some(right):
+        yield from in_order(right.*)
+
+co iter[T, R](mut! self: Array[T], do: fn(mut! T)->R) -> R:
+   var i = 0
+   while i < self.size:
+      yield do(self.buffer.deref_mut(i))
+
+co iter[T](mut! self: Array[T]):
+   var i = 0
+   while i < self.size:
+      yield self.buffer.deref_mut(i)
+
+fn next(mut! self: Coroutine[T], do: fn(mut! T)->R) -> Option[R]:
+   ... internal implementation ...
+
+fn next(mut! self: Coroutine[T], some: fn(mut! T)->R, none(): fn()->R) -> R:
+   ... internal implementation ...
+
+fn main():
+   var array = make_array()
+   var coro = array.iter()
+   var result = coro.next: do(elem): elem.to_string()
+-- Now, the type of var `coro` is something like `Coroutine[T]`.
+-- The type of `result` is going to be `Option[String]`.
+-- Note that the "return type" of `co iter` is `R`, but the type of `result`
+-- must be wrapped in an `Option` because we don't know at compile time
+-- whether `coro` is exhausted or not.
+-- Alternatively, we could also pass
+
+fn main():
+   var array =
+
+fn main():
+    var tree = Node.new(...)
+    var coro = in_order(tree)  -- tree is borrowed as `mut!`
+
+    coro.next(
+        |result|:
+            ... do something with result ...
+        ||:
+            ...
+    )
+
+    use result <- coro.next
+    ... do something with result ...
+
+
+    coro.next:
+        do(result):
+            ... do something with result ...
+
+    coro.next: |result|:
+        ... do something with result ...
