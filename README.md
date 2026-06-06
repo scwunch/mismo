@@ -61,17 +61,14 @@ Or take the deep dive and read the (outdated) [Mismo](Design%20Notes/Mismo.md) a
 
 Mismo is currently pre-0.1.0 and both the design and implementation are in active development.  It currently transpiles to Zig, but perhaps one day will target LLVM.
 
-## Installation
+## Installation & Usage
 
-TODO: Write installation instructions here
-
-## Usage
-
-TODO: Write usage instructions here
-
-## Development
-
-TODO: Write development instructions here
+To compile the Mismo compiler: 
+- install Rust and Cargo
+- install [Lisette](https://lisette.run/) => `cargo install lisette`
+- clone this repo
+- run `lis build` to build the compiler
+- or `lis run -- --test` to run the tests
 
 ## Contributing
 
@@ -81,6 +78,3 @@ TODO: Write development instructions here
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create a new Pull Request
 
-## Contributors
-
-- [Ryan Martens](https://github.com/your-github-user) - creator and maintainer
