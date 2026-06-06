@@ -17,6 +17,11 @@ Mismo **does** feature:
 
 Learn more about the Mismo philosophy and distinctives at the [Mismo Language Tour](Reference/Mismo Language Tour).
 
+- [Reference](Reference)
+- [Mismo Language Tour](https://github.com/scwunch/mismo/blob/main/Reference/Mismo%20Language%20Tour.md)
+- [Mismo Language Tour](Reference/Mismo%20Language%20Tour.md)
+- [Mismo Language Tour](Reference/Mismo Language Tour.md)
+
 Or take the deep dive and read the (outdated) [Mismo](Design Notes/Mismo).
 
 ## Project Status
