@@ -59,7 +59,7 @@ pub interface SyntaxError {
   // fn location(self, source: Slice<rune>) -> span.Location
 }
 
-#[displayable]
+#[display]
 pub struct ParseError {
   _s_: span.Span,
   pub msg: string,
