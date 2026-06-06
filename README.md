@@ -15,14 +15,9 @@ Mismo **does** feature:
 - **Type Safety** thru statically checked nominal algebraic data types (and structural types via tuples)
 - **Ergonomic Generic Programming** thru function overloading and semi-implicit dictionary-passing
 
-Learn more about the Mismo philosophy and distinctives at the [Mismo Language Tour](Reference/Mismo Language Tour).
+Learn more about the Mismo philosophy and distinctives at the [Mismo Language Tour](Reference/Mismo%20Language%20Tour.md).
 
-- [Reference](Reference)
-- [Mismo Language Tour](https://github.com/scwunch/mismo/blob/main/Reference/Mismo%20Language%20Tour.md)
-- [Mismo Language Tour](Reference/Mismo%20Language%20Tour.md)
-- [Mismo Language Tour](Reference/Mismo Language Tour.md)
-
-Or take the deep dive and read the (outdated) [Mismo](Design Notes/Mismo).
+Or take the deep dive and read the (outdated) [Mismo](Design%20Notes/Mismo.md) and other [Design Notes](Design%20Notes).
 
 ## Project Status
 
