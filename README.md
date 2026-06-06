@@ -2,7 +2,7 @@
 Mismo is an exploration of how mutable value semantics can be made safe, powerful, and ergonomic.  
 
 Mismo intentionally does **not** support:
-- Garbage Collection 
+- garbage collection 
 - methods
 - inheritance / subtyping
 - traits / type-classes
@@ -15,9 +15,9 @@ Mismo **does** feature:
 - **Type Safety** thru statically checked nominal algebraic data types (and structural types via tuples)
 - **Ergonomic Generic Programming** thru function overloading and semi-implicit dictionary-passing
 
-Learn more about the Mismo philosophy and distinctives at the [[Mismo Language Tour]].
+Learn more about the Mismo philosophy and distinctives at the [Mismo Language Tour](Reference/Mismo Language Tour).
 
-Or take the deep dive and read the (outdated) [[Mismo]].
+Or take the deep dive and read the (outdated) [Mismo](Design Notes/Mismo).
 
 ## Project Status
 
