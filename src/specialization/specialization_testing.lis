@@ -1,0 +1,123 @@
+import "errors"
+import "semantic"
+import "span"
+import "testing"
+
+pub fn test_specialization() {
+  let _ = testing.test_suite(
+    "Specialization",
+    [
+      test_specializer_add_function,
+      test_specializer_index_of,
+      test_specializer_substitute,
+      test_specialize,
+    ],
+  )
+}
+
+fn test_specializer_add_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Specializer.add_function"
+  let mut env = semantic.TypeEnv.new()
+  env.add_function(semantic.FunctionDef.mock(
+    "identity",
+    [TypeParameter.mock("T")],
+    [Parameter.let_("x", Type.Var(0))],
+    Type.Var(0),
+  ))
+
+  let mut spec = Specializer.new()
+  let ref_fn = env.signatures["identity"][0]
+  let call = semantic.FnCall.new(ref_fn, [Type.Int], [])
+  let idx = spec.add_function(MonoMorphKey.from_call(call))
+
+  t.should_eq_repr(idx, 0)?
+  t.should_eq_repr(spec.functions.length(), 1)?
+  t.should_eq_repr(spec.queue.length(), 1)?
+  t.should_eq_repr(spec.functions[0].name, "identity")?
+  t.should_eq(spec.functions[0].parameters[0].typ, Type.Int)?
+  t.should_eq(spec.functions[0].return_type, Type.Int)?
+  Ok(())
+}
+
+fn test_specializer_index_of(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Specializer.index_of"
+  let mut env = semantic.TypeEnv.new()
+  env.add_function(semantic.FunctionDef.mock(
+    "identity",
+    [TypeParameter.mock("T")],
+    [Parameter.let_("x", Type.Var(0))],
+    Type.Var(0),
+  ))
+
+  let mut spec = Specializer.new()
+  let ref_fn = env.signatures["identity"][0]
+
+  let call1 = semantic.FnCall.new(ref_fn, [Type.Int], [])
+  let i1 = spec.index_of(call1)
+  t.should_eq_repr(i1, 0)?
+  t.should_eq_repr(spec.functions.length(), 1)?
+
+  let call2 = semantic.FnCall.new(ref_fn, [Type.Int], [])
+  let i2 = spec.index_of(call2)
+  t.should_eq_repr(i2, 0)?
+  t.should_eq_repr(spec.functions.length(), 1)?
+
+  let call3 = semantic.FnCall.new(ref_fn, [Type.String], [])
+  let i3 = spec.index_of(call3)
+  t.should_eq_repr(i3, 1)?
+  t.should_eq_repr(spec.functions.length(), 2)?
+
+  Ok(())
+}
+
+fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Specializer.substitute"
+  let mut env = semantic.TypeEnv.new()
+  env.add_function(semantic.FunctionDef.mock(
+    "identity",
+    [TypeParameter.mock("T")],
+    [Parameter.let_("x", Type.Var(0))],
+    Type.Var(0),
+  ))
+
+  let mut spec = Specializer.new()
+  let ref_fn = env.signatures["identity"][0]
+  let call = semantic.FnCall.new(ref_fn, [Type.Int], [])
+  let _ = spec.index_of(call)
+
+  let expr = Expression.new(
+    span.new(0, 0),
+    semantic.Expr.Call(semantic.FnCall.new(ref_fn, [Type.Int], [])),
+  )
+  let result = spec.substitute(expr, [])
+
+  match result.kind {
+    ConcreteCall(i, args) => {
+      t.should_eq_repr(i, 0)?
+      t.should_eq_repr(args.length(), 0)?
+    },
+    _ => t.fail("expected ConcreteCall")?,
+  }
+
+  Ok(())
+}
+
+fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "specialize"
+  let mut env = semantic.TypeEnv.new()
+
+  env.add_function(semantic.FunctionDef.mock("main", [], [], Type.nil()))
+
+  let main = env.signatures["main"][0]
+
+  main.body = Expression.new(
+    span.new(0, 0),
+    semantic.Expr.Call(semantic.FnCall.new(main, [], [])),
+  )
+
+  // let registry = specialize(env)
+  // t.should_eq_repr(registry.functions.length(), 1)?
+  // t.should_eq_repr(registry.functions[0].name, "main")?
+
+  Ok(())
+}

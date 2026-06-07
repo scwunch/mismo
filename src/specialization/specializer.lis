@@ -1,8 +1,6 @@
 import "semantic"
 import "utils/slice"
 
-type FnCall = semantic.FnCall
-
 pub fn specialize(reg: semantic.TypeEnv) -> ConcreteRegistry {
   let main = match reg.signatures.get("main") {
     Some([main]) => main,
@@ -11,19 +9,25 @@ pub fn specialize(reg: semantic.TypeEnv) -> ConcreteRegistry {
   }
 
   let mut spec = Specializer.new()
-  let _ = spec.add_function(FnCall { fun: main, type_args: [], args: [] })
+  let _ = spec.add_function(MonoMorphKey { fun: main, type_args: [] })
 
   spec.run()
 
   ConcreteRegistry { type_defs: reg.type_defs, functions: spec.functions }
 }
 
-/// careful, even if this compiles, I'm not sure if the hash and eq implementations will be okay
-struct MonoMorphKey { fun: Ref<semantic.FunctionDef>, type_args: Slice<Type> }
+struct MonoMorphKey {
+  fun: Ref<semantic.FunctionDef>,
+  type_args: Slice<semantic.Type>,
+}
 
 impl MonoMorphKey {
-  fn from_call(call: FnCall) -> MonoMorphKey {
+  fn from_call(call: semantic.FnCall) -> MonoMorphKey {
     MonoMorphKey { fun: call.fun, type_args: call.type_args as Slice<Type> }
+  }
+
+  fn eq(self, key: MonoMorphKey) -> bool {
+    self.fun == key.fun && slice.compare(self.type_args, key.type_args, semantic.Type.eq)
   }
 }
 
@@ -32,16 +36,16 @@ type FuncAndTypeArgs = (int, Slice<Type>)
 pub struct Specializer {
   queue: Slice<FuncAndTypeArgs>,
   functions: Slice<Function>,
-  function_map: Map<MonoMorphKey, int>,
+  function_map: Cache,
   errors: Slice<error>,
 }
 
 impl Specializer {
   fn new() -> Specializer {
-    Specializer { 
+    Specializer {
       queue: [],
       functions: [],
-      function_map: Map.new(),
+      function_map: Cache.new(),
       errors: [],
     }
   }
@@ -59,18 +63,17 @@ impl Specializer {
     func.body = self.substitute(func.body, item.1)
   }
 
-  fn index_of(self: Ref<Specializer>, call: FnCall) -> int {
-    self.function_map
-      .get(MonoMorphKey.from_call(call))
-      .unwrap_or_else(|| self.add_function(call))
+  fn index_of(self: Ref<Specializer>, call: semantic.FnCall) -> int {
+    let call = MonoMorphKey.from_call(call)
+    self.function_map.get(call).unwrap_or_else(|| self.add_function(call))
   }
 
-  fn add_function(self: Ref<Specializer>, call: FnCall) -> int {
+  fn add_function(self: Ref<Specializer>, call: MonoMorphKey) -> int {
     let i = self.functions.length()
     let parameters = call.fun.parameters.map(|p| p.substitute(call.type_args))
     let return_type = call.fun.return_type.substitute(call.type_args)
     self.functions = self.functions.append(
-      Function { 
+      Function {
         span: call.fun.span,
         name: call.fun.name,
         parameters,

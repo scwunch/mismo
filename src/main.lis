@@ -5,6 +5,7 @@ import "lexer"
 import "parser"
 import "semantic"
 import "span"
+import "specialization"
 
 fn main() {
   match os.Args {
@@ -38,6 +39,7 @@ fn run_tests(tests: Slice<string>) {
     ("type_env", semantic.test_type_env),
     ("typecheck", semantic.test_typecheck),
     ("modecheck", semantic.test_modecheck),
+    ("specialization", specialization.test_specialization),
   ])
 
   if tests.is_empty() {

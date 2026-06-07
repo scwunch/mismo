@@ -56,15 +56,4 @@ impl FunctionTemplate {
     }
   }
 
-  pub fn signature(self) -> string {
-    let type_params = type_params_to_string(self.type_parameters)
-    let params = self.parameters
-      .map(|p| f"{p.mode} {p.name} {p.typ}")
-      .join(", ")
-    f"fn {self.name}{type_params}({params}) {self.return_type}"
-  }
-}
-
-fn type_params_to_string(type_params: Slice<TypeParameter>) -> string {
-  if type_params.is_empty() { "" } else { f"{type_params.map(|tp| tp.name)}" }
 }

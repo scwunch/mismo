@@ -1,0 +1,119 @@
+import "go:hash/maphash"
+
+import "semantic"
+import "span"
+
+struct Cache { map: Map<uint64, Slice<(MonoMorphKey, int)>> }
+
+impl Cache {
+  fn new() -> Cache {
+    Cache { .. }
+  }
+
+  fn get(self, key: MonoMorphKey) -> Option<int> {
+    match self.map.get(key.hash()) {
+      Some(pairs) => {
+        for (k, v) in pairs {
+          if k.eq(key) { return Some(v) }
+        }
+        None
+      },
+      None => None,
+    }
+  }
+
+  fn insert(self: Ref<Cache>, key: MonoMorphKey, value: int) {
+    let index = key.hash()
+    match self.map.get(index) {
+      Some(pairs) => {
+        let mut pairs = pairs
+        for (i, (k, _)) in pairs.enumerate() {
+          if k.eq(key) { pairs[i] = (key, value) }
+        }
+        self.map[index] = pairs.append((key, value))
+      },
+      None => self.map[index] = [(key, value)],
+    }
+  }
+}
+
+struct Hasher { h: Ref<maphash.Hash> }
+
+impl Hasher {
+  fn new() -> Hasher {
+    Hasher { h: &maphash.Hash { .. } }
+  }
+
+  fn write_byte(self, b: byte) {
+    let _ = self.h.WriteByte(b)
+  }
+
+  fn write_string(self, s: string) {
+    let _ = self.h.WriteString(s)
+  }
+
+  fn sum(self) -> uint64 {
+    self.h.Sum64()
+  }
+
+  fn write_type(self, t: semantic.Type) {
+    match t {
+      Never => self.write_byte(0),
+      Bool => self.write_byte(1),
+      Nat => self.write_byte(2),
+      Int => self.write_byte(3),
+      Float => self.write_byte(4),
+      String => self.write_byte(5),
+      Array(t) => {
+        self.write_byte(6)
+        self.write_type(t.*)
+      },
+      Tuple(fields) => {
+        self.write_byte(7)
+        for f in fields {
+          self.write_type(f)
+        }
+      },
+      Fn(params, ret) => {
+        self.write_byte(8)
+        for p in params {
+          self.write_byte(p.mode.ordinal() as byte)
+          self.write_type(p.typ)
+        }
+        self.write_type(ret.*)
+      },
+      Adt(def, args) => {
+        self.write_byte(9)
+        self.write_span(def.span)
+        for a in args {
+          self.write_type(a)
+        }
+      },
+      Var(int) => {
+        self.write_byte(10)
+        self.write_byte(int as byte)
+      },
+    }
+  }
+
+  fn write_span(self, s: span.Span) {
+    self.write_byte(s.start as byte)
+    self.write_byte(s.end as byte)
+  }
+
+  fn write_monomorph(self, key: MonoMorphKey) {
+    self.write_span(key.fun.span)
+    self.write_string(key.fun.name)
+    for t in key.type_args {
+      self.write_type(t)
+    }
+  }
+}
+
+impl MonoMorphKey {
+  fn hash(self) -> uint64 {
+    let h = Hasher.new()
+    h.write_monomorph(self)
+    h.sum()
+  }
+}

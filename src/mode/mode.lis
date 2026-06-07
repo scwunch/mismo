@@ -15,7 +15,7 @@ impl Mode {
     }
   }
 
-  fn ordinal(self) -> int {
+  pub fn ordinal(self) -> int {
     match self {
       Mode.Let => 0,
       Mode.Mut => 1,

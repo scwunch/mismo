@@ -19,6 +19,16 @@ pub struct TypeParameter {
   pub name: string,
 }
 
+impl TypeParameter {
+  pub fn new(span: span.Span, name: string) -> TypeParameter {
+    TypeParameter { span, name }
+  }
+
+  pub fn mock(name: string) -> TypeParameter {
+    TypeParameter { name, .. }
+  }
+}
+
 pub struct Field {
   pub span: span.Span,
   pub name: string,
@@ -125,7 +135,7 @@ impl FunctionDef {
     f"fn {self.name}{type_params}({params}) {self.return_type}"
   }
 
-  fn mock(
+  pub fn mock(
     name: string,
     type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
