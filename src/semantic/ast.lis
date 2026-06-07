@@ -47,11 +47,37 @@ impl FnCall {
   }
 }
 
-pub struct SwitchIf { cases: Slice<(Expression, Expression)> }
+pub struct SwitchIf {
+  pub cases: Slice<(Expression, Expression)>,
+}
 
-pub struct Match { subject: Ref<Expression>, cases: Slice<MatchCase> }
+impl SwitchIf {
+  pub fn new(cases: Slice<(Expression, Expression)>) -> SwitchIf {
+    SwitchIf { cases }
+  }
+}
 
-pub struct MatchCase { pattern: Expression, expr: Expression }
+pub struct Match {
+  pub subject: Ref<Expression>,
+  pub cases: Slice<MatchCase>,
+}
+
+impl Match {
+  pub fn new(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Match {
+    Match { subject, cases }
+  }
+}
+
+pub struct MatchCase {
+  pub pattern: Expression,
+  pub expr: Expression,
+}
+
+impl MatchCase {
+  pub fn new(pattern: Expression, expr: Expression) -> MatchCase {
+    MatchCase { pattern, expr }
+  }
+}
 
 impl Expression {
   pub fn new(span: span.Span, kind: Expr) -> Expression {

@@ -3,15 +3,16 @@ import "go:hash/maphash"
 import "semantic"
 import "span"
 
-struct Cache { map: Map<uint64, Slice<(MonoMorphKey, int)>> }
+struct Cache { map: Map<uint64, Slice<(MonoMorphKey, int)>>, hasher: Hasher }
 
 impl Cache {
   fn new() -> Cache {
-    Cache { .. }
+    Cache { hasher: Hasher.new(), .. }
   }
 
   fn get(self, key: MonoMorphKey) -> Option<int> {
-    match self.map.get(key.hash()) {
+    let hash = key.hash(self.hasher)
+    match self.map.get(hash) {
       Some(pairs) => {
         for (k, v) in pairs {
           if k.eq(key) { return Some(v) }
@@ -23,7 +24,7 @@ impl Cache {
   }
 
   fn insert(self: Ref<Cache>, key: MonoMorphKey, value: int) {
-    let index = key.hash()
+    let index = key.hash(self.hasher)
     match self.map.get(index) {
       Some(pairs) => {
         let mut pairs = pairs
@@ -42,6 +43,10 @@ struct Hasher { h: Ref<maphash.Hash> }
 impl Hasher {
   fn new() -> Hasher {
     Hasher { h: &maphash.Hash { .. } }
+  }
+
+  fn reset(self) {
+    self.h.Reset()
   }
 
   fn write_byte(self, b: byte) {
@@ -111,8 +116,8 @@ impl Hasher {
 }
 
 impl MonoMorphKey {
-  fn hash(self) -> uint64 {
-    let h = Hasher.new()
+  fn hash(self, h: Hasher) -> uint64 {
+    h.reset()
     h.write_monomorph(self)
     h.sum()
   }

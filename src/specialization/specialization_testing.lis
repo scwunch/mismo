@@ -1,3 +1,5 @@
+import "go:fmt"
+
 import "errors"
 import "semantic"
 import "span"
@@ -10,6 +12,8 @@ pub fn test_specialization() {
       test_specializer_add_function,
       test_specializer_index_of,
       test_specializer_substitute,
+      test_cache_get,
+      test_cache_insert,
       test_specialize,
     ],
   )
@@ -102,22 +106,93 @@ fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string>
   Ok(())
 }
 
+fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Cache.get"
+  let mut env = semantic.TypeEnv.new()
+  env.add_function(semantic.FunctionDef.mock("f", [], [], Type.nil()))
+
+  let ref_fn = env.signatures["f"][0]
+  let mut cache = Cache.new()
+  let key = MonoMorphKey.from_call(semantic.FnCall.new(ref_fn, [], []))
+  let hash = key.hash(cache.hasher)
+  cache.map[hash] = [(key, 42)]
+
+  match cache.get(key) {
+    Some(v) => t.should_eq_repr(v, 42)?,
+    None => t.fail("expected Some(42)")?,
+  }
+
+  let other = MonoMorphKey.from_call(semantic.FnCall.new(ref_fn, [Type.Int], []))
+  match cache.get(other) {
+    Some(_) => t.fail("expected None for non-existent key")?,
+    None => (),
+  }
+
+  Ok(())
+}
+
+fn test_cache_insert(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Cache.insert"
+  let mut env = semantic.TypeEnv.new()
+  env.add_function(semantic.FunctionDef.mock("f", [], [], Type.nil()))
+
+  let ref_fn = env.signatures["f"][0]
+  let mut cache = Cache.new()
+  let key = MonoMorphKey.from_call(semantic.FnCall.new(ref_fn, [], []))
+
+  cache.insert(key, 10)
+  match cache.get(key) {
+    Some(v) => t.should_eq_repr(v, 10)?,
+    None => t.fail("expected Some(10) after insert")?,
+  }
+
+  cache.insert(key, 20)
+  match cache.get(key) {
+    Some(v) => t.should_eq_repr(v, 20)?,
+    None => t.fail("expected Some(20) after second insert")?,
+  }
+
+  Ok(())
+}
+
 fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "specialize"
   let mut env = semantic.TypeEnv.new()
 
   env.add_function(semantic.FunctionDef.mock("main", [], [], Type.nil()))
+  env.add_function(semantic.FunctionDef.mock(
+    "foo",
+    [TypeParameter.mock("T")],
+    [Parameter.let_("a", Type.Var(0))],
+    Type.nil(),
+  ))
 
   let main = env.signatures["main"][0]
+  let foo = env.signatures["foo"][0]
 
   main.body = Expression.new(
     span.new(0, 0),
-    semantic.Expr.Call(semantic.FnCall.new(main, [], [])),
+    Expr.Block(
+      [
+        Expression.new(
+          span.new(0, 0),
+          Expr.Call(semantic.FnCall.new(foo, [Type.Int], [])),
+        ),
+        Expression.new(
+          span.new(0, 0),
+          Expr.Call(semantic.FnCall.new(foo, [Type.String], [])),
+        ),
+      ],
+      Type.nil(),
+    ),
   )
 
-  // let registry = specialize(env)
-  // t.should_eq_repr(registry.functions.length(), 1)?
-  // t.should_eq_repr(registry.functions[0].name, "main")?
-
+  let registry = specialize(env)
+  t.should_eq_repr(registry.functions.length(), 3)?
+  t.should_eq_repr(registry.functions[0].name, "main")?
+  t.should_eq_repr(registry.functions[1].name, "foo")?
+  t.should_eq(registry.functions[1].parameters[0].typ, Type.Int)?
+  t.should_eq_repr(registry.functions[2].name, "foo")?
+  t.should_eq(registry.functions[2].parameters[0].typ, Type.String)?
   Ok(())
 }
