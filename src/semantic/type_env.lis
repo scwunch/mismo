@@ -181,6 +181,16 @@ impl TypeEnv {
     self.function_defs = functions.map(self.eval_function)
     for i in 0..self.function_defs.length() {
       let def = &self.function_defs[i]
+      // self.signatures
+      //   .get(def.name)
+      //   .map_or_else<()>(
+      //     || {
+      //       self.signatures[def.name] = [def]
+      //     },
+      //     |existing| {
+      //       self.signatures[def.name] = existing.append(def)
+      //     },
+      //   )
       match self.signatures.get(def.name) {
         Some(existing) => {
           self.signatures[def.name] = existing.append(def)
@@ -211,6 +221,16 @@ impl TypeEnv {
     let i = self.function_defs.length()
     self.function_defs = self.function_defs.append(func)
     let def = &self.function_defs[i]
+    // self.signatures
+    //   .get(def.name)
+    //   .map_or_else<()>(
+    //     || {
+    //       self.signatures[def.name] = [def]
+    //     },
+    //     |existing| {
+    //       self.signatures[def.name] = existing.append(def)
+    //     },
+    //   )
     match self.signatures.get(def.name) {
       Some(existing) => {
         self.signatures[def.name] = existing.append(def)

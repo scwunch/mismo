@@ -25,3 +25,25 @@ pub fn analyze(items: cst.Declarations) -> TypeEnv {
   }
   env
 }
+
+pub fn type_check(items: cst.Declarations) -> TypeEnv {
+  let mut env = TypeEnv.new()
+  // populate @type_defs and @function_defs with names of types and type parameters
+  env.register_types(items.types)
+  // evaluate fields and variants for structs and enums
+  env.fill_out_type_info(items.types)
+  // register signatures of all functions
+  env.register_functions(items.functions)
+
+  for i in 0..env.function_defs.length() {
+    let func = &env.function_defs[i]
+    let body = items.functions[i].body
+    match TypeCheck.new(&env, func.*).check(body, func.return_type) {
+      Ok(expr) => {
+        func.body = expr
+      },
+      Err(e) => env.error(e),
+    }
+  }
+  env
+}

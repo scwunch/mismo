@@ -1,0 +1,12 @@
+import "compiler"
+import "errors"
+import "testing"
+
+pub fn test_compiler() {
+  let _ = testing.test_suite("Compiler", [test_dummy])
+}
+
+fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "dummy"
+  Ok(())
+}

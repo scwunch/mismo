@@ -1,6 +1,3 @@
-import "go:fmt"
-
-import "errors"
 import "semantic"
 import "span"
 import "testing"

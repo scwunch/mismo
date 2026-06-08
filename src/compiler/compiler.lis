@@ -1,24 +1,41 @@
+import "codegen"
 import "cst"
+import "lexer"
 import "parser"
 import "semantic"
 import "specialization"
 
-pub struct Compiler { cst_defs: cst.Declarations }
-
-impl Compiler {
-  pub fn parse(source: string) -> Ref<cst.Declarations> {
-    let mut parser = parser.Parser.new(source, &cst.Declarations.new())
-    parser.parse()
-    parser.defs
+pub fn compile_to_tokens(source: string) -> Slice<lexer.Token> {
+  let mut toks = []
+  let mut lex = lexer.Lexer.new(source)
+  loop {
+    let tok = lex.next()
+    toks = toks.append(tok)
+    if tok.kind == lexer.TokenKind.EOF { break toks }
   }
+}
 
-  pub fn type_check(defs: cst.Declarations) -> Result<Slice<(semantic.FunctionDef, semantic.Expression)>, ()> {
-    let mut env = semantic.TypeEnv.new()
-    let funcs = env.type_check_program(defs)
-    if env.errors.is_empty() { Ok(funcs) } else { Err(()) }
-  }
+pub fn compile_to_ast(source: string) -> cst.Declarations {
+  let mut parser = parser.Parser.new(source)
+  parser.parse()
+}
 
-  pub fn monomorphize(funcs: Slice<(semantic.FunctionDef, semantic.Expression)>) {
-    specialization.Specializer
-  }
+pub fn type_check(source: string) -> semantic.TypeEnv {
+  let decs = compile_to_ast(source)
+  semantic.type_check(decs)
+}
+
+pub fn mode_check(source: string) -> semantic.TypeEnv {
+  let decs = compile_to_ast(source)
+  semantic.analyze(decs)
+}
+
+pub fn specialize(source: string) -> specialization.ConcreteRegistry {
+  let reg = mode_check(source)
+  specialization.specialize(reg)
+}
+
+pub fn transpile(source: string) -> string {
+  let reg = specialize(source)
+  codegen.generate(reg)
 }
