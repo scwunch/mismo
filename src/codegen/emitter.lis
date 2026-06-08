@@ -1,0 +1,288 @@
+import "go:strings"
+
+import "mode"
+import "semantic"
+import "specialization"
+
+pub struct Emitter {
+  pub reg: specialization.ConcreteRegistry,
+  pub buffer: Slice<string>,
+  pub indent: int,
+}
+
+impl Emitter {
+  pub fn new(reg: Registry) -> Emitter {
+    Emitter { reg, buffer: [], indent: 0 }
+  }
+
+  pub fn out(self) -> string {
+    self.buffer.join("")
+  }
+
+  pub fn emit_program(self: Ref<Emitter>) {
+    for (_, t) in self.reg.type_defs {
+      self.emit_type_def(t.*)
+    }
+    for (i, func) in self.reg.functions.enumerate() {
+      self.emit_function(func, i)
+    }
+  }
+
+  fn emit_function(
+    self: Ref<Emitter>,
+    func: specialization.Function,
+    index: int,
+  ) {
+    self.emit("pub fn ")
+    self.ident(f"{func.name}_{index}")
+    self.emit_list_paren(func.parameters, self.emit_parameter)
+    self.emit(" ")
+    match func.return_type {
+      Tuple([]) => self.emit("void"),
+      t => self.emit_type(t),
+    }
+    self.start_block()
+    self.emit("return ")
+    self.emit_expr(func.body.kind)
+    self.emit(";")
+    self.end_block()
+    self.newline()
+  }
+
+  fn emit_parameter(self: Ref<Emitter>, param: semantic.Parameter) {
+    self.ident(param.name)
+    self.emit_param_type(param.mode, param.typ)
+  }
+
+  fn emit_expr(self: Ref<Emitter>, expr: semantic.Expr) {
+    match expr {
+      semantic.Expr.Nil => self.emit("()"),
+      _ => panic(f"unhandled expression type: {expr}"),
+    }
+  }
+
+  fn newline(self: Ref<Emitter>) {
+    self.emit("\n")
+    self.emit(strings.Repeat("  ", self.indent))
+  }
+
+  fn start_block(self: Ref<Emitter>) {
+    self.emit("{")
+    self.indent += 1
+    self.newline()
+  }
+
+  fn end_block(self: Ref<Emitter>) {
+    self.indent -= 1
+    self.newline()
+    self.emit("}")
+  }
+
+  fn emit_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+    if type_def.type_parameters.is_empty() {
+      self.emit_concrete_type_def(type_def)
+    } else {
+      self.emit_generic_type_def(type_def)
+    }
+  }
+
+  fn emit_concrete_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+    self.emit("pub const ")
+    self.type_name(type_def.name)
+    self.emit(" = ")
+    match type_def.kind {
+      Struct(fields) => self.emit_anonymous_struct_def(fields),
+      Enum(variants) => self.emit_anonymous_enum_def(variants),
+    }
+    self.emit(";")
+    self.newline()
+  }
+
+  fn emit_anonymous_struct_def(
+    self: Ref<Emitter>,
+    fields: Slice<semantic.Field>,
+  ) {
+    self.emit("struct ")
+    self.emit_block(
+      fields,
+      |field| {
+        self.ident(field.name)
+        self.emit(": ")
+        self.emit_type(field.typ)
+      },
+    )
+  }
+
+  fn emit_anonymous_enum_def(
+    self: Ref<Emitter>,
+    variants: Slice<semantic.Variant>,
+  ) {
+    self.emit("union(enum) ")
+    self.emit_block(
+      variants,
+      |variant| {
+        self.emit(variant.name)
+        self.emit_list(": struct {", "}", variant.fields, self.emit_type)
+      },
+    )
+  }
+
+  fn emit_generic_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+    // generic types are implemented as comptime functions in Zig
+    // they are instantiated as needed
+    self.emit("pub fn ")
+    self.type_name(type_def.name)
+    self.emit_list_paren(type_def.type_parameters, self.emit_type_param)
+    self.emit(" type ")
+    self.start_block()
+    self.emit("return ")
+    match type_def.kind {
+      Struct(fields) => self.emit_anonymous_struct_def(fields),
+      Enum(variants) => self.emit_anonymous_enum_def(variants),
+    }
+    self.emit(";")
+    self.end_block()
+    self.newline()
+  }
+
+  fn emit_type_param(self: Ref<Emitter>, type_param: semantic.TypeParameter) {
+    self.emit("comtime ")
+    self.emit(type_param.name)
+    self.emit(": type")
+  }
+
+  fn emit_type(self: Ref<Emitter>, typ: semantic.Type) {
+    match typ {
+      Never => self.emit("noreturn"),
+      Tuple([]) => self.emit("void"),
+      Bool => self.emit("bool"),
+      Nat => self.emit("usize"),
+      Int => self.emit("isize"),
+      Float => self.emit("f64"),
+      String => self.emit("String_t"),
+      Array(t) => {
+        self.emit("Array_t(")
+        self.emit_type(t.*)
+        self.emit(")")
+      },
+      // Pointer(t) => {
+      //   self.emit("*")
+      //   self.emit_type(t.*)
+      // },
+      // Slice(t) => "[]",
+      Tuple(ts) => self.emit_list_paren(ts, self.emit_type),
+      Fn(params, ret) => {
+        // self.emit("*const fn () ")
+        self.emit("fn (")
+        self.emit_list_paren(params, |p| self.emit_param_type(p.mode, p.typ))
+        self.emit_type(ret.*)
+      },
+      Adt(def, []) => self.emit(def.name + "_t"),
+      Adt(def, args) => {
+        self.emit(def.name)
+        self.emit("_t")
+        self.emit_list_paren(args, self.emit_type)
+      },
+      Var(i) => self.emit(f"T{i}"),
+    }
+  }
+
+  fn emit_list<A>(
+    self: Ref<Emitter>,
+    start: string,
+    end: string,
+    items: Slice<A>,
+    action: fn(A) -> (),
+  ) {
+    self.emit(start)
+    match items {
+      [] => (),
+      [a, ..rest] => {
+        action(a)
+        for a in rest {
+          self.emit(", ")
+          action(a)
+        }
+      },
+    }
+    self.emit(end)
+  }
+
+  fn emit_list_paren<A>(
+    self: Ref<Emitter>,
+    items: Slice<A>,
+    action: fn(A) -> (),
+  ) {
+    match items {
+      [] => self.emit("()"),
+      [a, ..rest] => {
+        self.emit("(")
+        action(a)
+        for a in rest {
+          self.emit(", ")
+          action(a)
+        }
+        self.emit(")")
+      },
+    }
+  }
+
+  fn emit_list_bracket<A>(
+    self: Ref<Emitter>,
+    items: Slice<A>,
+    action: fn(A) -> (),
+  ) {
+    match items {
+      [] => self.emit("[]"),
+      [a, ..rest] => {
+        self.emit("[")
+        action(a)
+        for a in rest {
+          self.emit(", ")
+          action(a)
+        }
+        self.emit("]")
+      },
+    }
+  }
+
+  fn emit_block<A>(self: Ref<Emitter>, items: Slice<A>, action: fn(A) -> ()) {
+    match items {
+      [] => self.emit("{}"),
+      [a, ..rest] => {
+        self.start_block()
+        action(a)
+        for a in rest {
+          self.emit(",")
+          self.newline()
+          action(a)
+        }
+        self.end_block()
+      },
+    }
+  }
+
+  fn emit_param_type(self: Ref<Emitter>, mode: mode.Mode, typ: semantic.Type) {
+    match mode {
+      Let => self.emit("*const "),
+      Mut | MutBang => self.emit("*"),
+      _ => (),
+    }
+    self.emit_type(typ)
+  }
+
+  fn ident(self: Ref<Emitter>, name: string) {
+    // check if valid Zig identifier here
+    self.emit(name)
+  }
+
+  fn type_name(self: Ref<Emitter>, name: string) {
+    // check if valid Zig identifier here
+    self.emit(name)
+    self.emit("_t")
+  }
+
+  fn emit(self: Ref<Emitter>, str: string) {
+    self.buffer = self.buffer.append(str)
+  }
+}
