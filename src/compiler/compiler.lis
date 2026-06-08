@@ -22,7 +22,7 @@ pub fn compile_to_ast(source: string) -> cst.Declarations {
 
 pub fn type_check(source: string) -> semantic.TypeEnv {
   let decs = compile_to_ast(source)
-  semantic.type_check(decs)
+  semantic.analyze_type_check(decs)
 }
 
 pub fn mode_check(source: string) -> semantic.TypeEnv {

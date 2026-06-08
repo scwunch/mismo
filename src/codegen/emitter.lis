@@ -262,10 +262,10 @@ impl Emitter {
     }
   }
 
-  fn emit_param_type(self: Ref<Emitter>, mode: mode.Mode, typ: semantic.Type) {
-    match mode {
-      Let => self.emit("*const "),
-      Mut | MutBang => self.emit("*"),
+  fn emit_param_type(self: Ref<Emitter>, m: mode.Mode, typ: semantic.Type) {
+    match m {
+      mode.Mode.Let => self.emit("*const "),
+      mode.Mode.Mut | mode.Mode.MutBang => self.emit("*"),
       _ => (),
     }
     self.emit_type(typ)

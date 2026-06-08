@@ -1,5 +1,5 @@
-import "compiler"
-import "errors"
+import "go:fmt"
+
 import "testing"
 
 pub fn test_compiler() {
@@ -8,5 +8,9 @@ pub fn test_compiler() {
 
 fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "dummy"
+  let program = "
+  hello world
+  "
+  fmt.Println(program)
   Ok(())
 }

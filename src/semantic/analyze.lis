@@ -26,7 +26,7 @@ pub fn analyze(items: cst.Declarations) -> TypeEnv {
   env
 }
 
-pub fn type_check(items: cst.Declarations) -> TypeEnv {
+pub fn analyze_type_check(items: cst.Declarations) -> TypeEnv {
   let mut env = TypeEnv.new()
   // populate @type_defs and @function_defs with names of types and type parameters
   env.register_types(items.types)

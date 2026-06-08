@@ -1,6 +1,7 @@
 import "go:fmt"
 import "go:os"
 
+import "compiler"
 import "lexer"
 import "parser"
 import "semantic"
@@ -40,6 +41,8 @@ fn run_tests(tests: Slice<string>) {
     ("typecheck", semantic.test_typecheck),
     ("modecheck", semantic.test_modecheck),
     ("specialization", specialization.test_specialization),
+    // ("codegen", codegen.test_codegen),
+    ("compiler", compiler.test_compiler),
   ])
 
   if tests.is_empty() {
