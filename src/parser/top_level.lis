@@ -2,13 +2,14 @@ import "cst"
 import "lexer"
 
 impl Parser {
-  pub fn parse(self: Ref<Parser>) {
+  pub fn parse(self: Ref<Parser>) -> cst.Declarations {
     loop {
       let result: Result<(), ParseError> = match self.peek().kind {
-        TokenKind.Identifier("import") => self.parse_import(),
-        TokenKind.Identifier("struct") => self.parse_struct(),
-        TokenKind.Identifier("enum") => self.parse_enum(),
-        TokenKind.Identifier("fn") => self.parse_function(),
+        Identifier("import") => self.parse_import(),
+        Identifier("struct") => self.parse_struct(),
+        Identifier("enum") => self.parse_enum(),
+        Identifier("fn") => self.parse_function(),
+        EOF => break self.defs,
         _ => Err(self.error(
           self.peek().span,
           "Expected top-level definition (fn, import, struct, enum, interface)",
