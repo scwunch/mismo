@@ -76,27 +76,27 @@ impl Lexer {
     loop {
       match self.peek_char() {
         '\n' => break,
-        0 => return Token.newline(start, self.index, 0),
+        0 => return Token.newline(start, self.index, 0, 0),
         _ => self.index += 1,
       }
     }
 
     let mut indent: uint32 = 0
 
-    loop {
+    let next_char = loop {
       match self.peek_char() {
         ' ' | '\t' => indent += 1,
         '\n' => indent = 0,
-        0 => return Token.newline(start, self.index, 0),
+        0 => return Token.newline(start, self.index, 0, 0),
         '-' if self.peek_char_at(1) == '-' => {
           return self.new_line_recursive(start)
         },
-        _ => break,
+        c => break c,
       }
       self.index += 1
     }
 
-    Token.newline(start, self.index, indent)
+    Token.newline(start, self.index, indent, next_char)
   }
 
   /// Reads an identifier, keyword, or word-operator (and, or, not, is, in).

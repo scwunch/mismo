@@ -185,7 +185,7 @@ fn test_comments(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut lex = Lexer.new("-- this is a comment\nhello")
   let tok = lex.next()
   match tok.kind {
-    TokenKind.Newline(0) => (),
+    TokenKind.Newline(0, 'h') => (),
     _ => t.fail(f"expected newline, got {tok.kind}")?,
   }
   let tok2 = lex.next()
@@ -209,7 +209,7 @@ fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Token.identifier(20, 26, "String"),
     Token.right_paren(26),
     Token.colon(27),
-    Token.newline(28, 31, 2),
+    Token.newline(28, 31, 2, 'p'),
     Token.identifier(31, 36, "print"),
     Token.left_paren(36),
     Token.string_literal(37, 46, "hello, "),
@@ -330,7 +330,7 @@ fn test_newlines(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut lex = Lexer.new("\n")
   let tok = lex.next()
   match tok.kind {
-    TokenKind.Newline(indent) => {
+    TokenKind.Newline(indent, 0) => {
       if indent != 0 { t.fail(f"expected indent 0, got {indent}")? }
     },
     _ => t.fail(f"expected newline, got {tok.kind}")?,

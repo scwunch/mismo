@@ -62,7 +62,7 @@ impl ExpressionParser {
 
   fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     if self.expression_done() {
-      let _ = self.parser.consume(lexer.TokenKind.Colon)
+      let _ = self.parser.consume(TokenKind.Colon)
       return Err(ParseError.new(self.parser.peek().span, "Empty expression"))
     }
 
@@ -183,7 +183,7 @@ impl ExpressionParser {
       TokenKind.RightBrace |
       TokenKind.Colon |
       TokenKind.EOF => true,
-      TokenKind.Newline(n) => n <= self.expression_indent,
+      TokenKind.Newline(i, _) => i <= self.expression_indent,
       _ => match self.stop {
         StopAt.Normal => false,
         StopAt.UcsBranch => self.check_ucs_branch(),
@@ -193,7 +193,7 @@ impl ExpressionParser {
           _ => false,
         },
         StopAt.Newline => match self.parser.peek().kind {
-          TokenKind.Newline(_n) => true,
+          TokenKind.Newline(_, _) => true,
           _ => false,
         },
         StopAt.ExpressionEnd => false,
@@ -207,7 +207,7 @@ impl ExpressionParser {
     let result = match tok.kind {
       TokenKind.Operator(op) => is_boolean_op(op) &&
       is_indented_newline(self.parser.peek().kind, self.expression_indent),
-      TokenKind.Newline(n) => n > self.expression_indent &&
+      TokenKind.Newline(n, _) => n > self.expression_indent &&
       is_boolean_token_kind(self.parser.peek().kind),
       _ => false,
     }
@@ -367,7 +367,7 @@ impl ExpressionParser {
         match self.stop {
           StopAt.ExpressionEnd => Ok(true),
           _ => match tok.kind {
-            TokenKind.Newline(_n) => Ok(true),
+            TokenKind.Newline(_, _) => Ok(true),
             _ => {
               let _ = self.parser.next()
               Err(ParseError.new(
@@ -388,7 +388,7 @@ impl ExpressionParser {
       self.stop,
     )
     let expr = expr_parser.parse()?
-    let Ok(_rparen_span) = self.parser.consume(lexer.TokenKind.RightParen) else {
+    let Ok(_rparen_span) = self.parser.consume(TokenKind.RightParen) else {
       return Err(ParseError.new(
         self.parser.peek().span,
         "Expected closing parenthesis",
@@ -398,65 +398,53 @@ impl ExpressionParser {
   }
 
   fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
-    let indent = self.parser.current_line_indent
-
-    self.skip_newline_unless_block_end(
-      indent,
-      "Expected array element; got end of block",
+    let items = self.parser.parse_list(
+      ']',
+      || {
+        ExpressionParser
+          .new(self.parser, self.expression_indent, StopAt.Comma)
+          .parse()
+      },
     )?
 
-    if self.parser.peek().kind == lexer.TokenKind.RightBracket {
-      let rbracket = self.parser.next()
-      return Ok(cst.array_lit(_span.merge(rbracket.span), []))
-    }
+    let rbracket_span = self.parser.consume(TokenKind.RightBracket)?
 
-    let items = self.parse_list([])?
-    let Ok(rbracket_span) = self.parser.consume(lexer.TokenKind.RightBracket) else {
-      return Err(ParseError.new(
-        self.parser.peek().span,
-        "Expected closing bracket",
-      ))
-    }
     let span_end = _span.merge(rbracket_span)
 
-    if items.is_empty() {
-      Ok(cst.array_lit(span_end, []))
-    } else {
-      Ok(cst.array_lit(span_end, items))
-    }
+    Ok(cst.array_lit(span_end, items))
   }
 
-  fn skip_newline_unless_block_end(
-    self: Ref<ExpressionParser>,
-    indent: uint32,
-    err_msg: string,
-  ) -> Result<(), ParseError> {
-    match self.parser.peek().kind {
-      TokenKind.Newline(n) => {
-        if n > indent {
-          let _ = self.parser.next()
-          return Ok(())
-        }
-        let peek_span = self.parser.peek().span
-        let result = self.parser.try_or_backtrack(|| {
-          let _ = self.parser.next()
-          match self.parser.peek().kind {
-            TokenKind.RightBracket | TokenKind.RightParen | TokenKind.RightBrace => Ok(
-              true,
-            ),
-            _ => Err(ParseError.new(peek_span, "")),
-          }
-        })
-        if result.is_ok() {
-          let _ = self.parser.next()
-          Ok(())
-        } else {
-          Err(ParseError.new(peek_span, err_msg))
-        }
-      },
-      _ => Ok(()),
-    }
-  }
+  // fn skip_newline_unless_block_end(
+  //   self: Ref<ExpressionParser>,
+  //   indent: uint32,
+  //   err_msg: string,
+  // ) -> Result<(), ParseError> {
+  //   match self.parser.peek().kind {
+  //     TokenKind.Newline(n) => {
+  //       if n > indent {
+  //         let _ = self.parser.next()
+  //         return Ok(())
+  //       }
+  //       let peek_span = self.parser.peek().span
+  //       let result = self.parser.try_or_backtrack(|| {
+  //         let _ = self.parser.next()
+  //         match self.parser.peek().kind {
+  //           TokenKind.RightBracket | TokenKind.RightParen | TokenKind.RightBrace => Ok(
+  //             true,
+  //           ),
+  //           _ => Err(ParseError.new(peek_span, "")),
+  //         }
+  //       })
+  //       if result.is_ok() {
+  //         let _ = self.parser.next()
+  //         Ok(())
+  //       } else {
+  //         Err(ParseError.new(peek_span, err_msg))
+  //       }
+  //     },
+  //     _ => Ok(()),
+  //   }
+  // }
 
   fn handle_dot(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     let receiver = self.pop_term()?
@@ -470,8 +458,8 @@ impl ExpressionParser {
     }
 
     let mut end = self.parser.peek().span.start
-    if self.parser.peek().kind == lexer.TokenKind.LeftParen {
-      let args = self.parse_args([])?
+    if self.parser.peek().kind == TokenKind.LeftParen {
+      let args = self.parse_args()?
       end = self.parser.peek().span.start
       let call = cst.Call { fn_name: name, type_args, args }
       Ok(cst.dot_call(span.new(start, end), &receiver, call))
@@ -487,42 +475,35 @@ impl ExpressionParser {
     } else {
       Some(type_args_raw)
     }
-    let args = self.parse_args([])?
+    let args = self.parse_args()?
     Ok(cst.call_expr(span, name, type_args, args))
   }
 
   fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Type>, ParseError> {
-    if self.parser.peek().kind != lexer.TokenKind.LeftBracket { return Ok([]) }
+    if self.parser.peek().kind != TokenKind.LeftBracket { return Ok([]) }
     let _ = self.parser.next()
     let mut types = []
     loop {
-      if self.parser.peek().kind == lexer.TokenKind.RightBracket ||
-      self.parser.peek().kind == lexer.TokenKind.EOF {
+      if self.parser.peek().kind == TokenKind.RightBracket ||
+      self.parser.peek().kind == TokenKind.EOF {
         break
       }
       types = types.append(self.parser.parse_type()?)
-      let _ = self.parser.consume(lexer.TokenKind.Comma)
+      let _ = self.parser.consume(TokenKind.Comma)
     }
-    let _ = self.parser.consume(lexer.TokenKind.RightBracket)?
+    let _ = self.parser.consume(TokenKind.RightBracket)?
     Ok(types)
   }
 
-  fn parse_args(self: Ref<ExpressionParser>, args: Slice<cst.Expression>) -> Result<Slice<cst.Expression>, ParseError> {
-    if self.parser.peek().kind != lexer.TokenKind.LeftParen { return Ok(args) }
-    let _ = self.parser.next()
-    self.skip_newline_unless_block_end(self.expression_indent, "")?
-    if self.parser.peek().kind == lexer.TokenKind.RightParen {
-      let _ = self.parser.next()
-      return Ok(args)
-    }
-    let list = self.parse_list(args)?
-    let Ok(_rparen_span) = self.parser.consume(lexer.TokenKind.RightParen) else {
-      return Err(ParseError.new(
-        self.parser.peek().span,
-        "Expected closing parenthesis",
-      ))
-    }
-    Ok(list)
+  fn parse_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Expression>, ParseError> {
+    let stop = self.stop
+    self.stop = StopAt.Comma
+    let items = self.parser.parse_list(')', self.parse)?
+    self.stop = stop
+
+    let _ = self.parser.consume(TokenKind.RightBracket)?
+
+    Ok(items)
   }
 
   fn parse_list(self: Ref<ExpressionParser>, exprs: Slice<cst.Expression>) -> Result<Slice<cst.Expression>, ParseError> {
@@ -535,7 +516,7 @@ impl ExpressionParser {
         StopAt.Comma,
       )
       out = out.append(expr_parser.parse()?)
-      if self.parser.peek().kind == lexer.TokenKind.Comma {
+      if self.parser.peek().kind == TokenKind.Comma {
         let _ = self.parser.next()
       } else {
         break
@@ -547,7 +528,7 @@ impl ExpressionParser {
   fn parse_let_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
-    let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
+    let Ok(_eq_span) = self.parser.consume(TokenKind.Operator(
       operator.Operator.Assign,
     )) else {
       return Err(ParseError.new(
@@ -575,7 +556,7 @@ impl ExpressionParser {
   fn parse_var_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {
     let name_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
-    let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
+    let Ok(_eq_span) = self.parser.consume(TokenKind.Operator(
       operator.Operator.Assign,
     )) else {
       return Err(ParseError.new(
@@ -626,7 +607,7 @@ impl ExpressionParser {
         "Expected variable name after 'for'",
       )),
     }
-    let Ok(_in_span) = self.parser.consume(lexer.TokenKind.Operator(
+    let Ok(_in_span) = self.parser.consume(TokenKind.Operator(
       operator.Operator.In,
     )) else {
       return Err(ParseError.new(
@@ -699,14 +680,14 @@ impl Parser {
   }
 
   fn parse_colon_and_block(self: Ref<Parser>, block_base_indent: uint32) -> Result<cst.Expression, ParseError> {
-    let Ok(_colon_span) = self.consume(lexer.TokenKind.Colon) else {
+    let Ok(_colon_span) = self.consume(TokenKind.Colon) else {
       return Err(ParseError.new(self.peek().span, "Expected ':'"))
     }
 
     let mut statements = []
     loop {
       match self.peek().kind {
-        TokenKind.Newline(n) => {
+        TokenKind.Newline(n, _) => {
           if n <= block_base_indent { break }
           let _ = self.next()
         },
@@ -752,16 +733,16 @@ fn is_boolean_op(op: Operator) -> bool {
   }
 }
 
-fn is_boolean_token_kind(kind: lexer.TokenKind) -> bool {
+fn is_boolean_token_kind(kind: TokenKind) -> bool {
   match kind {
     TokenKind.Operator(op) => is_boolean_op(op),
     _ => false,
   }
 }
 
-fn is_indented_newline(kind: lexer.TokenKind, indent: uint32) -> bool {
+fn is_indented_newline(kind: TokenKind, indent: uint32) -> bool {
   match kind {
-    TokenKind.Newline(n) => n > indent,
+    TokenKind.Newline(n, _) => n > indent,
     _ => false,
   }
 }
