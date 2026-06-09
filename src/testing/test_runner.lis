@@ -22,7 +22,7 @@ pub fn test_suite(
   for test_fn in tests {
     let mut t = TestRunner.new("")
     if let Err(e) = test_fn(&t) {
-      fmt.Println(e)
+      fmt.Println(f"{t.test_name} failed: {e}")
       t.status = false
     }
     suite = suite.append(t)
@@ -64,7 +64,7 @@ impl TestRunner {
 
   pub fn fail(self: Ref<TestRunner>, msg: string) -> Result<(), string> {
     self.status = false
-    Err(f"{self.test_name} failed: {msg}")
+    Err(msg)
   }
 
   pub fn should_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
