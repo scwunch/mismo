@@ -184,12 +184,16 @@ fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ),
   )
 
-  let registry = specialize(env)
-  t.should_eq_repr(registry.functions.length(), 3)?
-  t.should_eq_repr(registry.functions[0].name, "main")?
-  t.should_eq_repr(registry.functions[1].name, "foo")?
-  t.should_eq(registry.functions[1].parameters[0].typ, Type.Int)?
-  t.should_eq_repr(registry.functions[2].name, "foo")?
-  t.should_eq(registry.functions[2].parameters[0].typ, Type.String)?
-  Ok(())
+  match specialize(env) {
+    Ok(registry) => {
+      t.should_eq_repr(registry.functions.length(), 3)?
+      t.should_eq_repr(registry.functions[0].name, "main")?
+      t.should_eq_repr(registry.functions[1].name, "foo")?
+      t.should_eq(registry.functions[1].parameters[0].typ, Type.Int)?
+      t.should_eq_repr(registry.functions[2].name, "foo")?
+      t.should_eq(registry.functions[2].parameters[0].typ, Type.String)?
+      Ok(())
+    },
+    Err(e) => t.fail(e.message()),
+  }
 }

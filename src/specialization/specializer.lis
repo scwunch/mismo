@@ -1,13 +1,16 @@
+import "errors"
 import "semantic"
 import "utils/slice"
 
 type Expr = semantic.Expr
 
-pub fn specialize(reg: semantic.TypeEnv) -> ConcreteRegistry {
+pub fn specialize(reg: semantic.TypeEnv) -> Result<ConcreteRegistry, errors.SpecializationError> {
   let main = match reg.signatures.get("main") {
     Some([main]) => main,
-    Some(funs) => panic("multiple main functions found"),
-    None => panic("no main function found"),
+    Some(funs) => Err(
+      errors.MultipleMainFunctionsError.new(funs.map(|f| f.span)) as errors.SpecializationError,
+    )?,
+    None => Err(errors.NoMainFunctionError.new() as errors.SpecializationError)?,
   }
 
   let mut spec = Specializer.new()
@@ -15,7 +18,7 @@ pub fn specialize(reg: semantic.TypeEnv) -> ConcreteRegistry {
 
   spec.run()
 
-  ConcreteRegistry { type_defs: reg.type_defs, functions: spec.functions }
+  Ok(ConcreteRegistry { type_defs: reg.type_defs, functions: spec.functions })
 }
 
 #[display]

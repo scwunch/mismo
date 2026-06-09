@@ -28,17 +28,17 @@ pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
 
 pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
   let loc = location(self, source)
-  let mut start = self.span().start as int - 1
+  let mut start = self.span().start as int
   while start > 0 {
-    if source[start] == '\n' { break }
     start -= 1
+    if source[start] == '\n' { break }
   }
   let mut end = self.span().end as int
   while end < source.length() {
     if source[end] == '\n' { break }
     end += 1
   }
-  let line = source[start..end]
+  let line = source[start..end] as string
 
   let mut highlight = []
   for _ in 1..loc.col as int {
@@ -54,7 +54,7 @@ pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
 // }
 
 pub interface SyntaxError {
-  impl Diagnostic
+  embed Diagnostic
 
   // fn location(self, source: Slice<rune>) -> span.Location
 }
@@ -88,7 +88,7 @@ impl ParseError {
 }
 
 pub interface TypeError {
-  impl Diagnostic
+  embed Diagnostic
 }
 
 pub struct DuplicateNameError {
@@ -377,7 +377,7 @@ impl UnboundTypeParamError {
 }
 
 pub interface ModeError {
-  impl Diagnostic
+  embed Diagnostic
 }
 
 pub struct UseAfterConsumeError {
@@ -448,5 +448,49 @@ impl ModeMismatchError {
 
   pub fn span(self) -> span.Span {
     self._s_
+  }
+}
+
+pub interface SpecializationError {
+  embed Diagnostic
+}
+
+pub struct NoMainFunctionError {}
+
+impl NoMainFunctionError {
+  pub fn new() -> NoMainFunctionError {
+    NoMainFunctionError {}
+  }
+
+  pub fn code(self) -> int {
+    4001
+  }
+
+  pub fn message(self) -> string {
+    "No main function found."
+  }
+
+  pub fn span(self) -> span.Span {
+    span.new(0, 0)
+  }
+}
+
+pub struct MultipleMainFunctionsError { spans: Slice<span.Span> }
+
+impl MultipleMainFunctionsError {
+  pub fn new(spans: Slice<span.Span>) -> MultipleMainFunctionsError {
+    MultipleMainFunctionsError { spans }
+  }
+
+  pub fn code(self) -> int {
+    4002
+  }
+
+  pub fn message(self) -> string {
+    f"Multiple main function found: {self.spans}"
+  }
+
+  pub fn span(self) -> span.Span {
+    self.spans[0]
   }
 }

@@ -227,7 +227,7 @@ impl Emitter {
     }
   }
 
-  fn emit_list_bracket<A>(
+  pub fn emit_list_bracket<A>(
     self: Ref<Emitter>,
     items: Slice<A>,
     action: fn(A) -> (),

@@ -1,5 +1,6 @@
 import "go:fmt"
 
+import "errors"
 import "testing"
 
 pub fn test_compiler() {
@@ -9,8 +10,27 @@ pub fn test_compiler() {
 fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "dummy"
   let program = "
-  hello world
+  fn main():
+    1
   "
   fmt.Println(program)
+
+  fmt.Println("\nTokens: \n")
+  fmt.Println(compile_to_tokens(program))
+  fmt.Println("\nAST: \n")
+  fmt.Println(compile_to_ast(program))
+  fmt.Println("\nHIR: \n")
+  fmt.Println(mode_check(program))
+  fmt.Println("\nSpecialize: \n")
+  match transpile(program) {
+    Ok(zig) => fmt.Println(zig),
+    Err(errs) => {
+      let runes = program as Slice<rune>
+      for e in errs {
+        fmt.Println(errors.render(e, runes))
+      }
+      t.fail("failed with errors ^")?
+    },
+  }
   Ok(())
 }

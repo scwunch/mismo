@@ -9,6 +9,10 @@ impl Parser {
         Identifier("struct") => self.parse_struct(),
         Identifier("enum") => self.parse_enum(),
         Identifier("fn") => self.parse_function(),
+        Newline(_) => {
+          let _ = self.next()
+          continue
+        },
         EOF => break self.defs,
         _ => Err(self.error(
           self.peek().span,

@@ -1,5 +1,6 @@
 import "codegen"
 import "cst"
+import "errors"
 import "lexer"
 import "parser"
 import "semantic"
@@ -15,27 +16,54 @@ pub fn compile_to_tokens(source: string) -> Slice<lexer.Token> {
   }
 }
 
-pub fn compile_to_ast(source: string) -> cst.Declarations {
+pub fn compile_to_ast(source: string) -> Result<cst.Declarations, Slice<errors.Diagnostic>> {
   let mut parser = parser.Parser.new(source)
-  parser.parse()
+  let decs = parser.parse()
+  if decs.errors.is_empty() {
+    Ok(decs)
+  } else {
+    Err(decs.errors.map(|e| e as errors.Diagnostic))
+  }
 }
 
-pub fn type_check(source: string) -> semantic.TypeEnv {
-  let decs = compile_to_ast(source)
-  semantic.analyze_type_check(decs)
+pub fn type_check(source: string) -> Result<semantic.TypeEnv, Slice<errors.Diagnostic>> {
+  let decs = compile_to_ast(source)?
+  let env = semantic.analyze_type_check(decs)
+  if env.errors.is_empty() {
+    Ok(env)
+  } else {
+    Err(env.errors.map(|e| e as errors.Diagnostic))
+  }
 }
 
-pub fn mode_check(source: string) -> semantic.TypeEnv {
-  let decs = compile_to_ast(source)
-  semantic.analyze(decs)
+pub fn mode_check(source: string) -> Result<semantic.TypeEnv, Slice<errors.Diagnostic>> {
+  let decs = compile_to_ast(source)?
+  let env = semantic.analyze(decs)
+  if env.errors.is_empty() {
+    Ok(env)
+  } else {
+    Err(env.errors.map(|e| e as errors.Diagnostic))
+  }
 }
 
-pub fn specialize(source: string) -> specialization.ConcreteRegistry {
-  let reg = mode_check(source)
-  specialization.specialize(reg)
+pub enum MonomorphizationOut {
+  Ok(specialization.ConcreteRegistry),
+  SpecError(errors.SpecializationError),
+  TypeErrors(Slice<errors.TypeError>),
 }
 
-pub fn transpile(source: string) -> string {
-  let reg = specialize(source)
-  codegen.generate(reg)
+pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Slice<errors.Diagnostic>> {
+  let reg = mode_check(source)?
+  if reg.errors.is_empty() {
+    match specialization.specialize(reg) {
+      Ok(reg) => Ok(reg),
+      Err(e) => Err([e as errors.Diagnostic]),
+    }
+  } else {
+    Err(reg.errors.map(|e| e as errors.Diagnostic))
+  }
+}
+
+pub fn transpile(source: string) -> Result<string, Slice<errors.Diagnostic>> {
+  specialize(source).map(codegen.generate)
 }
