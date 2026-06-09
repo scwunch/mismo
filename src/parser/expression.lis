@@ -188,10 +188,7 @@ impl ExpressionParser {
         StopAt.Normal => false,
         StopAt.UcsBranch => self.check_ucs_branch(),
         StopAt.UcsEnd => self.check_ucs_end(),
-        StopAt.Comma => match self.parser.peek().kind {
-          TokenKind.Comma => true,
-          _ => false,
-        },
+        StopAt.Comma => self.parser.peek().kind == TokenKind.Comma,
         StopAt.Newline => match self.parser.peek().kind {
           TokenKind.Newline(_, _) => true,
           _ => false,
@@ -457,35 +454,19 @@ impl ExpressionParser {
 
   fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Option<Slice<cst.Type>>, ParseError> {
     if self.parser.peek().kind != TokenKind.LeftBracket { return Ok(None) }
-    // let _ = self.parser.next()
-    let _ = self.parser.consume(TokenKind.LeftBracket)?
+    let _ = self.parser.next()
     let types = self.parser.parse_list(']', self.parser.parse_type)?
     let _ = self.parser.consume(TokenKind.RightBracket)?
     Ok(Some(types))
-    // let mut types = []
-    // loop {
-    //   if self.parser.peek().kind == TokenKind.RightBracket ||
-    //   self.parser.peek().kind == TokenKind.EOF {
-    //     break
-    //   }
-    //   types = types.append(self.parser.parse_type()?)
-    //   let _ = self.parser.consume(TokenKind.Comma)
-    // }
-    // let _ = self.parser.consume(TokenKind.RightBracket)?
-    // Ok(types)
-  }
-
-  fn parse_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Expression>, ParseError> {
-    let items = self.parse_list(')')?
-    let _ = self.parser.consume(TokenKind.RightParen)?
-    Ok(items)
   }
 
   fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {
-    let stop = self.stop
-    self.stop = StopAt.Comma
-    let items = self.parser.parse_list(end, self.parse)?
-    self.stop = stop
+    let mut sub_parser = ExpressionParser.new(
+      self.parser,
+      self.expression_indent,
+      StopAt.Comma,
+    )
+    let items = self.parser.parse_list(end, sub_parser.parse)?
     Ok(items)
   }
 
