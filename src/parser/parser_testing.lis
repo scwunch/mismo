@@ -295,7 +295,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
     "type parameters should be empty",
   )?
   let cst.TypeBody.Struct(fields) = s.body else {
-    return Err("expected struct, got enum")
+    return t.fail("expected struct, got enum")
   }
   t.should_eq_repr(fields.length(), 2)?
   let expected_field1 = cst.Field.new(16, 22, "x", cst.typ(19, 22, "Int", []))
@@ -326,7 +326,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )?
   t.should_eq_repr(s.type_parameters[0].name, "T")?
   let cst.TypeBody.Struct(fields) = s.body else {
-    return Err("expected struct, got enum")
+    return t.fail("expected struct, got enum")
   }
   t.should_eq_repr(fields.length(), 2)?
   let expected_field1 = cst.Field.new(18, 22, "x", cst.typ(21, 22, "T", []))
@@ -373,7 +373,7 @@ fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let e = parser.defs.types.get(0).ok_or("no enum found")?
   t.should_eq_repr(e.name, "Color")?
   let cst.TypeBody.Enum(variants) = e.body else {
-    return Err("expected enum, got struct")
+    return t.fail("expected enum, got struct")
   }
   t.should_eq_repr(variants.length(), 3)?
   let expected_variant1 = cst.Variant.new(Span.new(13, 16), "Red", [])
@@ -397,7 +397,7 @@ fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let e = parser.defs.types.get(0).ok_or("no enum found")?
   t.should_eq_repr(e.name, "Option")?
   let cst.TypeBody.Enum(variants) = e.body else {
-    return Err("expected enum, got struct")
+    return t.fail("expected enum, got struct")
   }
   t.should_eq_repr(variants.length(), 2)?
   let expected_variant1 = cst.Variant.new(
@@ -645,6 +645,7 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut parser = Parser.new("awesome(1, 2, 3)")
   let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
   let expr = ep.parse().map_err(|e| e.message())?
+
   match expr.kind {
     cst.Expr.Call(c) => {
       t.should_eq_repr(c.fn_name, "awesome")?
@@ -800,10 +801,10 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
-    cst.Expr.Binop(b) => {
+    Binop(b) => {
       t.should_eq(b.op, Operator.Assign)?
       match b.left.kind {
-        cst.Expr.Binding(mode.Mode.Var, id_ref) => {
+        Binding(Var, id_ref) => {
           t.should_eq(id_ref.kind, cst.Expr.Identifier("y"))?
           t.should_eq_repr(id_ref.span, span.new(4, 5))?
         },

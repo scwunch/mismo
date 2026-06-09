@@ -382,36 +382,20 @@ impl ExpressionParser {
   }
 
   fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
-    let mut expr_parser = ExpressionParser.new(
-      self.parser,
-      self.expression_indent,
-      self.stop,
-    )
-    let expr = expr_parser.parse()?
-    let Ok(_rparen_span) = self.parser.consume(TokenKind.RightParen) else {
-      return Err(ParseError.new(
-        self.parser.peek().span,
-        "Expected closing parenthesis",
-      ))
+    let exprs = self.parse_list(')')?
+    let end = self.parser.consume(TokenKind.RightParen)?
+    let s = _span.merge(end)
+    match exprs {
+      [e] => Ok(e),
+      _ => Ok(cst.tuple_lit(s, [])),
     }
-    Ok(expr)
   }
 
   fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
-    let items = self.parser.parse_list(
-      ']',
-      || {
-        ExpressionParser
-          .new(self.parser, self.expression_indent, StopAt.Comma)
-          .parse()
-      },
-    )?
-
+    let items = self.parse_list(']')?
     let rbracket_span = self.parser.consume(TokenKind.RightBracket)?
-
-    let span_end = _span.merge(rbracket_span)
-
-    Ok(cst.array_lit(span_end, items))
+    let s = _span.merge(rbracket_span)
+    Ok(cst.array_lit(s, items))
   }
 
   // fn skip_newline_unless_block_end(
@@ -448,81 +432,61 @@ impl ExpressionParser {
 
   fn handle_dot(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     let receiver = self.pop_term()?
-    let start = receiver.span.start
+    let start = receiver.span
+    let ident_span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
-    let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.is_empty() {
-      None
-    } else {
-      Some(type_args_raw)
-    }
+    let type_args = self.parse_type_args()?
 
-    let mut end = self.parser.peek().span.start
-    if self.parser.peek().kind == TokenKind.LeftParen {
-      let args = self.parse_args()?
-      end = self.parser.peek().span.start
+    if self.parser.consume(TokenKind.LeftParen).is_ok() {
+      let args = self.parse_list(')')?
+      let end = self.parser.consume(TokenKind.RightParen)?
       let call = cst.Call { fn_name: name, type_args, args }
-      Ok(cst.dot_call(span.new(start, end), &receiver, call))
+      Ok(cst.dot_call(start.merge(end), &receiver, call))
     } else {
-      Ok(cst.dot_name(span.new(start, end), &receiver, name))
+      Ok(cst.dot_name(start.merge(ident_span), &receiver, name))
     }
   }
 
   fn function_call(self: Ref<ExpressionParser>, span: Span, name: string) -> Result<cst.Expression, ParseError> {
-    let type_args_raw = self.parse_type_args()?
-    let type_args = if type_args_raw.is_empty() {
-      None
-    } else {
-      Some(type_args_raw)
-    }
-    let args = self.parse_args()?
-    Ok(cst.call_expr(span, name, type_args, args))
+    let type_args = self.parse_type_args()?
+    let _ = self.parser.consume(TokenKind.LeftParen)?
+    let args = self.parse_list(')')?
+    let end = self.parser.consume(TokenKind.RightParen)?
+    Ok(cst.call_expr(span.merge(end), name, type_args, args))
   }
 
-  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Type>, ParseError> {
-    if self.parser.peek().kind != TokenKind.LeftBracket { return Ok([]) }
-    let _ = self.parser.next()
-    let mut types = []
-    loop {
-      if self.parser.peek().kind == TokenKind.RightBracket ||
-      self.parser.peek().kind == TokenKind.EOF {
-        break
-      }
-      types = types.append(self.parser.parse_type()?)
-      let _ = self.parser.consume(TokenKind.Comma)
-    }
+  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Option<Slice<cst.Type>>, ParseError> {
+    if self.parser.peek().kind != TokenKind.LeftBracket { return Ok(None) }
+    // let _ = self.parser.next()
+    let _ = self.parser.consume(TokenKind.LeftBracket)?
+    let types = self.parser.parse_list(']', self.parser.parse_type)?
     let _ = self.parser.consume(TokenKind.RightBracket)?
-    Ok(types)
+    Ok(Some(types))
+    // let mut types = []
+    // loop {
+    //   if self.parser.peek().kind == TokenKind.RightBracket ||
+    //   self.parser.peek().kind == TokenKind.EOF {
+    //     break
+    //   }
+    //   types = types.append(self.parser.parse_type()?)
+    //   let _ = self.parser.consume(TokenKind.Comma)
+    // }
+    // let _ = self.parser.consume(TokenKind.RightBracket)?
+    // Ok(types)
   }
 
   fn parse_args(self: Ref<ExpressionParser>) -> Result<Slice<cst.Expression>, ParseError> {
-    let stop = self.stop
-    self.stop = StopAt.Comma
-    let items = self.parser.parse_list(')', self.parse)?
-    self.stop = stop
-
-    let _ = self.parser.consume(TokenKind.RightBracket)?
-
+    let items = self.parse_list(')')?
+    let _ = self.parser.consume(TokenKind.RightParen)?
     Ok(items)
   }
 
-  fn parse_list(self: Ref<ExpressionParser>, exprs: Slice<cst.Expression>) -> Result<Slice<cst.Expression>, ParseError> {
-    let mut out = exprs
-    loop {
-      if self.expression_done() { break }
-      let mut expr_parser = ExpressionParser.new(
-        self.parser,
-        self.expression_indent,
-        StopAt.Comma,
-      )
-      out = out.append(expr_parser.parse()?)
-      if self.parser.peek().kind == TokenKind.Comma {
-        let _ = self.parser.next()
-      } else {
-        break
-      }
-    }
-    Ok(out)
+  fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {
+    let stop = self.stop
+    self.stop = StopAt.Comma
+    let items = self.parser.parse_list(end, self.parse)?
+    self.stop = stop
+    Ok(items)
   }
 
   fn parse_let_declaration(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, ParseError> {

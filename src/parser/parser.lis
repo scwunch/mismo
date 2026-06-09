@@ -187,14 +187,10 @@ impl Parser {
     }
     let mut type_args = []
     if self.consume(TokenKind.LeftBracket).is_ok() {
-      type_args = self.parse_type_args()?
+      type_args = self.parse_list(']', self.parse_type)?
       span = span.merge(self.consume(TokenKind.RightBracket)?)
     }
     Ok(cst.Type.new(span, name, type_args))
-  }
-
-  fn parse_type_args(self: Ref<Parser>) -> Result<Slice<cst.Type>, ParseError> {
-    self.parse_list('[', self.parse_type)
   }
 
   fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, ParseError> {
@@ -213,7 +209,7 @@ impl Parser {
           f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
         )
       })?
-    let params = self.parse_list('[', self.parse_param_type)?
+    let params = self.parse_list(')', self.parse_param_type)?
     span = span.merge(self.consume(TokenKind.RightParen)?)
     if self.consume(TokenKind.Arrow).is_ok() {
       let ret_type = self.parse_type()?
