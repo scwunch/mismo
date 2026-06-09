@@ -1,6 +1,7 @@
 import "go:fmt"
 
 import "errors"
+import "parser"
 import "testing"
 
 pub fn test_compiler() {
@@ -17,8 +18,9 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // fmt.Println("\nTokens: \n")
   // fmt.Println(compile_to_tokens(program))
-  // fmt.Println("\nAST: \n")
-  // fmt.Println(compile_to_ast(program))
+  fmt.Println("\nAST: \n")
+  let decs = parser.Parser.new(program).parse()
+  fmt.Println(decs.functions[0])
   // fmt.Println("\nHIR: \n")
   // fmt.Println(mode_check(program))
   // fmt.Println("\nSpecialize: \n")

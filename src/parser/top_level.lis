@@ -90,7 +90,11 @@ impl Parser {
     let rparen = self.consume(lexer.TokenKind.RightParen)?
     span = span.merge(rparen)
     let _ = self.consume(lexer.TokenKind.Arrow)
-    let ret_type = self.parse_type()?
+    let ret_type = if self.peek().kind == lexer.TokenKind.Colon {
+      cst.Type.new(self.peek().span, "Nil", [])
+    } else {
+      self.parse_type()?
+    }
     span = span.merge(ret_type.span)
     Ok(cst.Signature.new(span, name, type_params, params, ret_type))
   }
