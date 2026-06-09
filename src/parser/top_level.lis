@@ -14,14 +14,17 @@ impl Parser {
           continue
         },
         EOF => break self.defs,
-        _ => Err(self.error(
+        _ => Err(ParseError.new(
           self.peek().span,
           "Expected top-level definition (fn, import, struct, enum, interface)",
         )),
       }
       match result {
         Ok(_) => (),
-        Err(_) => self.recover_to_next_def(),
+        Err(e) => {
+          self.emit_error(e)
+          self.recover_to_next_def()
+        },
       }
     }
   }
@@ -150,11 +153,11 @@ impl Parser {
     //         break
     //       }
     //     },
-    //     Err(tok) => return Err(self.error(tok.span, f"Expected struct fields; got {tok.kind}"))
+    //     Err(tok) => return Err(ParseError.new(tok.span, f"Expected struct fields; got {tok.kind}"))
     //   }
 
     //   let indent = self.consume_newline().map_err(
-    //     |tok| self.error(tok.span, f"Expected struct fields; got {tok.kind}")
+    //     |tok| ParseError.new(tok.span, f"Expected struct fields; got {tok.kind}")
     //   )?
     //   if indent > 0 {
     //     fields = fields.append(self.parse_field())

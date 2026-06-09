@@ -63,7 +63,7 @@ impl ExpressionParser {
   fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     if self.expression_done() {
       let _ = self.parser.consume(lexer.TokenKind.Colon)
-      return Err(self.parser.error(self.parser.peek().span, "Empty expression"))
+      return Err(ParseError.new(self.parser.peek().span, "Empty expression"))
     }
 
     loop {
@@ -83,7 +83,7 @@ impl ExpressionParser {
       } else {
         "<noop>"
       }
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         f"expected operand after {op_str}",
       ))
@@ -94,7 +94,7 @@ impl ExpressionParser {
     }
 
     if !self.operators.is_empty() || self.terms.length() != 1 {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "operators and terms did not add up",
       ))
@@ -117,7 +117,7 @@ impl ExpressionParser {
         Bind.Tighter => self.compress()?,
         Bind.Looser => break,
         Bind.None => {
-          return Err(self.parser.error(
+          return Err(ParseError.new(
             self.parser.peek().span,
             f"Relative precedence not defined between {left_op.string()} [left] and {right_op.string()} [right].  Disambiguate with parentheses.",
           ))
@@ -166,7 +166,7 @@ impl ExpressionParser {
 
   fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
     if self.terms.is_empty() {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Not enough terms to complete expression",
       ))
@@ -239,7 +239,7 @@ impl ExpressionParser {
           self.push_operator(StackOp.NotPrefix(tok_span))?
           return self.read_operand()
         },
-        _ => return Err(self.parser.error(
+        _ => return Err(ParseError.new(
           tok_span,
           f"Expected term or prefix operator. Got {tok.kind}",
         )),
@@ -299,8 +299,8 @@ impl ExpressionParser {
       TokenKind.StringLiteral(s) => cst.string_lit(tok_span, s),
       TokenKind.Nil => cst.nil_lit(tok_span),
       TokenKind.Bool(b) => cst.bool_lit(tok_span, b),
-      TokenKind.Error(msg) => return Err(self.parser.error(tok_span, msg)),
-      _ => return Err(self.parser.error(
+      TokenKind.Error(msg) => return Err(ParseError.new(tok_span, msg)),
+      _ => return Err(ParseError.new(
         tok_span,
         f"Expected term or prefix operator. Got {tok.kind}",
       )),
@@ -354,14 +354,14 @@ impl ExpressionParser {
       },
       TokenKind.LeftParen | TokenKind.LeftBracket => {
         let _ = self.parser.next()
-        Err(self.parser.error(
+        Err(ParseError.new(
           tok_span,
           "only named functions are supported, cannot 'call' arbitrary expressions",
         ))
       },
       TokenKind.Error(msg) => {
         let _ = self.parser.next()
-        Err(self.parser.error(tok_span, msg))
+        Err(ParseError.new(tok_span, msg))
       },
       _ => {
         match self.stop {
@@ -370,7 +370,7 @@ impl ExpressionParser {
             TokenKind.Newline(_n) => Ok(true),
             _ => {
               let _ = self.parser.next()
-              Err(self.parser.error(
+              Err(ParseError.new(
                 tok_span,
                 f"Expected binary operator; got {tok.kind}",
               ))
@@ -389,7 +389,7 @@ impl ExpressionParser {
     )
     let expr = expr_parser.parse()?
     let Ok(_rparen_span) = self.parser.consume(lexer.TokenKind.RightParen) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected closing parenthesis",
       ))
@@ -412,7 +412,7 @@ impl ExpressionParser {
 
     let items = self.parse_list([])?
     let Ok(rbracket_span) = self.parser.consume(lexer.TokenKind.RightBracket) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected closing bracket",
       ))
@@ -444,14 +444,14 @@ impl ExpressionParser {
             TokenKind.RightBracket | TokenKind.RightParen | TokenKind.RightBrace => Ok(
               true,
             ),
-            _ => Err(self.parser.error(peek_span, "")),
+            _ => Err(ParseError.new(peek_span, "")),
           }
         })
         if result.is_ok() {
           let _ = self.parser.next()
           Ok(())
         } else {
-          Err(self.parser.error(peek_span, err_msg))
+          Err(ParseError.new(peek_span, err_msg))
         }
       },
       _ => Ok(()),
@@ -517,7 +517,7 @@ impl ExpressionParser {
     }
     let list = self.parse_list(args)?
     let Ok(_rparen_span) = self.parser.consume(lexer.TokenKind.RightParen) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected closing parenthesis",
       ))
@@ -550,7 +550,7 @@ impl ExpressionParser {
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
       operator.Operator.Assign,
     )) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected '=' after let binding name",
       ))
@@ -578,7 +578,7 @@ impl ExpressionParser {
     let Ok(_eq_span) = self.parser.consume(lexer.TokenKind.Operator(
       operator.Operator.Assign,
     )) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected '=' after var binding name",
       ))
@@ -621,7 +621,7 @@ impl ExpressionParser {
         let _ = self.parser.next()
         name
       },
-      _ => return Err(self.parser.error(
+      _ => return Err(ParseError.new(
         var_tok_span,
         "Expected variable name after 'for'",
       )),
@@ -629,7 +629,7 @@ impl ExpressionParser {
     let Ok(_in_span) = self.parser.consume(lexer.TokenKind.Operator(
       operator.Operator.In,
     )) else {
-      return Err(self.parser.error(
+      return Err(ParseError.new(
         self.parser.peek().span,
         "Expected 'in' after variable name in for loop",
       ))
@@ -673,7 +673,7 @@ impl ExpressionParser {
           ])),
         }
       },
-      _ => return Err(self.parser.error(
+      _ => return Err(ParseError.new(
         self.parser.peek().span,
         "Expected ':' after if condition",
       )),
@@ -700,7 +700,7 @@ impl Parser {
 
   fn parse_colon_and_block(self: Ref<Parser>, block_base_indent: uint32) -> Result<cst.Expression, ParseError> {
     let Ok(_colon_span) = self.consume(lexer.TokenKind.Colon) else {
-      return Err(self.error(self.peek().span, "Expected ':'"))
+      return Err(ParseError.new(self.peek().span, "Expected ':'"))
     }
 
     let mut statements = []

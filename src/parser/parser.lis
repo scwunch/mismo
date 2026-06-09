@@ -61,7 +61,7 @@ impl Parser {
       TokenKind.For => "for",
       TokenKind.While => "while",
       TokenKind.Operator(op) => op.sigil(),
-      tok => return Err(self.error(
+      tok => return Err(ParseError.new(
         self.peek().span,
         f"Expected identifier.  Got {tok}",
       )),
@@ -111,7 +111,7 @@ impl Parser {
             if self.peek().kind == end {
               Ok(())
             } else {
-              Err(self.error(
+              Err(ParseError.new(
                 self.peek().span,
                 "list items must be indented deeper than line of list start",
               ))
@@ -170,7 +170,7 @@ impl Parser {
     let _ = self
       .consume(lexer.TokenKind.LeftParen)
       .map_err(|_| {
-        self.error(
+        ParseError.new(
           span,
           f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
         )
@@ -194,7 +194,7 @@ impl Parser {
     if self.peek().kind == kind {
       Ok(self.next().span)
     } else {
-      Err(self.error(
+      Err(ParseError.new(
         self.peek().span,
         f"Expected {kind}; got {self.peek().kind}",
       ))
@@ -202,10 +202,8 @@ impl Parser {
   }
 
   /// emit an error
-  fn error(self: Ref<Parser>, span: Span, msg: string) -> ParseError {
-    let err = ParseError.new(span, msg)
+  fn emit_error(self: Ref<Parser>, err: ParseError) {
     self.defs.errors = self.defs.errors.append(err)
-    err
   }
 
   /// recover parser to the next top-level statement (ie, indent=0)

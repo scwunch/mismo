@@ -15,13 +15,13 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   "
   fmt.Println(program)
 
-  fmt.Println("\nTokens: \n")
-  fmt.Println(compile_to_tokens(program))
-  fmt.Println("\nAST: \n")
-  fmt.Println(compile_to_ast(program))
-  fmt.Println("\nHIR: \n")
-  fmt.Println(mode_check(program))
-  fmt.Println("\nSpecialize: \n")
+  // fmt.Println("\nTokens: \n")
+  // fmt.Println(compile_to_tokens(program))
+  // fmt.Println("\nAST: \n")
+  // fmt.Println(compile_to_ast(program))
+  // fmt.Println("\nHIR: \n")
+  // fmt.Println(mode_check(program))
+  // fmt.Println("\nSpecialize: \n")
   match transpile(program) {
     Ok(zig) => fmt.Println(zig),
     Err(errs) => {
