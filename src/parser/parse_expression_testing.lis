@@ -29,7 +29,7 @@ pub fn test_expression() {
 fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "simple binary"
   let mut parser = Parser.new("1 + 2")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
@@ -46,7 +46,7 @@ fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "arithmetic precedence"
   let mut parser = Parser.new("1 + 2 * 3")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
@@ -65,7 +65,7 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
   }
 
   parser = Parser.new("1 - 2 * 3 + 4")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
@@ -95,7 +95,7 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
 fn test_parse_parens(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "parentheses"
   let mut parser = Parser.new("(1 + 2) * 3")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
@@ -119,32 +119,32 @@ fn test_parse_basic_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "basic literals"
 
   let mut parser = Parser.new("1")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.IntLiteral(1))?
 
   parser = Parser.new("1.0")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.FloatLiteral(1.0))?
 
   parser = Parser.new("\"hello\"")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.StringLiteral("hello"))?
 
   parser = Parser.new("true")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.BoolLiteral(true))?
 
   parser = Parser.new("false")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.BoolLiteral(false))?
 
   parser = Parser.new("nil")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Nil)?
   Ok(())
@@ -153,7 +153,7 @@ fn test_parse_basic_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "array literals"
   let mut parser = Parser.new("[1, 2, 3]")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.ArrayLiteral(elems) => {
@@ -167,7 +167,7 @@ fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   parser = Parser.new("[]")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.ArrayLiteral(elems) => {
@@ -180,8 +180,8 @@ fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "tuple literals"
-  let mut parser = Parser.new("1, 2, 3, 4")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut parser = Parser.new("(1, 2, 3, 4)")
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.TupleLiteral(elems) => {
@@ -200,7 +200,7 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "function calls"
   let mut parser = Parser.new("awesome(1, 2, 3)")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
 
   match expr.kind {
@@ -219,7 +219,7 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   parser = Parser.new("awesome[Int](1)")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Call(c) => {
@@ -248,7 +248,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "method calls"
 
   let mut parser = Parser.new(".awesome(1, 2, 3)")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
@@ -268,7 +268,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   parser = Parser.new(".awesome[Int](1)")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
@@ -294,7 +294,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   parser = Parser.new(".awesome")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotName(receiver, field) => {
@@ -310,13 +310,13 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "unary negation"
   let mut parser = Parser.new("-5")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.IntLiteral(-5))?
   t.should_eq(expr.span, span.new(0, 2))?
 
   parser = Parser.new("-x")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Neg(&cst.identifier(span.new(1, 2), "x")))?
   t.should_eq(expr.span, span.new(0, 2))?
@@ -326,7 +326,7 @@ fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "unary not"
   let mut parser = Parser.new("not x")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Not(&cst.identifier(span.new(4, 5), "x")))?
   t.should_eq(expr.span, span.new(0, 3))?
@@ -337,7 +337,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "let/var declarations"
 
   let mut parser = Parser.new("let x = 5")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
@@ -355,7 +355,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   parser = Parser.new("var y = 10")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     Binop(b) => {
@@ -378,7 +378,7 @@ fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
   t.test_name = "return/break/continue"
 
   let mut parser = Parser.new("return 42")
-  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Return(Some(e)) => t.should_eq(e.kind, cst.Expr.IntLiteral(42))?,
@@ -386,12 +386,12 @@ fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
   }
 
   parser = Parser.new("break")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Break(None))?
 
   parser = Parser.new("continue")
-  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Continue)?
   Ok(())

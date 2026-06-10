@@ -33,6 +33,14 @@ impl Span {
     self.start > other.start
   }
 
+  pub fn extend_left(self, by: uint32) -> Span {
+    if self.start <= by {
+      Span.new(0, self.end)
+    } else {
+      Span.new(self.start - by, self.end)
+    }
+  }
+
   pub fn merge(self, other: Span) -> Span {
     let start = if self.start < other.start { self.start } else { other.start }
     let end = if self.end > other.end { self.end } else { other.end }

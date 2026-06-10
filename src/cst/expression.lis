@@ -150,13 +150,8 @@ pub fn binop_expr(
   Expression { span, kind: Expr.Binop(&Binop { left, op, right }) }
 }
 
-pub fn call_expr(
-  span: span.Span,
-  fn_name: string,
-  type_args: Option<Slice<Type>>,
-  args: Slice<Expression>,
-) -> Expression {
-  Expression { span, kind: Expr.Call(Call { fn_name, type_args, args }) }
+pub fn call_expr(span: span.Span, call: Call) -> Expression {
+  Expression { span, kind: Expr.Call(call) }
 }
 
 pub fn if_(span: span.Span, cond: Conditional) -> Expression {
@@ -201,10 +196,13 @@ pub fn dot_call(span: span.Span, receiver: Ref<Expression>, call: Call) -> Expre
 }
 
 pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+  // let span = expr.map(|e| span.merge(e.span)).unwrap_or(span)
+  if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Return(expr) }
 }
 
 pub fn break_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+  if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Break(expr) }
 }
 
