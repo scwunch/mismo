@@ -1,3 +1,5 @@
+import "go:fmt"
+
 import "codegen"
 import "cst"
 import "errors"
@@ -66,4 +68,23 @@ pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Sli
 
 pub fn transpile(source: string) -> Result<string, Slice<errors.Diagnostic>> {
   specialize(source).map(codegen.generate)
+}
+
+pub fn run(source: string) {
+  match transpile(source) {
+    Ok(zig_code) => {
+      match run_zig(zig_code, Options.new()) {
+        Ok(res) => {
+          fmt.Println(res)
+        },
+        Err(e) => fmt.Println(e.Error()),
+      }
+    },
+    Err(errs) => {
+      let source = source as Slice<rune>
+      for e in errs {
+        errors.render(e, source)
+      }
+    },
+  }
 }

@@ -1,0 +1,85 @@
+import "go:bytes"
+import "go:fmt"
+import "go:os"
+import "go:os/exec"
+import "go:path/filepath"
+
+// Options controls compilation behaviour.
+pub struct Options {
+  pub zig_bin: string,
+  pub output_name: string,
+  pub keep_work_dir: bool,
+  pub work_dir_parent: string,
+}
+
+impl Options {
+  pub fn new() -> Options {
+    Options { 
+      zig_bin: "zig",
+      output_name: "out",
+      keep_work_dir: true,
+      work_dir_parent: os.TempDir(),
+    }
+  }
+}
+
+pub struct ZigResult {
+  pub stdout: string,
+  pub stderr: string,
+  pub exit_code: int,
+  pub binary_path: string,
+  pub work_dir: string,
+}
+
+impl ZigResult {
+  pub fn success(self) -> bool {
+    self.exit_code == 0
+  }
+}
+
+/// Write zig_source to a temp file and run Zig compiler on it.
+/// Check ZigResult.err for infrastructure failures.
+/// Check ZigResult.exit_code for compiler failure.
+pub fn run_zig(zig_source: string, opts: Options) -> Result<ZigResult, error> {
+  let mut res = ZigResult { .. }
+  let parent = opts.work_dir_parent
+  res.work_dir = os.MkdirTemp(parent, "zigrunner-*")?
+  if !opts.keep_work_dir {
+    // only cleans the .zig source and cache
+    // — the binary is copied out before this runs if needed.
+    defer os.RemoveAll(res.work_dir)
+  }
+
+  // --- write source file ---
+  let src_path = filepath.Join(res.work_dir, "main.zig")
+  os.WriteFile(src_path, zig_source as Slice<byte>, 0o644)?
+
+  // --- build the zig command ---
+  // "zig build-exe" compiles a single file to a standalone binary.
+  // We pass -femit-bin to tell zig exactly where to put the output.
+  res.binary_path = filepath.Join(res.work_dir, opts.output_name)
+  let args = ["build-exe", src_path, f"-femit-bin={res.binary_path}"]
+  let cmd = exec.Command(opts.zig_bin, args...)
+  cmd.Dir = res.work_dir
+
+  let mut stdout = bytes.Buffer { .. }
+  let mut stderr = bytes.Buffer { .. }
+  cmd.Stdout = Some(&stdout)
+  cmd.Stderr = Some(&stderr)
+
+  let run_err = cmd.Run()
+  res.stdout = stdout.String()
+  res.stderr = stderr.String()
+
+  match run_err {
+    Err(e) => {
+      fmt.Println(e.Error())
+      // match e {
+      //   ExitError{ExitCode: code} => (),
+      // 	_ => (),
+      // }
+      Ok(res)
+    },
+    Ok(()) => Ok(res),
+  }
+}

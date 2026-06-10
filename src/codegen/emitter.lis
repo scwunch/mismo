@@ -42,7 +42,10 @@ impl Emitter {
       t => self.emit_type(t),
     }
     self.start_block()
-    self.emit("return ")
+    match func.return_type {
+      Tuple([]) => (),
+      _ => self.emit("return "),
+    }
     self.emit_expr(func.body.kind)
     self.emit(";")
     self.end_block()
@@ -54,10 +57,38 @@ impl Emitter {
     self.emit_param_type(param.mode, param.typ)
   }
 
+  fn emit_expression(self: Ref<Emitter>, expr: semantic.Expression) {
+    self.emit_expr(expr.kind)
+  }
+
   fn emit_expr(self: Ref<Emitter>, expr: semantic.Expr) {
     match expr {
-      semantic.Expr.Nil => self.emit("()"),
-      _ => panic(f"unhandled expression type: {expr}"),
+      Nil => self.emit(".{}"),
+      BoolLiteral(b) => self.emit(f"{b}"),
+      IntLiteral(i) => self.emit(f"{i}"),
+      FloatLiteral(f) => self.emit(f"{f}"),
+      StringLiteral(s) => self.emit(f"\"{s}\""),
+      ArrayLiteral(elems, _) => {
+        self.emit_list_bracket(elems, self.emit_expression)
+      },
+      TupleLiteral(elems) => {
+        self.emit_list(".{", "}", elems, self.emit_expression)
+      },
+      Identifier(varid) => panic(f"unhandled expression type: {expr}"),
+      Assign(pattern, value) => panic(f"unhandled expression type: {expr}"),
+      Binding(m, expr) => panic(f"unhandled expression type: {expr}"),
+      Call(call) => panic(f"unhandled expression type: {expr}"),
+      ConcreteCall(i, args) => panic(f"unhandled expression type: {expr}"),
+      SwitchIf(cases) => panic(f"unhandled expression type: {expr}"),
+      Match(arms) => panic(f"unhandled expression type: {expr}"),
+      Loop(exprs, _) => panic(f"unhandled expression type: {expr}"),
+      Block(exprs, _) => self.emit_block(exprs, self.emit_expression),
+      Return(Some(value)) => panic(f"unhandled expression type: {expr}"),
+      Return(None) => panic(f"unhandled expression type: {expr}"),
+      Break(Some(value)) => panic(f"unhandled expression type: {expr}"),
+      Break(None) => panic(f"unhandled expression type: {expr}"),
+      Continue => panic(f"unhandled expression type: {expr}"),
+      FieldAccess(expr, i) => panic(f"unhandled expression type: {expr}"),
     }
   }
 
@@ -242,6 +273,25 @@ impl Emitter {
           action(a)
         }
         self.emit("]")
+      },
+    }
+  }
+
+  fn emit_list_brace<A>(
+    self: Ref<Emitter>,
+    items: Slice<A>,
+    action: fn(A) -> (),
+  ) {
+    match items {
+      [] => self.emit("{}"),
+      [a, ..rest] => {
+        self.emit("{")
+        action(a)
+        for a in rest {
+          self.emit(", ")
+          action(a)
+        }
+        self.emit("}")
       },
     }
   }

@@ -12,7 +12,15 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "dummy"
   let program = "
   fn main():
+    nil
+    true
+    false
     1
+    1.0
+    -5
+    \"hello world\"
+    -- [1, 2, 3]
+    (1, 2, 3)
   "
   fmt.Println(program)
 
@@ -34,5 +42,7 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.fail("failed with errors ^")?
     },
   }
+
+  run(program)
   Ok(())
 }
