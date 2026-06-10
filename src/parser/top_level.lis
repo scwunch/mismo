@@ -114,8 +114,7 @@ impl Parser {
   }
 
   fn parse_function_body(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
-    let span = self.peek().span
-    Ok(cst.nil_lit(span))
+    self.parse_colon_and_block(0)
   }
 
   fn parse_type_param(self: Ref<Parser>) -> Result<cst.TypeParameter, ParseError> {

@@ -1,0 +1,473 @@
+import "cst"
+import "lexer"
+import "mode"
+import "span"
+import "testing"
+
+pub fn test_top_level() {
+  let _ = testing.test_suite(
+    "Parser",
+    [
+      test_consume,
+      test_parse_type_params,
+      test_parse_type,
+      test_parse_tuple_type,
+      test_parse_fn_type,
+      test_parse_field,
+      test_parse_fields,
+      test_parse_struct,
+      test_parse_variant,
+      test_parse_enum,
+      test_parse_signature,
+      test_parse_function,
+    ],
+  )
+}
+
+fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parser Consume"
+  let mut parser = Parser.new("[[[[[")
+  match parser.consume(lexer.TokenKind.LeftBracket) {
+    Ok(s) => t.should_eq(s, span.new(0, 1))?,
+    Err(e) => t.fail(f"{e}")?,
+  }
+  match parser.consume(lexer.TokenKind.RightBracket) {
+    Ok(s) => t.fail("Did not expect `]`")?,
+    Err(e) => t.should_eq(parser.peek(), lexer.Token.left_bracket(1))?,
+  }
+  parser = Parser.new("foobar")
+  match parser.consume_identifier() {
+    Ok(str) => t.should_eq_repr(str, "foobar")?,
+    Err(e) => t.fail(f"{e}")?,
+  }
+  Ok(())
+}
+
+fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parse Type Params"
+  // NOTE: parse_type_params is called *after* consuming the opening bracket,
+  // so we just leave it off here
+  let mut parser = Parser.new(" T, U]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        cst.TypeParameter.new(span.new(1, 2), "T"),
+        cst.TypeParameter.new(span.new(4, 5), "U"),
+      ],
+    )?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // trailing comma
+  parser = Parser.new(" T, U,]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        cst.TypeParameter.new(span.new(1, 2), "T"),
+        cst.TypeParameter.new(span.new(4, 5), "U"),
+      ],
+    )?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // space-separated
+  parser = Parser.new(" T U]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        cst.TypeParameter.new(span.new(1, 2), "T"),
+        cst.TypeParameter.new(span.new(3, 4), "U"),
+      ],
+    )?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // newline-separated, newline at beginning and end
+  parser = Parser.new(" \n T\n U\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        cst.TypeParameter.new(span.new(3, 4), "T"),
+        cst.TypeParameter.new(span.new(6, 7), "U"),
+      ],
+    )?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // comma-newline-separated, newline at end
+  parser = Parser.new(" T,\n U,\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(
+      type_params,
+      [
+        cst.TypeParameter.new(span.new(1, 2), "T"),
+        cst.TypeParameter.new(span.new(5, 6), "U"),
+      ],
+    )?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // empty list
+  parser = Parser.new(" ]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // empty list with newline (indent>0)
+  parser = Parser.new(" \n  ]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // empty list with newline (indent=0)
+  parser = Parser.new("  \n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Err(err) => t.fail(err.message())?,
+  }
+
+  // failure to indent item
+  parser = Parser.new("\nT\nU\n]")
+  match parser.parse_type_params() {
+    Ok(type_params) => t.fail("expected error")?,
+    Err(err) => t.should_eq_repr(
+      err.message(),
+      "list items must be indented deeper than line of list start",
+    )?,
+  }
+  Ok(())
+}
+
+fn test_parse_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Type"
+  let mut parser = Parser.new("Type")
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, cst.Type.new(span.new(0, 4), "Type", []))?,
+    Err(e) => t.fail(e.message())?,
+  }
+
+  parser = Parser.new("Option[T]")
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(
+      typ,
+      cst.typ(0, 9, "Option", [cst.typ(7, 8, "T", [])]),
+    ),
+    Err(e) => t.fail(e.message()),
+  }?
+
+  parser = Parser.new("Result[Option[T], String]")
+  let mut res = cst.typ(
+    0,
+    25,
+    "Result",
+    [
+      cst.typ(7, 16, "Option", [cst.typ(14, 15, "T", [])]),
+      cst.typ(18, 24, "String", []),
+    ],
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.message()),
+  }?
+
+  parser = Parser.new("Result[\n  Option[T]  \n  String\n]")
+  res = cst.typ(
+    0,
+    32,
+    "Result",
+    [
+      cst.typ(10, 19, "Option", [cst.typ(17, 18, "T", [])]),
+      cst.typ(24, 30, "String", []),
+    ],
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.message()),
+  }?
+
+  Ok(())
+}
+
+fn test_parse_tuple_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Tuple Type"
+  let mut parser = Parser.new("(Type, Type)")
+  let res = cst.Type.tuple(
+    span.new(0, 12),
+    [cst.typ(1, 5, "Type", []), cst.typ(7, 11, "Type", [])],
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.message()),
+  }?
+  Ok(())
+}
+
+fn test_parse_fn_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Function Type"
+  let mut parser = Parser.new("(Type, Type) -> Type")
+  let res = cst.Type.fn_(
+    span.new(0, 20),
+    [
+      cst.ParamType.none(cst.typ(1, 5, "Type", [])),
+      cst.ParamType.none(cst.typ(7, 11, "Type", [])),
+    ],
+    &cst.typ(16, 20, "Type", []),
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.message()),
+  }?
+
+  parser = Parser.new("(let Option[T], mut! T)->R")
+  let res = cst.Type.fn_(
+    span.new(0, 26),
+    [
+      cst.ParamType.let_(cst.typ(5, 14, "Option", [cst.typ(12, 13, "T", [])])),
+      cst.ParamType.mut_bang(cst.typ(21, 22, "T", [])),
+    ],
+    &cst.typ(25, 26, "R", []),
+  )
+  match parser.parse_type() {
+    Ok(typ) => t.should_eq(typ, res),
+    Err(e) => t.fail(e.message()),
+  }?
+  Ok(())
+}
+
+fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Field of Struct"
+  let mut parser = Parser.new("field: Type")
+  match parser.parse_field() {
+    Ok(field) => t.should_eq(
+      field,
+      cst.Field.new(0, 11, "field", cst.typ(7, 11, "Type", [])),
+    ),
+    Err(e) => t.fail(e.message()),
+  }?
+  Ok(())
+}
+
+fn test_parse_fields(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Struct Fields"
+  let mut parser = Parser.new("\n  field: Type\n  field: Type\n")
+  match parser.parse_fields() {
+    Ok(fields) => t.should_eq_repr(
+      fields,
+      [
+        cst.Field.new(3, 14, "field", cst.typ(10, 14, "Type", [])),
+        cst.Field.new(17, 28, "field", cst.typ(24, 28, "Type", [])),
+      ],
+    ),
+    Err(e) => t.fail(e.message()),
+  }?
+  Ok(())
+}
+
+fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Struct"
+  let mut parser = Parser.new("struct Point \n  x: Int\n  y: Int\n")
+
+  match parser.parse_struct() {
+    Ok(_) => (),
+    Err(e) => t.fail(e.message())?,
+  }
+  let s = parser.defs.types.get(0).ok_or("no struct found")?
+  t.should_eq_repr(s.name, "Point")?
+  t.should_be_true(
+    s.type_parameters.is_empty(),
+    "type parameters should be empty",
+  )?
+  let cst.TypeBody.Struct(fields) = s.body else {
+    return t.fail("expected struct, got enum")
+  }
+  t.should_eq_repr(fields.length(), 2)?
+  let expected_field1 = cst.Field.new(16, 22, "x", cst.typ(19, 22, "Int", []))
+  let expected_field2 = cst.Field.new(25, 31, "y", cst.typ(28, 31, "Int", []))
+  t.should_eq(fields[0], expected_field1)?
+  t.should_eq(fields[1], expected_field2)?
+  t.should_eq(
+    s,
+    cst.TypeDecl.new_struct(
+      Span.new(0, 32),
+      "Point",
+      [],
+      [expected_field1, expected_field2],
+    ),
+  )?
+
+  // struct with type parameters
+  let mut parser = Parser.new("struct Point[T]\n  x: T\n  y: T\n")
+  match parser.parse_struct() {
+    Ok(_) => (),
+    Err(e) => t.fail(e.message())?,
+  }
+  let s = parser.defs.types.get(0).ok_or("no struct found")?
+  t.should_eq_repr(s.name, "Point")?
+  t.should_be_true(
+    s.type_parameters.length() == 1,
+    "type parameters should have length 1",
+  )?
+  t.should_eq_repr(s.type_parameters[0].name, "T")?
+  let cst.TypeBody.Struct(fields) = s.body else {
+    return t.fail("expected struct, got enum")
+  }
+  t.should_eq_repr(fields.length(), 2)?
+  let expected_field1 = cst.Field.new(18, 22, "x", cst.typ(21, 22, "T", []))
+  let expected_field2 = cst.Field.new(25, 29, "y", cst.typ(28, 29, "T", []))
+  t.should_eq(fields[0], expected_field1)?
+  t.should_eq(fields[1], expected_field2)?
+  t.should_eq(
+    s,
+    cst.TypeDecl.new_struct(
+      Span.new(0, 30),
+      "Point",
+      [cst.TypeParameter.new(Span.new(13, 14), "T")],
+      [expected_field1, expected_field2],
+    ),
+  )?
+  Ok(())
+}
+
+fn test_parse_variant(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Variant"
+  let mut parser = Parser.new("Some(T)")
+  match parser.parse_variant() {
+    Ok(variant) => t.should_eq(
+      variant,
+      cst.Variant.new(Span.new(0, 7), "Some", [cst.typ(5, 6, "T", [])]),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+  parser = Parser.new("None")
+  match parser.parse_variant() {
+    Ok(variant) => t.should_eq(
+      variant,
+      cst.Variant.new(Span.new(0, 4), "None", []),
+    )?,
+    Err(e) => t.fail(e.message())?,
+  }
+  Ok(())
+}
+
+fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parsing Enum"
+  let mut parser = Parser.new("enum Color\n  Red\n  Green\n  Blue\n")
+  parser.parse_enum().map_err(|e| e.message())?
+  let e = parser.defs.types.get(0).ok_or("no enum found")?
+  t.should_eq_repr(e.name, "Color")?
+  let cst.TypeBody.Enum(variants) = e.body else {
+    return t.fail("expected enum, got struct")
+  }
+  t.should_eq_repr(variants.length(), 3)?
+  let expected_variant1 = cst.Variant.new(Span.new(13, 16), "Red", [])
+  let expected_variant2 = cst.Variant.new(Span.new(19, 24), "Green", [])
+  let expected_variant3 = cst.Variant.new(Span.new(27, 31), "Blue", [])
+  t.should_eq(variants[0], expected_variant1)?
+  t.should_eq(variants[1], expected_variant2)?
+  t.should_eq(variants[2], expected_variant3)?
+  t.should_eq(
+    e,
+    cst.TypeDecl.new_enum(
+      Span.new(0, 32),
+      "Color",
+      [],
+      [expected_variant1, expected_variant2, expected_variant3],
+    ),
+  )?
+
+  parser = Parser.new("enum Option[T]\n  Some(T)\n  None")
+  parser.parse_enum().map_err(|e| e.message())?
+  let e = parser.defs.types.get(0).ok_or("no enum found")?
+  t.should_eq_repr(e.name, "Option")?
+  let cst.TypeBody.Enum(variants) = e.body else {
+    return t.fail("expected enum, got struct")
+  }
+  t.should_eq_repr(variants.length(), 2)?
+  let expected_variant1 = cst.Variant.new(
+    Span.new(17, 24),
+    "Some",
+    [cst.typ(22, 23, "T", [])],
+  )
+  let expected_variant2 = cst.Variant.new(Span.new(27, 31), "None", [])
+  t.should_eq(variants[0], expected_variant1)?
+  t.should_eq(variants[1], expected_variant2)?
+  t.should_eq(
+    e,
+    cst.TypeDecl.new_enum(
+      Span.new(0, 31),
+      "Option",
+      [cst.TypeParameter.new(Span.new(12, 13), "T")],
+      [expected_variant1, expected_variant2],
+    ),
+  )?
+  Ok(())
+}
+
+fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parse Function Signature"
+  let mut parser = Parser.new("fn foo(a: Int, b: Int) Int")
+  match parser.consume_identifier() {
+    Ok(name) => t.should_eq_repr(name, "fn")?,
+    Err(e) => return t.fail(e.message()),
+  }
+  let sig = match parser.parse_signature() {
+    Ok(sig) => sig,
+    Err(e) => return t.fail(e.message()),
+  }
+  t.should_eq_repr(sig.name, "foo")?
+  t.should_eq_repr(sig.type_parameters.length(), 0)?
+  t.should_eq_repr(sig.parameters.length(), 2)?
+  t.should_eq(
+    sig.parameters[0],
+    cst.param(7, 13, None, "a", cst.typ(10, 13, "Int", [])),
+  )?
+  t.should_eq(
+    sig.parameters[1],
+    cst.param(15, 21, None, "b", cst.typ(18, 21, "Int", [])),
+  )?
+  t.should_eq(sig.return_type, cst.typ(23, 26, "Int", []))?
+
+  parser = Parser.new("fn bar(let a String, mut! b Int) -> Nil")
+  match parser.consume_identifier() {
+    Ok(name) => t.should_eq_repr(name, "fn")?,
+    Err(e) => return t.fail(e.message()),
+  }
+  let sig = match parser.parse_signature() {
+    Ok(sig) => sig,
+    Err(e) => return t.fail(e.message()),
+  }
+  t.should_eq_repr(sig.name, "bar")?
+  t.should_eq_repr(sig.type_parameters.length(), 0)?
+  t.should_eq_repr(sig.parameters.length(), 2)?
+  t.should_eq(
+    sig.parameters[0],
+    cst.param(7, 19, Some(mode.Mode.Let), "a", cst.typ(13, 19, "String", [])),
+  )?
+  t.should_eq(
+    sig.parameters[1],
+    cst.param(21, 31, Some(mode.Mode.MutBang), "b", cst.typ(28, 31, "Int", [])),
+  )?
+  t.should_eq(sig.return_type, cst.typ(36, 39, "Nil", []))?
+
+  Ok(())
+}
+
+fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Parse Function Definition"
+  let mut parser = Parser.new("fn main(): print(\"hello world\"")
+  parser.parse_function().map_err(|e| e.msg)?
+  let main = parser.defs.functions.get(0).ok_or("failed to register `fn main`")?
+  t.should_eq_repr(main.signature.name, "main")?
+  t.should_be_true(
+    main.signature.parameters.is_empty(),
+    f"unexpected parameters: {main.signature.parameters}",
+  )?
+  t.should_eq(main.body, cst.nil_lit(span.new(0, 0)))?
+  Ok(())
+}

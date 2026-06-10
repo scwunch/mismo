@@ -1,0 +1,398 @@
+import "cst"
+import "lexer"
+import "mode"
+import "span"
+import "testing"
+
+pub fn test_expression() {
+  let _ = mode.Mode.Let
+  // stop lisette from removing mode import
+  let _ = testing.test_suite(
+    "ExpressionParser",
+    [
+      test_parse_simple_binary,
+      test_parse_arithmetic_precedence,
+      test_parse_parens,
+      test_parse_basic_literals,
+      test_parse_array_literals,
+      test_parse_tuple_literals,
+      test_parse_function_calls,
+      test_parse_method_calls,
+      test_parse_unary_neg,
+      test_parse_unary_not,
+      test_parse_let_var,
+      test_parse_return_break_continue,
+    ],
+  )
+}
+
+fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "simple binary"
+  let mut parser = Parser.new("1 + 2")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Binop(b) => {
+      t.should_eq(expr.span, span.new(0, 5))?
+      t.should_eq(b.op, Operator.Add)?
+      t.should_eq(b.left.kind, cst.Expr.IntLiteral(1))?
+      t.should_eq(b.right.kind, cst.Expr.IntLiteral(2))?
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "arithmetic precedence"
+  let mut parser = Parser.new("1 + 2 * 3")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Binop(b) => {
+      t.should_eq(b.op, Operator.Add)?
+      t.should_eq(b.left.kind, cst.Expr.IntLiteral(1))?
+      match b.right.kind {
+        cst.Expr.Binop(br) => {
+          t.should_eq(br.op, Operator.Mul)?
+          t.should_eq(br.left.kind, cst.Expr.IntLiteral(2))?
+          t.should_eq(br.right.kind, cst.Expr.IntLiteral(3))?
+        },
+        _ => return t.fail(f"Expected Binop; got {b.right.kind}"),
+      }
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+
+  parser = Parser.new("1 - 2 * 3 + 4")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Binop(b) => {
+      t.should_eq(b.op, Operator.Add)?
+      match b.left.kind {
+        cst.Expr.Binop(bl) => {
+          t.should_eq(bl.op, Operator.Sub)?
+          t.should_eq(bl.left.kind, cst.Expr.IntLiteral(1))?
+          match bl.right.kind {
+            cst.Expr.Binop(blr) => {
+              t.should_eq(blr.op, Operator.Mul)?
+              t.should_eq(blr.left.kind, cst.Expr.IntLiteral(2))?
+              t.should_eq(blr.right.kind, cst.Expr.IntLiteral(3))?
+            },
+            _ => return t.fail("Expected Binop"),
+          }
+        },
+        _ => return t.fail("Expected Binop"),
+      }
+      t.should_eq(b.right.kind, cst.Expr.IntLiteral(4))?
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_parens(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "parentheses"
+  let mut parser = Parser.new("(1 + 2) * 3")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Binop(b) => {
+      t.should_eq(b.op, Operator.Mul)?
+      match b.left.kind {
+        cst.Expr.Binop(bl) => {
+          t.should_eq(bl.op, Operator.Add)?
+          t.should_eq(bl.left.kind, cst.Expr.IntLiteral(1))?
+          t.should_eq(bl.right.kind, cst.Expr.IntLiteral(2))?
+        },
+        _ => return t.fail("Expected Binop for paren group"),
+      }
+      t.should_eq(b.right.kind, cst.Expr.IntLiteral(3))?
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_basic_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "basic literals"
+
+  let mut parser = Parser.new("1")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.IntLiteral(1))?
+
+  parser = Parser.new("1.0")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.FloatLiteral(1.0))?
+
+  parser = Parser.new("\"hello\"")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.StringLiteral("hello"))?
+
+  parser = Parser.new("true")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.BoolLiteral(true))?
+
+  parser = Parser.new("false")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.BoolLiteral(false))?
+
+  parser = Parser.new("nil")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.Nil)?
+  Ok(())
+}
+
+fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "array literals"
+  let mut parser = Parser.new("[1, 2, 3]")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.ArrayLiteral(elems) => {
+      t.should_be_true(elems.length() == 3, f"Expected 3; got {elems.length()}")?
+      t.should_eq(expr.span, span.new(0, 9))?
+      t.should_eq(elems[0].kind, cst.Expr.IntLiteral(1))?
+      t.should_eq(elems[1].kind, cst.Expr.IntLiteral(2))?
+      t.should_eq(elems[2].kind, cst.Expr.IntLiteral(3))?
+    },
+    _ => return t.fail(f"Expected ArrayLiteral; got {expr.kind}"),
+  }
+
+  parser = Parser.new("[]")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.ArrayLiteral(elems) => {
+      t.should_be_true(elems.is_empty(), "Expected empty array")?
+    },
+    _ => return t.fail(f"Expected ArrayLiteral; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "tuple literals"
+  let mut parser = Parser.new("1, 2, 3, 4")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.TupleLiteral(elems) => {
+      t.should_be_true(elems.length() == 4, f"Expected 4; got {elems.length()}")?
+      t.should_eq(expr.span, span.new(0, 10))?
+      t.should_eq(elems[0].kind, cst.Expr.IntLiteral(1))?
+      t.should_eq(elems[1].kind, cst.Expr.IntLiteral(2))?
+      t.should_eq(elems[2].kind, cst.Expr.IntLiteral(3))?
+      t.should_eq(elems[3].kind, cst.Expr.IntLiteral(4))?
+    },
+    _ => return t.fail(f"Expected TupleLiteral; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "function calls"
+  let mut parser = Parser.new("awesome(1, 2, 3)")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+
+  match expr.kind {
+    cst.Expr.Call(c) => {
+      t.should_eq_repr(c.fn_name, "awesome")?
+      t.should_be_true(c.type_args.is_none(), "Expected no type args")?
+      t.should_be_true(
+        c.args.length() == 3,
+        f"Expected 3 args; got {c.args.length()}",
+      )?
+      t.should_eq(c.args[0].kind, cst.Expr.IntLiteral(1))?
+      t.should_eq(c.args[1].kind, cst.Expr.IntLiteral(2))?
+      t.should_eq(c.args[2].kind, cst.Expr.IntLiteral(3))?
+    },
+    _ => return t.fail(f"Expected Call; got {expr.kind}"),
+  }
+
+  parser = Parser.new("awesome[Int](1)")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Call(c) => {
+      t.should_eq_repr(c.fn_name, "awesome")?
+      match c.type_args {
+        Some(type_args) => {
+          t.should_be_true(
+            type_args.length() == 1,
+            f"Expected 1 type arg; got {type_args.length()}",
+          )?
+          t.should_eq(type_args[0], cst.typ(8, 11, "Int", []))?
+        },
+        _ => return t.fail("Expected type args"),
+      }
+      t.should_be_true(
+        c.args.length() == 1,
+        f"Expected 1 arg; got {c.args.length()}",
+      )?
+    },
+    _ => return t.fail(f"Expected Call; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "method calls"
+
+  let mut parser = Parser.new(".awesome(1, 2, 3)")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.DotCall(receiver, call) => {
+      t.should_eq(expr.span, span.new(0, 17))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq_repr(call.fn_name, "awesome")?
+      t.should_be_true(call.type_args.is_none(), "Expected no type args")?
+      t.should_be_true(
+        call.args.length() == 3,
+        f"Expected 3 args; got {call.args.length()}",
+      )?
+      t.should_eq(call.args[0].kind, cst.Expr.IntLiteral(1))?
+      t.should_eq(call.args[1].kind, cst.Expr.IntLiteral(2))?
+      t.should_eq(call.args[2].kind, cst.Expr.IntLiteral(3))?
+    },
+    _ => return t.fail(f"Expected DotCall; got {expr.kind}"),
+  }
+
+  parser = Parser.new(".awesome[Int](1)")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.DotCall(receiver, call) => {
+      t.should_eq(expr.span, span.new(0, 16))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq_repr(call.fn_name, "awesome")?
+      match call.type_args {
+        Some(type_args) => {
+          t.should_be_true(
+            type_args.length() == 1,
+            f"Expected 1 type arg; got {type_args.length()}",
+          )?
+          t.should_eq(type_args[0], cst.typ(9, 12, "Int", []))?
+        },
+        _ => return t.fail("Expected type args"),
+      }
+      t.should_be_true(
+        call.args.length() == 1,
+        f"Expected 1 arg; got {call.args.length()}",
+      )?
+    },
+    _ => return t.fail(f"Expected DotCall; got {expr.kind}"),
+  }
+
+  parser = Parser.new(".awesome")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.DotName(receiver, field) => {
+      t.should_eq(expr.span, span.new(0, 8))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq_repr(field, "awesome")?
+    },
+    _ => return t.fail(f"Expected DotName; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "unary negation"
+  let mut parser = Parser.new("-5")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.IntLiteral(-5))?
+  t.should_eq(expr.span, span.new(0, 2))?
+
+  parser = Parser.new("-x")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.Neg(&cst.identifier(span.new(1, 2), "x")))?
+  t.should_eq(expr.span, span.new(0, 2))?
+  Ok(())
+}
+
+fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "unary not"
+  let mut parser = Parser.new("not x")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.Not(&cst.identifier(span.new(4, 5), "x")))?
+  t.should_eq(expr.span, span.new(0, 3))?
+  Ok(())
+}
+
+fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "let/var declarations"
+
+  let mut parser = Parser.new("let x = 5")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Binop(b) => {
+      t.should_eq(b.op, Operator.Assign)?
+      match b.left.kind {
+        cst.Expr.Binding(mode.Mode.Let, id_ref) => {
+          t.should_eq(id_ref.kind, cst.Expr.Identifier("x"))?
+          t.should_eq_repr(id_ref.span, span.new(4, 5))?
+        },
+        _ => return t.fail("Expected Binding(Let)"),
+      }
+      t.should_eq(b.right.kind, cst.Expr.IntLiteral(5))?
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+
+  parser = Parser.new("var y = 10")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    Binop(b) => {
+      t.should_eq(b.op, Operator.Assign)?
+      match b.left.kind {
+        Binding(Var, id_ref) => {
+          t.should_eq(id_ref.kind, cst.Expr.Identifier("y"))?
+          t.should_eq_repr(id_ref.span, span.new(4, 5))?
+        },
+        _ => return t.fail("Expected Binding(Var)"),
+      }
+      t.should_eq(b.right.kind, cst.Expr.IntLiteral(10))?
+    },
+    _ => return t.fail(f"Expected Binop; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "return/break/continue"
+
+  let mut parser = Parser.new("return 42")
+  let mut ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    cst.Expr.Return(Some(e)) => t.should_eq(e.kind, cst.Expr.IntLiteral(42))?,
+    _ => return t.fail(f"Expected Return; got {expr.kind}"),
+  }
+
+  parser = Parser.new("break")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.Break(None))?
+
+  parser = Parser.new("continue")
+  ep = ExpressionParser.new(&parser, 0, StopAt.Normal)
+  let expr = ep.parse().map_err(|e| e.message())?
+  t.should_eq(expr.kind, cst.Expr.Continue)?
+  Ok(())
+}
