@@ -460,7 +460,7 @@ fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parse Function Definition"
-  let mut parser = Parser.new("fn main(): print(\"hello world\"")
+  let mut parser = Parser.new("fn main(): print(\"hello world\")")
   parser.parse_function().map_err(|e| e.msg)?
   let main = parser.defs.functions.get(0).ok_or("failed to register `fn main`")?
   t.should_eq_repr(main.signature.name, "main")?
@@ -468,6 +468,32 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     main.signature.parameters.is_empty(),
     f"unexpected parameters: {main.signature.parameters}",
   )?
-  t.should_eq(main.body, cst.nil_lit(span.new(0, 0)))?
+  match main.body.kind {
+    Call(call) => {
+      t.should_eq(main.body.span, span.new(11, 31))?
+      t.should_eq(
+        call,
+        cst.Call { 
+          fn_name: "print",
+          type_args: None,
+          args: [cst.string_lit(span.new(17, 30), "hello world")],
+        },
+      )?
+    },
+    _ => return t.fail(
+      f"expected 'main's body to be a function call; got {main.body.kind}",
+    ),
+  }
+  t.should_eq(
+    main.body,
+    cst.call_expr(
+      span.new(11, 31),
+      cst.Call { 
+        fn_name: "print",
+        type_args: None,
+        args: [cst.string_lit(span.new(17, 30), "hello world")],
+      },
+    ),
+  )?
   Ok(())
 }

@@ -85,40 +85,34 @@ impl Expression {
 impl Expr {
   pub fn eq(self, other: Expr) -> bool {
     match (self, other) {
-      (Expr.Nil, Expr.Nil) => true,
-      (Expr.BoolLiteral(b1), Expr.BoolLiteral(b2)) => b1 == b2,
-      (Expr.IntLiteral(i1), Expr.IntLiteral(i2)) => i1 == i2,
-      (Expr.FloatLiteral(f1), Expr.FloatLiteral(f2)) => f1 == f2,
-      (Expr.StringLiteral(s1), Expr.StringLiteral(s2)) => s1 == s2,
-      (Expr.ArrayLiteral(a1), Expr.ArrayLiteral(a2)) => slice.compare(
-        a1,
-        a2,
-        Expression.eq,
-      ),
-      (Expr.TupleLiteral(t1), Expr.TupleLiteral(t2)) => slice.compare(
-        t1,
-        t2,
-        Expression.eq,
-      ),
-      (Expr.Identifier(i1), Expr.Identifier(i2)) => i1 == i2,
-      (Expr.Binding(m1, e1), Expr.Binding(m2, e2)) => m1 == m2 && e1.eq(e2.*),
-      (Expr.Binop(b1), Expr.Binop(b2)) => b1.eq(b2.*),
-      (Expr.If(cond1), Expr.If(cond2)) => cond1.eq(cond2),
-      (Expr.While(cond1), Expr.While(cond2)) => cond1.eq(cond2),
-      (Expr.For(f1), Expr.For(f2)) => f1.eq(f2.*),
-      (Expr.Block(exprs1), Expr.Block(exprs2)) => slice.compare(
-        exprs1,
-        exprs2,
-        Expression.eq,
-      ),
-      (Expr.Neg(e1), Expr.Neg(e2)) => e1.eq(e2.*),
-      (Expr.Not(e1), Expr.Not(e2)) => e1.eq(e2.*),
-      (Expr.Return(Some(e1)), Expr.Return(Some(e2))) => e1.eq(e2.*),
-      (Expr.Return(None), Expr.Return(None)) => true,
-      (Expr.Break(None), Expr.Break(None)) => true,
-      (Expr.Break(Some(e1)), Expr.Break(Some(e2))) => e1.eq(e2.*),
-      (Expr.Continue, Expr.Continue) => true,
-      (Expr.Type(n1, a1), Expr.Type(n2, a2)) => {
+      (Nil, Nil) => true,
+      (BoolLiteral(b1), BoolLiteral(b2)) => b1 == b2,
+      (IntLiteral(i1), IntLiteral(i2)) => i1 == i2,
+      (FloatLiteral(f1), FloatLiteral(f2)) => f1 == f2,
+      (StringLiteral(s1), StringLiteral(s2)) => s1 == s2,
+      (ArrayLiteral(a1), ArrayLiteral(a2)) => {
+        slice.compare(a1, a2, Expression.eq)
+      },
+      (TupleLiteral(t1), TupleLiteral(t2)) => {
+        slice.compare(t1, t2, Expression.eq)
+      },
+      (Identifier(i1), Identifier(i2)) => i1 == i2,
+      (Binding(m1, e1), Binding(m2, e2)) => m1 == m2 && e1.eq(e2.*),
+      (Binop(b1), Binop(b2)) => b1.eq(b2.*),
+      (If(cond1), If(cond2)) => cond1.eq(cond2),
+      (While(cond1), While(cond2)) => cond1.eq(cond2),
+      (For(f1), For(f2)) => f1.eq(f2.*),
+      (Block(exprs1), Block(exprs2)) => {
+        slice.compare(exprs1, exprs2, Expression.eq)
+      },
+      (Neg(e1), Neg(e2)) => e1.eq(e2.*),
+      (Not(e1), Not(e2)) => e1.eq(e2.*),
+      (Return(Some(e1)), Return(Some(e2))) => e1.eq(e2.*),
+      (Return(None), Return(None)) => true,
+      (Break(None), Break(None)) => true,
+      (Break(Some(e1)), Break(Some(e2))) => e1.eq(e2.*),
+      (Continue, Continue) => true,
+      (Type(n1, a1), Type(n2, a2)) => {
         let type_args_eq = match (a1, a2) {
           (None, None) => true,
           (Some(t1), Some(t2)) => slice.compare(t1, t2, Type.eq),
@@ -126,8 +120,9 @@ impl Expr {
         }
         n1 == n2 && type_args_eq
       },
-      (Expr.DotName(r1, f1), Expr.DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
-      (Expr.DotCall(r1, c1), Expr.DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
+      (DotName(r1, f1), DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
+      (DotCall(r1, c1), DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
+      (Call(c1), Call(c2)) => c1.eq(c2),
       _ => false,
     }
   }

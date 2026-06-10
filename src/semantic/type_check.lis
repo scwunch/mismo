@@ -73,7 +73,13 @@ impl TypeCheck {
 impl TypeCheck {
   fn check(self, expr: cst.Expression, expected: Type) -> Result<Expression, errors.TypeError> {
     let actual = self.infer(expr)?
-    if !actual.typ().eq(expected) { panic("register type mismatch error here") }
+    if !actual.typ().assignable_to(expected) {
+      return Err(errors.TypeMismatchError.new(
+        actual.span,
+        expected.string(),
+        actual.typ().string(),
+      ))
+    }
     Ok(actual)
   }
 

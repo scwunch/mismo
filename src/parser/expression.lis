@@ -265,7 +265,7 @@ impl ExpressionParser {
     let s = _span.merge(end)
     match exprs {
       [e] => Ok(e),
-      _ => Ok(cst.tuple_lit(s, [])),
+      _ => Ok(cst.tuple_lit(s, exprs)),
     }
   }
 
@@ -315,12 +315,7 @@ impl ExpressionParser {
   }
 
   fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {
-    let mut sub_parser = ExpressionParser.new(
-      self.parser,
-      self.parser.current_line_indent,
-    )
-    let items = self.parser.parse_list(end, sub_parser.parse)?
-    Ok(items)
+    self.parser.parse_list(end, self.parser.parse_expression)
   }
 }
 
@@ -456,7 +451,11 @@ fn unary_op(op: Operator, term: cst.Expression) -> cst.Expression {
   match op {
     Neg => {
       let span = term.span.extend_left(1)
-      cst.neg(span, &term)
+      match term.kind {
+        IntLiteral(i) => cst.int_lit(span, -i),
+        FloatLiteral(f) => cst.float_lit(span, -f),
+        _ => cst.neg(span, &term),
+      }
     },
     Not => {
       let span = term.span.extend_left(4)

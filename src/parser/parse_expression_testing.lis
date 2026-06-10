@@ -1,3 +1,5 @@
+import "go:fmt"
+
 import "cst"
 import "lexer"
 import "mode"
@@ -185,14 +187,32 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.TupleLiteral(elems) => {
-      t.should_be_true(elems.length() == 4, f"Expected 4; got {elems.length()}")?
-      t.should_eq(expr.span, span.new(0, 10))?
+      t.should_be_true(
+        elems.length() == 4,
+        f"Expected 4 elements; got {elems.length()}",
+      )?
+      t.should_eq(expr.span, span.new(0, 12))?
       t.should_eq(elems[0].kind, cst.Expr.IntLiteral(1))?
       t.should_eq(elems[1].kind, cst.Expr.IntLiteral(2))?
       t.should_eq(elems[2].kind, cst.Expr.IntLiteral(3))?
       t.should_eq(elems[3].kind, cst.Expr.IntLiteral(4))?
     },
     _ => return t.fail(f"Expected TupleLiteral; got {expr.kind}"),
+  }
+
+  parser = Parser.new("(\n  1\n  2\n  3\n  4)")
+  let expr2 = ep.parse().map_err(|e| e.message())?
+  match (expr.kind, expr2.kind) {
+    (TupleLiteral(elems), TupleLiteral(elems2)) => {
+      t.should_be_true(
+        elems2.length() == 4,
+        f"Expected 4 elements; got {elems.length()}",
+      )?
+      for i in 0..4 {
+        t.should_eq(elems[i].kind, elems2[i].kind)?
+      }
+    },
+    _ => return t.fail(f"Expected TupleLiteral; got {expr2.kind}"),
   }
   Ok(())
 }
@@ -329,7 +349,7 @@ fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Not(&cst.identifier(span.new(4, 5), "x")))?
-  t.should_eq(expr.span, span.new(0, 3))?
+  t.should_eq(expr.span, span.new(0, 5))?
   Ok(())
 }
 
