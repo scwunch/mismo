@@ -85,7 +85,7 @@ pub fn run(source: string) {
     Err(errs) => {
       let source = source as Slice<rune>
       for e in errs {
-        errors.render(e, source)
+        fmt.Println(errors.render(e, source))
       }
     },
   }

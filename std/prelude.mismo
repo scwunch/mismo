@@ -122,7 +122,7 @@ fn /(self Bool, other Bool) Bool:
       else: false
 fn /(self Bool, other Nat) Nat: .nat.__zig_div_uint(other)
 fn /(self Bool, other Int) Int: .int.__zig_div_int(other)
----
+
 -- Nat
 fn bool(self Nat) Bool: .__zig_neq(0)
 fn nat(self Nat) Nat: self

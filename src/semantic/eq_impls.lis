@@ -40,30 +40,35 @@ impl Variant {
 impl Type {
   pub fn eq(self, other: Type) -> bool {
     match (self, other) {
-      (Type.Any, Type.Any) => true,
-      (Type.Never, Type.Never) => true,
-      (Type.Bool, Type.Bool) => true,
-      (Type.Nat, Type.Nat) => true,
-      (Type.Int, Type.Int) => true,
-      (Type.Float, Type.Float) => true,
-      (Type.String, Type.String) => true,
-      (Type.Tuple(a), Type.Tuple(b)) => slice.compare(a, b, Type.eq),
-      (Type.Fn(a, b), Type.Fn(c, d)) => slice.compare(a, c, ParamType.eq) &&
+      (Any, Any) => true,
+      (Never, Never) => true,
+      (Bool, Bool) => true,
+      (Nat, Nat) => true,
+      (Int, Int) => true,
+      (Float, Float) => true,
+      (String, String) => true,
+      (Array(a), Array(b)) |
+      (Pointer(a), Pointer(b)) => a.eq(b.*),
+      (Slice(a), Slice(b)) => a.eq(b.*),
+      (Tuple(a), Tuple(b)) => slice.compare(a, b, Type.eq),
+      (Fn(a, b), Fn(c, d)) => slice.compare(a, c, ParamType.eq) &&
       b.eq(d.*),
-      (Type.Adt(a, b), Type.Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
-      (Type.Var(a), Type.Var(b)) => a == b,
-      (Type.Any, _) |
-      (Type.Never, _) |
-      (Type.Bool, _) |
-      (Type.Nat, _) |
-      (Type.Int, _) |
-      (Type.Float, _) |
-      (Type.String, _) |
-      (Type.Array(_), _) |
-      (Type.Tuple(_), _) |
-      (Type.Fn(_, _), _) |
-      (Type.Adt(_, _), _) |
-      (Type.Var(_), _) => false,
+      (Adt(a, b), Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
+      (Var(a), Var(b)) => a == b,
+      (Any, _) |
+      (Never, _) |
+      (Bool, _) |
+      (Nat, _) |
+      (Int, _) |
+      (Float, _) |
+      (String, _) |
+      (Array(_), _) |
+      (Slice(_), _)|
+      (Pointer(_),_)|
+      (Tuple(_), _) |
+      (Fn(_, _), _) |
+      (Adt(_, _), _) |
+      (Var(_), _) => false,
     }
   }
 }

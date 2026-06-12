@@ -74,14 +74,22 @@ impl Hasher {
         self.write_byte(6)
         self.write_type(t.*)
       },
-      Tuple(fields) => {
+      Slice(t) => {
         self.write_byte(7)
+        self.write_type(t.*)
+      },
+      Pointer(t) => {
+        self.write_byte(8)
+        self.write_type(t.*)
+      },
+      Tuple(fields) => {
+        self.write_byte(9)
         for f in fields {
           self.write_type(f)
         }
       },
       Fn(params, ret) => {
-        self.write_byte(8)
+        self.write_byte(10)
         for p in params {
           self.write_byte(p.mode.ordinal() as byte)
           self.write_type(p.typ)
@@ -89,14 +97,14 @@ impl Hasher {
         self.write_type(ret.*)
       },
       Adt(def, args) => {
-        self.write_byte(9)
+        self.write_byte(11)
         self.write_span(def.span)
         for a in args {
           self.write_type(a)
         }
       },
       Var(int) => {
-        self.write_byte(10)
+        self.write_byte(12)
         self.write_byte(int as byte)
       },
     }

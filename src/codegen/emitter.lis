@@ -198,11 +198,11 @@ impl Emitter {
         self.emit_type(t.*)
         self.emit(")")
       },
-      // Pointer(t) => {
-      //   self.emit("*")
-      //   self.emit_type(t.*)
-      // },
-      // Slice(t) => "[]",
+      Pointer(t) => {
+        self.emit("*")
+        self.emit_type(t.*)
+      },
+      Slice(t) => self.emit("[]"),
       Tuple(ts) => self.emit_list_paren(ts, self.emit_type),
       Fn(params, ret) => {
         // self.emit("*const fn () ")

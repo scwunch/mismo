@@ -114,6 +114,21 @@ impl TypeEnv {
           "Int" => Some(Type.Int),
           "Float" => Some(Type.Float),
           "String" => Some(Type.String),
+          "Array" => {
+            self.check_arity(typ.span, name, type_args.length(), 1)?
+            let t = self.eval_type(type_args[0])?
+            return Ok(Type.Array(&t))
+          },
+          "Slice" => {
+            self.check_arity(typ.span, name, type_args.length(), 1)?
+            let t = self.eval_type(type_args[0])?
+            return Ok(Type.Slice(&t))
+          },
+          "Pointer" => {
+            self.check_arity(typ.span, name, type_args.length(), 1)?
+            let t = self.eval_type(type_args[0])?
+            return Ok(Type.Pointer(&t))
+          },
           _ => None,
         }
         if let Some(primitive) = primitive {

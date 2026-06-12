@@ -10,6 +10,8 @@ pub enum Type {
   Float,
   String,
   Array(Ref<Type>),
+  Pointer(Ref<Type>),
+  Slice(Ref<Type>),
   Tuple(Slice<Type>),
   Fn(Slice<ParamType>, Ref<Type>),
   Adt(Ref<TypeDef>, Slice<Type>),
@@ -50,6 +52,8 @@ impl Type {
       Float => "Float",
       String => "String",
       Array(t) => f"Array[{t}]",
+      Slice(t) => f"Slice[{t}]",
+      Pointer(t) => f"Pointer[{t}]",
       Tuple(fields) => f"({fields.map(Type.string).join(", ")})",
       Fn(params, ret) => f"({params.map(ParamType.string).join(", ")})->{ret}",
       Adt(def, args) => def.name + f"{args}",
@@ -60,7 +64,7 @@ impl Type {
   pub fn type_args(self) -> Slice<Type> {
     match self {
       Any | Never | Bool | Nat | Int | Float | String | Var(_) => [],
-      Array(typ) => [typ.*],
+      Array(typ) | Slice(typ) | Pointer(typ) => [typ.*],
       Tuple(fields) => fields,
       Fn(params, ret) => params.map(|p| p.typ).append(ret.*),
       Adt(_, args) => args,
@@ -77,6 +81,8 @@ impl Type {
       (Float, Float) |
       (String, String) |
       (Array(_), Array(_)) => true,
+      (Slice(_), Slice(_)) => true,
+      (Pointer(_), Pointer(_)) => true,
       (Tuple(a), Tuple(b)) => a.length() == b.length(),
       (Fn(a, _), Fn(b, _)) => a.length() == b.length(),
       (Adt(def1, _), Adt(def2, _)) => def1 == def2,
@@ -89,6 +95,8 @@ impl Type {
       (Float, _) |
       (String, _) |
       (Array(_), _) |
+      (Slice(_), _) |
+      (Pointer(_), _) |
       (Tuple(_), _) |
       (Fn(_, _), _) |
       (Adt(_, _), _) |
@@ -106,6 +114,8 @@ impl Type {
       Float => Type.Float,
       String => Type.String,
       Array(typ) => Type.Array(&typ.substitute(args)),
+      Slice(typ) => Type.Slice(&typ.substitute(args)),
+      Pointer(typ) => Type.Pointer(&typ.substitute(args)),
       Tuple(fields) => Type.Tuple(fields.map(|f| f.substitute(args))),
       Fn(params, ret) => Type.Fn(params.map(|p| p.substitute(args)), ret),
       Adt(def, args) => Type.Adt(def, args.map(|a| a.substitute(args))),
