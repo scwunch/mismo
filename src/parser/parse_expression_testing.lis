@@ -1,5 +1,3 @@
-import "go:fmt"
-
 import "cst"
 import "lexer"
 import "mode"
