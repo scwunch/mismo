@@ -45,486 +45,234 @@ extern fn __zig_ptr2slice[T](ptr: Any, size: Nat) Slice[T]
 
 fn bool(_ Nil) Bool: false
 
-extend Bool
-   fn bool Bool: self
-   fn nat Nat: 
-      nat(if self: 1
-      else: 0)
-   fn int Int: 
-      if self: 1
+--- Bool
+fn bool(self Bool) Bool: self
+fn nat(self Bool) Nat:
+   nat(if self: 1
+   else: 0)
+fn int(self Bool) Int:
+   if self: 1
+   else: 0
+fn float(self Bool) Float:
+   if self: 1.0
+   else: 0.0
+fn string(self Bool) String:
+   if self: "true"
+   else: "false"
+
+fn ==(self Bool, other Bool) Bool: .__zig_eq(other)
+fn ==(self Bool, other Nat) Bool: .__zig_eq(other)
+fn ==(self Bool, other Int) Bool: .__zig_eq(other)
+fn !=(self Bool, other Bool) Bool: .__zig_neq(other)
+fn !=(self Bool, other Nat) Bool: .__zig_neq(other)
+fn !=(self Bool, other Int) Bool: .__zig_neq(other)
+fn <(self Bool, other Bool) Bool: not self and other
+fn <(self Bool, other Nat) Bool: .nat.__zig_lt(other)
+fn <(self Bool, other Int) Bool: .int.__zig_lt(other)
+fn <=(self Bool, other Bool) Bool: not self or other
+fn <=(self Bool, other Nat) Bool: .nat.__zig_lte(other)
+fn <=(self Bool, other Int) Bool: .int.__zig_lte(other)
+fn >(self Bool, other Bool) Bool: self and not other
+fn >(self Bool, other Nat) Bool: .nat.__zig_gt(other)
+fn >(self Bool, other Int) Bool: .int.__zig_gt(other)
+fn >=(self Bool, other Bool) Bool: self or not other
+fn >=(self Bool, other Nat) Bool: .nat.__zig_gte(other)
+fn >=(self Bool, other Int) Bool: .int.__zig_gte(other)
+
+fn +(self Bool, other Bool) Nat:
+   nat(if
+      self and other: 2
+      self or other: 1
       else: 0
-   fn float Float: 
-      if self: 1.0
-      else: 0.0
-   fn string String: 
-      if self: "true"
-      else: "false"
+   )
+fn +(self Bool, other Nat) Nat: .nat.__zig_add_uint(other)
+fn +(self Bool, other Int) Int: .int.__zig_add_int(other)
 
-   fn ==(other Bool) Bool: .__zig_eq(other)
-   fn ==(other Nat) Bool: .__zig_eq(other)
-   fn ==(other Int) Bool: .__zig_eq(other)
-   fn !=(other Bool) Bool: .__zig_neq(other)
-   fn !=(other Nat) Bool: .__zig_neq(other)
-   fn !=(other Int) Bool: .__zig_neq(other)
-   fn <(other Bool) Bool: not self and other
-   fn <(other Nat) Bool: .nat.__zig_lt(other)
-   fn <(other Int) Bool: .int.__zig_lt(other)
-   fn <=(other Bool) Bool: not self or other
-   fn <=(other Nat) Bool: .nat.__zig_lte(other)
-   fn <=(other Int) Bool: .int.__zig_lte(other)
-   fn >(other Bool) Bool: self and not other
-   fn >(other Nat) Bool: .nat.__zig_gt(other)
-   fn >(other Int) Bool: .int.__zig_gt(other)
-   fn >=(other Bool) Bool: self or not other
-   fn >=(other Nat) Bool: .nat.__zig_gte(other)
-   fn >=(other Int) Bool: .int.__zig_gte(other)
+fn -(self Bool, other Bool) Int:
+   if
+      self and other: 0
+      self: 1
+      other: -1
+   else: 0
+fn -(self Bool, other Nat) Int: .nat.__zig_sub_int(other)
+fn -(self Bool, other Int) Int: .int.__zig_sub_int(other)
 
-   fn +(other Bool) Nat:
-      nat(if 
-         self and other: 2
-         self or other: 1
-         else: 0 
-      )
-   fn +(other Nat) Nat: .nat.__zig_add_uint(other)
-   fn +(other Int) Int: .int.__zig_add_int(other)
+fn -(self Bool) Int:
+   if self: -1
+   else: 0
 
-   fn -(other Bool) Int:
-      if 
-         self and other: 0
-         self: 1
-         other: -1
-      else: 0
-   fn -(other Nat) Int: .nat.__zig_sub_int(other)
-   fn -(other Int) Int: .int.__zig_sub_int(other)
-   
-   fn -() Int:
-      if self: -1
-      else: 0
+fn *(self Bool, other Bool) Bool:
+   if self and other: true
+   else: false
+fn *(self Bool, other Nat) Nat:
+   if self: other
+   else: nat(0)
+fn *(self Bool, other Int) Int:
+   if self: other
+   else: 0
+fn *(self Bool, other Float) Float:
+   if self: other
+   else: 0.0
 
-   fn *(other Bool) Bool:
-      if self and other: true
+fn /(self Bool, other Bool) Bool:
+   if
+      not other:
+         panic("divide by zero")
+      self and other: true
       else: false
-   fn *(other Nat) Nat: 
-      if self: other
-      else: nat(0)
-   fn *(other Int) Int: 
-      if self: other
-      else: 0
-   fn *(other Float) Float: 
-      if self: other
-      else: 0.0
+fn /(self Bool, other Nat) Nat: .nat.__zig_div_uint(other)
+fn /(self Bool, other Int) Int: .int.__zig_div_int(other)
+---
+-- Nat
+fn bool(self Nat) Bool: .__zig_neq(0)
+fn nat(self Nat) Nat: self
+fn int(self Nat) Int: .__zig_nat2int
+fn float(self Nat) Float: .__zig_nat2float
+fn string(self Nat) String: .__zig_nat2string
 
-   fn /(other Bool) Bool:
-      if 
-         not other:
-            panic("divide by zero")
-         self and other: true
-         else: false
-   fn /(other Nat) Nat: .nat.__zig_div_uint(other)
-   fn /(other Int) Int: .int.__zig_div_int(other)
+fn ==(self Nat, other Bool) Bool: .__zig_eq(other)
+fn ==(self Nat, other Nat) Bool: .__zig_eq(other)
+fn ==(self Nat, other Int) Bool: .__zig_eq(other)
+fn !=(self Nat, other Bool) Bool: .__zig_neq(other)
+fn !=(self Nat, other Nat) Bool: .__zig_neq(other)
+fn !=(self Nat, other Int) Bool: .__zig_neq(other)
+fn <(self Nat, other Bool) Bool: .__zig_lt(other.nat)
+fn <(self Nat, other Nat) Bool: .__zig_lt(other)
+fn <(self Nat, other Int) Bool: .int.__zig_lt(other)
+fn <=(self Nat, other Bool) Bool: .__zig_lte(other.nat)
+fn <=(self Nat, other Nat) Bool: .__zig_lte(other)
+fn <=(self Nat, other Int) Bool: .int.__zig_lte(other)
+fn >(self Nat, other Bool) Bool: .__zig_gt(other.nat)
+fn >(self Nat, other Nat) Bool: .__zig_gt(other)
+fn >(self Nat, other Int) Bool: .int.__zig_gt(other)
+fn >=(self Nat, other Bool) Bool: .__zig_gte(other.nat)
+fn >=(self Nat, other Nat) Bool: .__zig_gte(other)
+fn >=(self Nat, other Int) Bool: .int.__zig_gte(other)
 
-extend Nat
-   fn bool Bool: .__zig_neq(0)
-   fn nat Nat: self
-   fn int Int: .__zig_nat2int
-   fn float Float: .__zig_nat2float
-   fn string String: .__zig_nat2string
+fn -(self Nat) Int: .__zig_nat2int.__zig_neg_int
+fn +(self Nat, other Bool) Nat: .__zig_add_uint(other.nat)
+fn +(self Nat, other Nat) Nat: .__zig_add_uint(other)
+fn +(self Nat, other Int) Int: .int.__zig_add_int(other)
+fn -(self Nat, other Bool) Nat: .__zig_sub_uint(other.nat)
+fn -(self Nat, other Nat) Nat: .__zig_sub_uint(other)
+fn -(self Nat, other Int) Int: .int.__zig_sub_int(other)
+fn *(self Nat, other Bool) Nat: if other: self else: nat(0)
+fn *(self Nat, other Nat) Nat: .__zig_mul_uint(other)
+fn *(self Nat, other Int) Int: .int.__zig_mul_int(other)
+fn /(self Nat, other Bool) Nat: .__zig_div_uint(other.nat)
+fn /(self Nat, other Nat) Nat: .__zig_div_uint(other)
+fn /(self Nat, other Int) Int: .int.__zig_div_int(other)
 
-   fn ==(other Bool) Bool: .__zig_eq(other)
-   fn ==(other Nat) Bool: .__zig_eq(other)
-   fn ==(other Int) Bool: .__zig_eq(other)
-   fn !=(other Bool) Bool: .__zig_neq(other)
-   fn !=(other Nat) Bool: .__zig_neq(other)
-   fn !=(other Int) Bool: .__zig_neq(other)
-   fn <(other Bool) Bool: .__zig_lt(other.nat)
-   fn <(other Nat) Bool: .__zig_lt(other)
-   fn <(other Int) Bool: .int.__zig_lt(other)
-   fn <=(other Bool) Bool: .__zig_lte(other.nat)
-   fn <=(other Nat) Bool: .__zig_lte(other)
-   fn <=(other Int) Bool: .int.__zig_lte(other)
-   fn >(other Bool) Bool: .__zig_gt(other.nat)
-   fn >(other Nat) Bool: .__zig_gt(other)
-   fn >(other Int) Bool: .int.__zig_gt(other)
-   fn >=(other Bool) Bool: .__zig_gte(other.nat)
-   fn >=(other Nat) Bool: .__zig_gte(other)
-   fn >=(other Int) Bool: .int.__zig_gte(other)
+-- Int
+fn bool Bool: self != 0
+fn nat Nat: .__zig_int2nat
+fn int Int: self
+fn float Float: .__zig_int2float
+fn string String: .__zig_int2string
 
-   fn -() Int: .__zig_nat2int.__zig_neg_int
-   fn +(other Bool) Nat: .__zig_add_uint(other.nat)
-   fn +(other Nat) Nat: .__zig_add_uint(other)
-   fn +(other Int) Int: .int.__zig_add_int(other)
-   fn -(other Bool) Nat: .__zig_sub_uint(other.nat)
-   fn -(other Nat) Nat: .__zig_sub_uint(other)
-   fn -(other Int) Int: .int.__zig_sub_int(other)
-   fn *(other Bool) Nat: if other: self else: nat(0)
-   fn *(other Nat) Nat: .__zig_mul_uint(other)
-   fn *(other Int) Int: .int.__zig_mul_int(other)
-   fn /(other Bool) Nat: .__zig_div_uint(other.nat)
-   fn /(other Nat) Nat: .__zig_div_uint(other)
-   fn /(other Int) Int: .int.__zig_div_int(other)
-   
-extend Int
-   fn bool Bool: self != 0
-   fn nat Nat: .__zig_int2nat
-   fn int Int: self
-   fn float Float: .__zig_int2float
-   fn string String: .__zig_int2string
+fn ==(self Int, other Bool) Bool: .__zig_eq(other)
+fn ==(self Int, other Nat) Bool: .__zig_eq(other)
+fn ==(self Int, other Int) Bool: .__zig_eq(other)
+fn !=(self Int, other Bool) Bool: .__zig_neq(other)
+fn !=(self Int, other Nat) Bool: .__zig_neq(other)
+fn !=(self Int, other Int) Bool: .__zig_neq(other)
+fn <(self Int, other Bool) Bool: .__zig_lt(other.int)
+fn <(self Int, other Nat) Bool: .__zig_lt(other.int)
+fn <(self Int, other Int) Bool: .__zig_lt(other)
+fn <=(self Int, other Bool) Bool: .__zig_lte(other.int)
+fn <=(self Int, other Nat) Bool: .__zig_lte(other.int)
+fn <=(self Int, other Int) Bool: .__zig_lte(other)
+fn >(self Int, other Bool) Bool: .__zig_gt(other.int)
+fn >(self Int, other Nat) Bool: .__zig_gt(other.int)
+fn >(self Int, other Int) Bool: .__zig_gt(other)
+fn >=(self Int, other Bool) Bool: .__zig_gte(other.int)
+fn >=(self Int, other Nat) Bool: .__zig_gte(other.int)
+fn >=(self Int, other Int) Bool: .__zig_gte(other)
 
-   fn ==(other Bool) Bool: .__zig_eq(other)
-   fn ==(other Nat) Bool: .__zig_eq(other)
-   fn ==(other Int) Bool: .__zig_eq(other)
-   fn !=(other Bool) Bool: .__zig_neq(other)
-   fn !=(other Nat) Bool: .__zig_neq(other)
-   fn !=(other Int) Bool: .__zig_neq(other)
-   fn <(other Bool) Bool: .__zig_lt(other.int)
-   fn <(other Nat) Bool: .__zig_lt(other.int)
-   fn <(other Int) Bool: .__zig_lt(other)
-   fn <=(other Bool) Bool: .__zig_lte(other.int)
-   fn <=(other Nat) Bool: .__zig_lte(other.int)
-   fn <=(other Int) Bool: .__zig_lte(other)
-   fn >(other Bool) Bool: .__zig_gt(other.int)
-   fn >(other Nat) Bool: .__zig_gt(other.int)
-   fn >(other Int) Bool: .__zig_gt(other)
-   fn >=(other Bool) Bool: .__zig_gte(other.int)
-   fn >=(other Nat) Bool: .__zig_gte(other.int)
-   fn >=(other Int) Bool: .__zig_gte(other)
+fn -(self Int) Int: .__zig_neg_int
+fn +(self Int, other Bool) Int: .__zig_add_int(other.int)
+fn +(self Int, other Nat) Int: .__zig_add_int(other.int)
+fn +(self Int, other Int) Int: .__zig_add_int(other)
+fn -(self Int, other Bool) Int: .__zig_sub_int(other.int)
+fn -(self Int, other Nat) Int: .__zig_sub_int(other.int)
+fn -(self Int, other Int) Int: .__zig_sub_int(other)
+fn *(self Int, other Bool) Int: .__zig_mul_int(other.int)
+fn *(self Int, other Nat) Int: .__zig_mul_int(other.int)
+fn *(self Int, other Int) Int: .__zig_mul_int(other)
+fn /(self Int, other Bool) Int: .__zig_div_int(other.int)
+fn /(self Int, other Nat) Int: .__zig_div_int(other.int)
+fn /(self Int, other Int) Int: .__zig_div_int(other)
 
-   fn -() Int: .__zig_neg_int
-   fn +(other Bool) Int: .__zig_add_int(other.int)
-   fn +(other Nat) Int: .__zig_add_int(other.int)
-   fn +(other Int) Int: .__zig_add_int(other)
-   fn -(other Bool) Int: .__zig_sub_int(other.int)
-   fn -(other Nat) Int: .__zig_sub_int(other.int)
-   fn -(other Int) Int: .__zig_sub_int(other)
-   fn *(other Bool) Int: .__zig_mul_int(other.int)
-   fn *(other Nat) Int: .__zig_mul_int(other.int)
-   fn *(other Int) Int: .__zig_mul_int(other)
-   fn /(other Bool) Int: .__zig_div_int(other.int)
-   fn /(other Nat) Int: .__zig_div_int(other.int)
-   fn /(other Int) Int: .__zig_div_int(other)
+-- Float
+fn int Int: .__zig_float2int
+fn float Float: self
+fn string String: .__zig_float2string
 
-extend Float
-   fn int Int: .__zig_float2int
-   fn float Float: self
-   fn string String: .__zig_float2string
+fn ==(self Float, other Float) Bool: .__zig_eq(other)
+fn !=(self Float, other Float) Bool: .__zig_neq(other)
+fn <(self Float, other Float) Bool: .__zig_lt(other)
+fn <=(self Float, other Float) Bool: .__zig_lte(other)
+fn >(self Float, other Float) Bool: .__zig_gt(other)
+fn >=(self Float, other Float) Bool: .__zig_gte(other)
 
-   fn ==(other Float) Bool: .__zig_eq(other)
-   fn !=(other Float) Bool: .__zig_neq(other)
-   fn <(other Float) Bool: .__zig_lt(other)
-   fn <=(other Float) Bool: .__zig_lte(other)
-   fn >(other Float) Bool: .__zig_gt(other)
-   fn >=(other Float) Bool: .__zig_gte(other)
-
-   fn -() Float: .__zig_neg_float
-   fn +(other Float) Float: .__zig_add_float(other)
-   fn -(other Float) Float: .__zig_sub_float(other)
-   fn *(other Float) Float: .__zig_mul_float(other)
-   fn /(other Float) Float: .__zig_div_float(other)
+fn -(self Float) Float: .__zig_neg_float
+fn +(self Float, other Float) Float: .__zig_add_float(other)
+fn -(self Float, other Float) Float: .__zig_sub_float(other)
+fn *(self Float, other Float) Float: .__zig_mul_float(other)
+fn /(self Float, other Float) Float: .__zig_div_float(other)
 
 
-extend[T] Pointer[T]
-   -- static alloc Pointer[T]:
-   --     __zig_alloc[T](1).pointer
+-- Pointer[T]
+-- static alloc Pointer[T]:
+--     __zig_alloc[T](1).pointer
 
-   fn free(size: Nat):
-      __zig_free(self.slice(size))
+fn free[T](self Pointer[T], size: Nat):
+   __zig_free(self.slice(size))
 
-   fn slice(size: Nat) Slice[T]:
-      __zig_ptr2slice(self, size)
-
-
-extend[T] Slice[T]
-   -- static alloc(size: Nat) Slice[T]:
-   --     __zig_alloc(size)
-
-   fn pointer Pointer[T]:
-      .__zig_slice2ptr
-
-   fn free:
-      .__zig_free
-
-   fn size Nat:
-      .__zig_slice_size
+fn slice[T](self Pointer[T], size: Nat) Slice[T]:
+   __zig_ptr2slice(self, size)
 
 
-fn print[T Stringable](val: T):
-      __zig_print(val.string)
+-- Slice[T]
+-- static alloc(size: Nat) Slice[T]:
+--     __zig_alloc(size)
+
+fn pointer[T](self Slice[T]) Pointer[T]:
+   .__zig_slice2ptr
+
+fn free[T](self Slice[T]):
+   .__zig_free
+
+fn size[T](self Slice[T]) Nat:
+   .__zig_slice_size
+
+
+-- fn print[T Stringable](val: T):
+--    __zig_print(val.string)
+
+fn print(val String):
+   __zig_print(val)
 
 fn panic(str: String) -> Never:
-      __zig_panic(str)
+   __zig_panic(str)
 
 struct String
-   var bytes: Array[Byte]
+   bytes: Array[Byte]
 
-   fn ==(other String) Bool: 
-      .bytes == other.bytes
-   
-   fn string String: self
+fn ==(self String, other String) Bool:
+   .bytes == other.bytes
 
-   fn drop: 
-      .bytes.drop[Byte]
+fn string(self String) String: self
+
+fn drop(self String):
+   .bytes.drop[Byte]
 
 struct Array[T]
-   var buffer: Slice[T]
-   var size: Nat
+   buffer: Slice[T]
+   size: Nat
 
-   -- static new(size: Nat) Array[T]:
-   --     Array[T](__zig_alloc[T](size), 0)
+-- static new(size: Nat) Array[T]:
+--     Array[T](__zig_alloc[T](size), 0)
 
-   fn drop: 
-      .buffer.free
-
-trait Stringable
-   fn string String
-
-extend Nil is Stringable
-   fn string String: "nil"
-extend Bool is Stringable
-extend Nat is Stringable
-extend Int is Stringable
-extend Float is Stringable
-extend String is Stringable
-
-enum Option[T]
-   Some(T)
-   None
-
-   
-extend[T Stringable] Option[T] is Stringable
-   fn string String: 
-      if self is
-         Some(t): "Some(" + t.string + ")"
-         None: "None"
-         
-trait Equatable[T: Equatable[Self]]
-   fn ==(self, other T) Bool
-   
-   fn !=(self, other T) Bool:
-      not (self == other)
-   
-   fn ==(other T, self) Bool:
-      self == other
-   
-   fn !=(other T, self) Bool:
-      self != other
-
-trait Comparable[T: Comparable[Self]] is Equatable[T]
-   fn <(other: T) -> Bool
-   
-   fn <=(other: T) Bool:
-      self < other or self == other
-   
-   fn >=(other T) Bool:
-      not (self < other)
-   
-   fn >(other T) Bool:
-      not (self <= other)
-
-   fn <(other T, self) Bool:
-      not self >= other
-
-extend[A, B: Comparable[A]] A is Comparable[B]
-   fn <(other B) Bool:
-      not other >= self
-
-fn <(self A#, other #Comparable[A]) Bool:
-   not (other >= self)
-
-
-
-trait SomethingFreaky[A, B: Equatable[A], C: Cloneable]
-   -- this should give us an error, since B requires `B.Equatable[A]`
-   -- which requires `A.Equatable[B]`, which is not given explicitly
-   fn something_freaky(a A, b B, c C) -> C
-      if a == b:
-         c.clone
-      else:
-         c.clone
-
-extend[T Equatable[T] & Cloneable] T is SomethingFreaky[T, T, T]
-
-trait Cloneable is Copyable
-   fn clone Self
-
-trait Cloneable[Self: Copyable]
-   fn clone(self) Self
-
-trait Sequence[T] is Enumarable[T] & Iterable[T]
-   fn first T
-   fn rest Sequence[T]
-   
-trait Sequence[Self: Iterable[T] & Enumarable[T], T]
-   fn first(self) T: self.enumarable.first
-   fn rest(self) Sequence[T]: self.enumarable.rest
-   
-=> for a given instantiation Sequence[A, B] I know:
-=> the following traits must be implemented in context:
-=> Iterable[A, B]
-=> Enumarable[A, B]
-
-likewise, for a given instance of a generic type or function
-eg MyType[T: Iterable[U], U: Stringable]
-=> MyType[T, U] where
-Iterable[T, U]
-Stringable[U]
-
-So every set of type paramters should have a struct that is an array of type names, 
-and required traits, as in, traits that are required for instantiation.
-   
-trait Iterable[T]
-   fn iter Iterator[T]
-
-trait Iterator[T]
-   fn next Option[T]
-
-trait Iterator[T Equatable[S], S = T]
-   fn next T
-   fn sentinel S
-
-fn main:
-   var iter = [1, 2, 3].iter(sentinel: -1)
-
-trait Peekable[T] is Iterator[T]
-   fn peek Option[T]
-
-struct Iterator[T]
-   var next Fn[Option[T]]
-
-fn main:
-   var iter = Iterator(|| -> Option[Nat]: Some(1))
-   print(iter.next.string)
-   for i in iter:
-      print(i.string)
-      break
-
-Let's say I've been given this trait claim:
-extend[T] Array[T] is Iterable[T]
-
-Now I want to know if `fn iter[Self, T](self: Self) Iterator[T]` exists when
-Self=Array[T].
-In other words, after performing a substitution to the method, does it exist?
-
-=> fn iter[T](self: Array[T]) Iterator[T]
-
-One tricky case is illustrated by the following:
-extend Array[String] is Iterable[String]
-
-Now I need to prove `Iterable[Array[String], String]`, which requires:
-fn iter[Self, T](self: Self) Iterator[T]
-=> iter(self: Array[String]) Iterator[String]
-
-Now suppose I actually find:
-fn iter[T](self: Array[T]) Iterator[T] 
-
-Should this even be allowed?  I guess what I'm really looking for is if I can
-always call `iter` on any type that claims to be `Iterable`.  So, with this
-function, is that the case?  YES, it is.  As long as this function is defined,
-my `Iterable[Array[String], String]` claim is indeed valid, as this function
-guarantees the following function call expression will never have 0 overloads:
-
-var array = Array[String].new
-array.iter  -- is Iterator[String]
-
-However, it does not guarantee that that call will necessarily pass
-type-checking because the call could still end up being ambiguous.
-
-
-How about type-node evaluation?
-Suppose I have a type
-struct Box[T Stringable]
-(equivalent to 
-   struct Box[T] where T: Stringable
-   => traits = [Stringable[T]]
-)
-
-then I have some type_nodes:
-- Box[Int]
-- Box[A]
-- Box[T, U, V]
-
-We can immediately discard as invalid the ones with mismatching arity.
-
-But what about the others?  Well, type Box has certain trait requirements.  So
-let's first match evaluate the type arg(s), then simply iterate through the
-trait requirements and check if they are satisfied.
-
-Like this:
-Box[Int]
-first evaluate the args, which in this case is just [Int]
-Now, what's our substitution rule?  It is {T: Int}.
-Notice that it's not {Self: Int}, because `Self` has already been replaced with
-`T`.  Can I do this with indices though?
-
-Let's try... 
-Box[A, B, C: Stringable] is Stringable
-=> Stringable[T3]
-=> Stringable[Box[T1, T2, T3]]]
-
-So when we get Box[Int, Float, Bool]
-our substitution rule is: {T1: Int, T2: Float, T3: Bool}
-=> [Stringable[Bool], Stringable[Box[Int, Float, Bool]]]
-
-Our substitution rule will always be the length of the type parameters.
-And this works out for the type variables, because whatever type variables they
-started with have already been replaced with those type parameters.
-trait Equatable[T: Equatable[Self]]
-=> required: Equatable[T, Self]
-  which requires: Equatable[Self, T]
-    (cycle detection: stop here)
-
-extend[A, B Equatable[A]] Option[A] is Equatable[Option[B]]
-given: 
- - Equatable[B, A] (extension requirement is Equatable[Self, T] with {Self: B, T: A})
- - Equatable[A, B] (transitive requirement of Equatable is Equatable[T, Self]
-   with same substitution: {Self: B, T: A})
-prove:
- - Equatable[Option[A], Option[B]]
-
-trait Comparable[T: Comparable[Self]] is Equatable[T]
-   fn <(other: T) -> Bool
-requirements: 
- - Comparable[T, Self]
- - Comparable[Self, T] (cyclical requirement, not included)
- - Equatable[T, Self]
- - Equatable[Self, T] (transitive requirement)
-
-extend[A, B Comparable[A]] Option[A] is Comparable[Option[B]]
-   fn <(other: Option[B]) -> Bool: ...
-given: 
- - Comparable[B, A] (extension requirement is Comparable[Self, T] 
-   with {Self: B, T: A})
-  - transitive requirements:
-   - Comparable[A, B] (Comparable[T, Self] with same substitution: {Self: B, T: A})
-   - Equatable[A, B] (Equatable[T, Self] with {Self: B, T: A})
-   - Equatable[B, A] (Equatable[Self, T] with {Self: B, T: A})
-prove:
- - Comparable[Option[A], Option[B]]
-
-find fn(self: Self, other: T) with {Self: Option[A], T: Option[B]}
-=> find fn(self: Option[A], other: Option[B])
-
-fn <[T: Comparable[U], U](left: Option[T], right: Option[U]) -> Bool: ...
-requirements: 
- - Equatable[T, U]
- - Comparable[U, T]
- - Equatable[T, U]
- - Equatable[U, T]
-
-=> found fn[T, U](left: Option[T], right: Option[U]) -> Bool
-unify the parameter types given the "given" and "requirements"
-
-
-
-fn print[T Stringable](msg T): ...
-requires: Stringable[T]
-
-extend[T Stringable] Option[T] is Stringable
-given: Stringable[T]
-prove: Stringable[Option T]
-
-struct FooBox[T Foo] is Stringable
-given: Foo[T]
-prove: Stringable[FooBox[T]]
-
-struct CompBox[T Comparable[Int]]
-add trait: Comparable[T, Int]
+fn drop[T](self Array[T]):
+   .buffer.free
