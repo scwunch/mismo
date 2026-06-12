@@ -73,6 +73,7 @@ impl Parser {
     let mut span = self.next().span
     let _ = self.consume(TokenKind.Identifier("fn"))?
     let sig = self.parse_signature()?
+    span = span.merge(sig.span)
     self.defs.add_function(cst.FunctionDecl.new(span, sig, cst.extern(span)))
     Ok(())
   }
