@@ -89,6 +89,7 @@ impl Emitter {
       Break(None) => panic(f"unhandled expression type: {expr}"),
       Continue => panic(f"unhandled expression type: {expr}"),
       FieldAccess(expr, i) => panic(f"unhandled expression type: {expr}"),
+      Extern => panic("Oops, we shouldn't be emitting external functions!"),
     }
   }
 

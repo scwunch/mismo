@@ -127,6 +127,10 @@ impl FunctionDef {
     }
   }
 
+  pub fn is_extern(self) -> bool {
+    if let Expr.Extern = self.body.kind { true } else { false }
+  }
+
   pub fn signature(self) -> string {
     let type_params = type_params_to_string(self.type_parameters)
     let params = self.parameters

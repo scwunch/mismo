@@ -98,6 +98,10 @@ impl FunctionDecl {
   pub fn new(span: span.Span, signature: Signature, body: Expression) -> FunctionDecl {
     FunctionDecl { span, signature, body }
   }
+
+  pub fn extern(self) -> bool {
+    self.body.kind.is_extern()
+  }
 }
 
 pub struct Signature {

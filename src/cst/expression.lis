@@ -36,6 +36,7 @@ pub enum Expr {
   Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
   DotCall(Ref<Expression>, Call),
+  Extern,
 }
 
 pub struct Binop {
@@ -210,6 +211,10 @@ pub fn continue_(span: span.Span) -> Expression {
   Expression { span, kind: Expr.Continue }
 }
 
+pub fn extern(span: span.Span) -> Expression {
+  Expression { span, kind: Expr.Extern }
+}
+
 impl Expression {
   pub fn string(self) -> string {
     f"{self.span}: {self.kind.string()}"
@@ -244,7 +249,12 @@ impl Expr {
       Expr.Type(name, _) => f"Type({name})",
       Expr.DotName(r, field) => f"DotName({r.kind.string()}.{field})",
       Expr.DotCall(r, c) => f"DotCall({r.kind.string()}.{c.fn_name})",
+      Expr.Extern => "<external implementation>",
     }
+  }
+
+  pub fn is_extern(self) -> bool {
+    if let Expr.Extern = self { true } else { false }
   }
 }
 

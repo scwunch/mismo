@@ -9,6 +9,7 @@ impl Parser {
         Identifier("struct") => self.parse_struct(),
         Identifier("enum") => self.parse_enum(),
         Identifier("fn") => self.parse_function(),
+        Identifier("extern") => self.parse_extern(),
         Newline(_, _) => {
           let _ = self.next()
           continue
@@ -65,6 +66,14 @@ impl Parser {
     let newline_span = self.next().span
     span = span.merge(newline_span)
     self.defs.add_type(cst.TypeDecl.new_enum(span, name, type_params, variants))
+    Ok(())
+  }
+
+  fn parse_extern(self: Ref<Parser>) -> Result<(), ParseError> {
+    let mut span = self.next().span
+    let _ = self.consume(TokenKind.Identifier("fn"))?
+    let sig = self.parse_signature()?
+    self.defs.add_function(cst.FunctionDecl.new(span, sig, cst.extern(span)))
     Ok(())
   }
 

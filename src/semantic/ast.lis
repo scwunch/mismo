@@ -28,6 +28,7 @@ pub enum Expr {
   Break(Option<Ref<Expression>>),
   Continue,
   FieldAccess(Ref<Expression>, int),
+  Extern,
 }
 
 #[display]
@@ -124,6 +125,7 @@ impl Expr {
       Expr.ConcreteCall(_, _) => panic(
         "compiler bug 75: concrete call should never have 'type' method called on it",
       ),
+      Expr.Extern => Type.Never,
     }
   }
 }

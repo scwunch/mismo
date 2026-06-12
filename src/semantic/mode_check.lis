@@ -56,6 +56,7 @@ impl ModeCheck {
       Expr.Match(_) => panic("match not implemented"),
       Expr.Loop(_, _) => panic("loop not implemented"),
       Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
+      Expr.Extern => Ok(mode.Mode.Var),
     }
   }
 

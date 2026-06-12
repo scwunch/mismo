@@ -154,6 +154,7 @@ impl TypeCheck {
         [self.infer(expr.*)?].append(slice.map_result(call.args, self.infer)?...),
         node.span,
       )?,
+      cst.Expr.Extern => Expr.Extern,
     }
     Ok(Expression { span: node.span, kind: expr })
   }
