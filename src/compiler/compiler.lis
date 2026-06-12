@@ -73,7 +73,9 @@ pub fn transpile(source: string) -> Result<string, Slice<errors.Diagnostic>> {
 pub fn run(source: string) {
   match transpile(source) {
     Ok(zig_code) => {
-      match run_zig(zig_code, Options.new()) {
+      let mut opts = Options.new()
+      opts.work_dir_parent = "/home/ryan/Obsidian/Vault/Projects/mismo/zig-out"
+      match run_zig(zig_code, opts) {
         Ok(res) => {
           fmt.Println(res)
         },

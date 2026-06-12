@@ -1,6 +1,7 @@
 # output
 target/
 output.log
+zig-out/zigrunner-*
 
 # IDE
 .cursor/
