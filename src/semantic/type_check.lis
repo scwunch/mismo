@@ -14,7 +14,7 @@ import "utils/slice"
 // }
 
 pub struct TypeCheck {
-  env: Ref<TypeEnv>,
+  env: TypeContext,
   next_var: Ref<int>,
   return_type: Type,
   bindings: Ref<List<Ref<Variable>>>,
@@ -29,7 +29,7 @@ impl TypeCheck {
       scope = &List.Cons(v, scope)
     }
     TypeCheck { 
-      env,
+      env: env.type_context(func.type_parameters),
       next_var: &zero,
       return_type: func.return_type,
       bindings: scope,
@@ -137,7 +137,7 @@ impl TypeCheck {
       },
       cst.Expr.Continue => Expr.Continue,
       cst.Expr.Type(name, type_args) => {
-        self.env.error(errors.ParseError.new(
+        self.env.env.error(errors.ParseError.new(
           node.span,
           "unexpected type expression",
         ))
@@ -220,13 +220,16 @@ impl TypeCheck {
             Ok(Expr.Assign(varid, &value))
           },
           None => {
-            self.env.error(errors.MissingNameError.new(name, binop.left.span))
+            self.env.env.error(errors.MissingNameError.new(
+              name,
+              binop.left.span,
+            ))
             let _ = self.infer(binop.right)?
             Ok(Expr.Nil)
           },
         },
         _ => {
-          self.env.error(errors.InvalidAssignmentTargetError.new(
+          self.env.env.error(errors.InvalidAssignmentTargetError.new(
             binop.left.span,
             binop.left,
           ))
@@ -299,7 +302,7 @@ impl TypeCheck {
       }
     }
     if !type_args.is_empty() { panic("not handling explicit type args yet") }
-    let candidates = match self.env.signatures.get(fname) {
+    let candidates = match self.env.env.signatures.get(fname) {
       None => return Err(errors.MissingNameError.new(fname, span)),
       Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
     }

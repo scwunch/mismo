@@ -38,7 +38,8 @@ fn test_type_equality(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_eval_type_primitives(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_type primitives"
-  let env = TypeEnv.new()
+  let mut env = TypeEnv.new()
+  let env = env.type_context([])
 
   match env.eval_type(cst.typ(0, 5, "Never", [])) {
     Ok(typ) => t.should_eq(typ, Type.Never)?,
@@ -74,7 +75,8 @@ fn test_eval_type_primitives(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_eval_type_compound(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_type compound types"
-  let env = TypeEnv.new()
+  let mut env = TypeEnv.new()
+  let env = env.type_context([])
 
   // Tuple type: (Int, Bool)
   match env.eval_type(cst.Type.tuple(
@@ -144,8 +146,10 @@ fn test_eval_type_nominal(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ),
   ])
 
+  let env = env.type_context([])
+
   // Option[Int]
-  let option_ref = env.type_defs["Option"]
+  let option_ref = env.env.type_defs["Option"]
   match env.eval_type(cst.typ(0, 11, "Option", [cst.typ(7, 10, "Int", [])])) {
     Ok(typ) => t.should_eq(typ, Type.Adt(option_ref, [Type.Int]))?,
     Err(e) => t.fail(e.message())?,
@@ -171,9 +175,10 @@ fn test_eval_type_nominal(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_type errors"
   let mut env = TypeEnv.new()
+  let ctx = env.type_context([])
 
   // Missing name
-  match env.eval_type(cst.typ(0, 6, "Wobble", [])) {
+  match ctx.eval_type(cst.typ(0, 6, "Wobble", [])) {
     Ok(_) => t.fail("expected error for unknown type")?,
     Err(e) => t.should_be_true(
       e.code() == 2002,
@@ -182,7 +187,7 @@ fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Arity mismatch on primitive: Int[String]
-  match env.eval_type(cst.typ(0, 3, "Int", [cst.typ(0, 6, "String", [])])) {
+  match ctx.eval_type(cst.typ(0, 3, "Int", [cst.typ(0, 6, "String", [])])) {
     Ok(_) => t.fail("expected arity error on primitive")?,
     Err(e) => t.should_be_true(
       e.code() == 2003,
@@ -204,7 +209,7 @@ fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
   ])
 
   // Arity mismatch on ADT: Option[Int, String] (2 args, 1 expected)
-  match env.eval_type(cst.typ(
+  match ctx.eval_type(cst.typ(
     0,
     20,
     "Option",
@@ -222,7 +227,8 @@ fn test_eval_type_errors(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_eval_param_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_param_type"
-  let env = TypeEnv.new()
+  let mut env = TypeEnv.new()
+  let env = env.type_context([])
 
   // none mode → defaults to Let
   match env.eval_param_type(cst.ParamType.none(cst.typ(0, 3, "Int", []))) {
@@ -250,7 +256,8 @@ fn test_eval_param_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_eval_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_param"
-  let env = TypeEnv.new()
+  let mut env = TypeEnv.new()
+  let env = env.type_context([])
 
   // No mode → defaults to Let
   match env.eval_param(cst.param(0, 0, None, "x", cst.typ(6, 9, "Int", []))) {
@@ -374,7 +381,7 @@ fn test_duplicate_name_error(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
 fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "eval_function"
-  let env = TypeEnv.new()
+  let mut env = TypeEnv.new()
 
   // fn foo() Int
   let sig = cst.Signature.new(

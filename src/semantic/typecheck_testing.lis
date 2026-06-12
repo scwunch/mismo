@@ -441,7 +441,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 
   let mut tc = TypeCheck.new_blank()
-  tc.env.signatures["foo"] = [&foo1, &foo2]
+  tc.env.env.signatures["foo"] = [&foo1, &foo2]
 
   // foo("hi") => selects overload 0 (String)
   let arg_str = Expression { 
@@ -512,7 +512,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 
   let mut tc3 = TypeCheck.new_blank()
-  tc3.env.signatures["foo"] = [&foo1, &foo2]
+  tc3.env.env.signatures["foo"] = [&foo1, &foo2]
 
   // foo(63) => selects overload 1 (concrete Int beats type var)
   let arg_int = Expression { span: span.new(0, 2), kind: Expr.IntLiteral(63) }
@@ -561,7 +561,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc8 = TypeCheck.new_blank()
-  tc8.env.signatures["foo"] = [&foo8_0, &foo8_1]
+  tc8.env.env.signatures["foo"] = [&foo8_0, &foo8_1]
 
   // foo([[1, 2], [3, 4]]) => selects overload 1 (more specific: Array[Array[Int]])
   let arr_arr_int = Variable.new(
@@ -640,7 +640,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc10 = TypeCheck.new_blank()
-  tc10.env.signatures["foo"] = [&foo10_0, &foo10_1]
+  tc10.env.env.signatures["foo"] = [&foo10_0, &foo10_1]
 
   // foo(fn(x: Int) => x + 1) => selects overload 1 (more specific)
   let fn_int = Variable.new(
@@ -704,7 +704,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Type.Tuple([]),
   )
   let mut tc11 = TypeCheck.new_blank()
-  tc11.env.signatures["foo"] = [&foo11_0, &foo11_1]
+  tc11.env.env.signatures["foo"] = [&foo11_0, &foo11_1]
 
   // foo(("hi", 5)) => selects overload 1 (concrete)
   let tup_str = Variable.new(

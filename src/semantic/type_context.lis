@@ -1,0 +1,135 @@
+import "cst"
+import "errors"
+import "mode"
+import "span"
+import "utils/slice"
+
+/// Generic context that bundles a TypeEnv with type parameters
+/// for evaluating types
+struct TypeContext { env: Ref<TypeEnv>, type_params: Slice<TypeParameter> }
+
+impl TypeEnv {
+  fn type_context(self: Ref<TypeEnv>, type_params: Slice<TypeParameter>) -> TypeContext {
+    TypeContext { env: self, type_params }
+  }
+}
+
+impl TypeContext {
+  fn eval_type(self, typ: cst.Type) -> Result<Type, errors.TypeError> {
+    match typ.kind {
+      cst.TypeKind.Tuple(types) => {
+        Ok(Type.Tuple(slice.map_result(types, self.eval_type)?))
+        // let mut ts = []
+        // for t in types {
+        //   ts = ts.append(self.eval_type(t, ctx)?)
+        // }
+        // Ok(Type.Tuple(ts))
+      },
+      cst.TypeKind.Fn(params, ret) => {
+        let params = slice.map_result(params, self.eval_param_type)?
+        // let mut param_types = []
+        // for p in params {
+        //   param_types = param_types.append(self.eval_param_type(p)?)
+        // }
+        let ret = self.eval_type(ret.*)?
+        Ok(Type.Fn(params, &ret))
+      },
+      cst.TypeKind.Nominal(name, type_args) => {
+        self.eval_nominal_type(
+          typ.span,
+          name,
+          slice.map_result(type_args, self.eval_type)?,
+        )
+      },
+    }
+  }
+
+  fn eval_nominal_type(
+    self,
+    span: span.Span,
+    name: string,
+    type_args: Slice<Type>,
+  ) -> Result<Type, errors.TypeError> {
+    // try to match type param
+    for (i, tp) in self.type_params.enumerate() {
+      if name == tp.name {
+        return if type_args.is_empty() {
+          Ok(Type.Var(i))
+        } else {
+          Err(errors.TypeParameterArityError.new(
+            span,
+            f"type parameter {tp.name}",
+            0,
+            type_args.length(),
+          ))
+        }
+      }
+    }
+
+    // try to match built in type
+    let primitive = match name {
+      "Any" => Some(Type.Any),
+      "Never" => Some(Type.Never),
+      "Nil" => Some(Type.Tuple([])),
+      "Bool" => Some(Type.Bool),
+      "Nat" => Some(Type.Nat),
+      "Int" => Some(Type.Int),
+      "Float" => Some(Type.Float),
+      "String" => Some(Type.String),
+      "Array" => {
+        check_arity(span, name, type_args.length(), 1)?
+        return Ok(Type.Array(&type_args[0]))
+      },
+      "Slice" => {
+        check_arity(span, name, type_args.length(), 1)?
+        return Ok(Type.Slice(&type_args[0]))
+      },
+      "Pointer" => {
+        check_arity(span, name, type_args.length(), 1)?
+        return Ok(Type.Pointer(&type_args[0]))
+      },
+      _ => None,
+    }
+    if let Some(primitive) = primitive {
+      check_arity(span, name, type_args.length(), 0)?
+      return Ok(primitive)
+    }
+
+    // try to match user-defined Nominal type
+    match self.env.type_defs.get(name) {
+      None => {
+        Err(errors.MissingNameError.new(name, span))
+      },
+      Some(def) => {
+        let n = def.type_parameters.length()
+        check_arity(span, name, type_args.length(), n)?
+        Ok(Type.Adt(def, type_args))
+      },
+    }
+  }
+
+  fn eval_param(self, param: cst.Parameter) -> Result<Parameter, errors.TypeError> {
+    let typ = self.eval_type(param.typ)?
+    Ok(
+      Parameter { 
+        span: param.span,
+        mode: param.mode.unwrap_or(mode.Mode.Let),
+        name: param.name,
+        typ,
+      },
+    )
+  }
+
+  fn eval_param_type(self, param: cst.ParamType) -> Result<ParamType, errors.TypeError> {
+    let typ = self.eval_type(param.typ)?
+    Ok(ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
+  }
+}
+
+fn check_arity(span: span.Span, name: string, type_args: int, type_params: int) -> Result<(), errors.TypeError> {
+  if type_args == type_params {
+    Ok(())
+  } else {
+    Err(errors.TypeParameterArityError.new(span, name, type_args, type_params))
+  }
+}
