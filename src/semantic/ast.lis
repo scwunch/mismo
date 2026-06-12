@@ -1,6 +1,7 @@
 import "mode"
 import "span"
 
+#[display]
 pub struct Expression {
   pub span: span.Span,
   pub kind: Expr,

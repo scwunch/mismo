@@ -45,6 +45,15 @@ extern fn __zig_ptr2slice[T](ptr: Any, size: Nat) Slice[T]
 
 fn bool(_ Nil) Bool: false
 
+fn print(val String):
+   __zig_print(val)
+
+fn panic(str: String) -> Never:
+   __zig_panic(str)
+
+fn main():
+   print("hello world")
+
 --- Bool
 fn bool(self Bool) Bool: self
 fn nat(self Bool) Nat:

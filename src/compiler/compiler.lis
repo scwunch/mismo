@@ -75,6 +75,7 @@ pub fn run(source: string) {
     Ok(zig_code) => {
       let mut opts = Options.new()
       opts.work_dir_parent = "/home/ryan/Obsidian/Vault/Projects/mismo/zig-out"
+      opts.zig_prelude_path = "/home/ryan/Obsidian/Vault/Projects/mismo/zig-out/prelude.zig"
       match run_zig(zig_code, opts) {
         Ok(res) => {
           fmt.Println(res)

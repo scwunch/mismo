@@ -157,3 +157,8 @@ pub fn main() !void {
     debug_allocator = debug_allocator_state.allocator();
     main_0();
 }
+
+pub const String_t = struct { bytes: Array_t(u8) };
+pub fn Array_t(comptime T0: type) type {
+    return struct { buffer: []T0, size: usize };
+}

@@ -345,8 +345,8 @@ impl TypeCheck {
 }
 
 pub struct Variable {
-  mode: mode.Mode,
-  name: string,
+  pub mode: mode.Mode,
+  pub name: string,
   typ: Type,
   init: uint32,
   consumed: Option<uint32>,

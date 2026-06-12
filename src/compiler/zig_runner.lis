@@ -7,6 +7,7 @@ import "go:path/filepath"
 // Options controls compilation behaviour.
 pub struct Options {
   pub zig_bin: string,
+  pub zig_prelude_path: string,
   pub output_name: string,
   pub keep_work_dir: bool,
   pub work_dir_parent: string,
@@ -16,6 +17,7 @@ impl Options {
   pub fn new() -> Options {
     Options { 
       zig_bin: "zig",
+      zig_prelude_path: "",
       output_name: "out",
       keep_work_dir: true,
       work_dir_parent: os.TempDir(),
@@ -52,7 +54,23 @@ pub fn run_zig(zig_source: string, opts: Options) -> Result<ZigResult, error> {
 
   // --- write source file ---
   let src_path = filepath.Join(res.work_dir, "main.zig")
-  os.WriteFile(src_path, zig_source as Slice<byte>, 0o644)?
+  let src = os.OpenFile(
+    src_path,
+    os.O_WRONLY | os.O_APPEND | os.O_CREATE,
+    0o644,
+  )?
+  match src.WriteString(zig_source) {
+    Err(e) | Both(_, e) => return Err(e),
+    _ => (),
+  }
+  if !opts.zig_prelude_path.is_empty() {
+    let prelude = os.ReadFile(opts.zig_prelude_path)?
+    match src.Write(prelude) {
+      Err(e) | Both(_, e) => return Err(e),
+      _ => (),
+    }
+  }
+  src.Close()?
 
   // --- build the zig command ---
   // "zig build-exe" compiles a single file to a standalone binary.

@@ -24,7 +24,7 @@ impl Emitter {
       self.emit_type_def(t.*)
     }
     for (i, func) in self.reg.functions.enumerate() {
-      self.emit_function(func, i)
+      if !func.is_extern() { self.emit_function(func, i) }
     }
   }
 
@@ -54,6 +54,7 @@ impl Emitter {
 
   fn emit_parameter(self: Ref<Emitter>, param: semantic.Parameter) {
     self.ident(param.name)
+    self.emit(": ")
     self.emit_param_type(param.mode, param.typ)
   }
 
@@ -74,11 +75,11 @@ impl Emitter {
       TupleLiteral(elems) => {
         self.emit_list(".{", "}", elems, self.emit_expression)
       },
-      Identifier(varid) => panic(f"unhandled expression type: {expr}"),
+      Identifier(varid) => self.ident(varid.name),
       Assign(pattern, value) => panic(f"unhandled expression type: {expr}"),
       Binding(m, expr) => panic(f"unhandled expression type: {expr}"),
-      Call(call) => panic(f"unhandled expression type: {expr}"),
-      ConcreteCall(i, args) => panic(f"unhandled expression type: {expr}"),
+      Call(call) => panic(f"Uy, this should be concrete at this point!: {expr}"),
+      ConcreteCall(i, args) => self.emit_call(i, args),
       SwitchIf(cases) => panic(f"unhandled expression type: {expr}"),
       Match(arms) => panic(f"unhandled expression type: {expr}"),
       Loop(exprs, _) => panic(f"unhandled expression type: {expr}"),
@@ -91,6 +92,13 @@ impl Emitter {
       FieldAccess(expr, i) => panic(f"unhandled expression type: {expr}"),
       Extern => panic("Oops, we shouldn't be emitting external functions!"),
     }
+  }
+
+  fn emit_call(self: Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {
+    let func = self.reg.functions[fn_id]
+    self.emit(func.name)
+    self.emit(f"_{fn_id}")
+    self.emit_list_paren(args, self.emit_expression)
   }
 
   fn newline(self: Ref<Emitter>) {
