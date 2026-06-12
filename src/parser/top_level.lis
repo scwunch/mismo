@@ -99,12 +99,19 @@ impl Parser {
     let params = self.parse_function_params()?
     let rparen = self.consume(TokenKind.RightParen)?
     span = span.merge(rparen)
-    let _ = self.consume(TokenKind.Arrow)
-    let ret_type = if self.peek().kind == TokenKind.Colon {
-      cst.Type.new(self.peek().span, "Nil", [])
-    } else {
+    let ret_type = if self.consume(TokenKind.Arrow).is_ok() {
       self.parse_type()?
+    } else {
+      match self.peek().kind {
+        Colon | Newline(0, _) => cst.Type.new(self.peek().span, "Nil", []),
+        _ => self.parse_type()?
+      }
     }
+    // let ret_type = if self.peek().kind == TokenKind.Colon {
+    //   cst.Type.new(self.peek().span, "Nil", [])
+    // } else {
+    //   self.parse_type()?
+    // }
     span = span.merge(ret_type.span)
     Ok(cst.Signature.new(span, name, type_params, params, ret_type))
   }
