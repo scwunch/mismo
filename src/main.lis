@@ -22,8 +22,7 @@ fn main() {
       match data {
         Ok(file_data) => {
           let source_str = file_data as string
-          // let tokens = lexer.lex(source_str)
-          fmt.Println(f"source:\n{source_str}")
+          compiler.run(source_str)
         },
         Err(e) => fmt.Println(e),
       }
