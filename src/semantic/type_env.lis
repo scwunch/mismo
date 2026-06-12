@@ -12,7 +12,7 @@ pub struct TypeEnv {
 
 impl TypeEnv {
   pub fn new() -> TypeEnv {
-    TypeEnv { 
+    TypeEnv {
       type_defs: Map.new(),
       function_defs: Slice.new(),
       signatures: Map.new(),
@@ -53,7 +53,7 @@ impl TypeEnv {
       match decl.body {
         cst.TypeBody.Struct(fields) => {
           def.kind = TypeKind.Struct(fields.map(|field| {
-            Field { 
+            Field {
               span: field.span,
               name: field.name,
               typ: self
@@ -67,7 +67,7 @@ impl TypeEnv {
         },
         cst.TypeBody.Enum(variants) => {
           def.kind = TypeKind.Enum(variants.map(|variant| {
-            Variant { 
+            Variant {
               span: variant.span,
               name: variant.name,
               fields: variant.payload.map(|typ| {
@@ -106,6 +106,7 @@ impl TypeEnv {
       },
       cst.TypeKind.Nominal(name, type_args) => {
         let primitive = match name {
+          "Any" => Some(Type.Any),
           "Never" => Some(Type.Never),
           "Nil" => Some(Type.Tuple([])),
           "Bool" => Some(Type.Bool),
@@ -160,7 +161,7 @@ impl TypeEnv {
   pub fn eval_param(self, param: cst.Parameter) -> Result<Parameter, errors.TypeError> {
     let typ = self.eval_type(param.typ)?
     Ok(
-      Parameter { 
+      Parameter {
         span: param.span,
         mode: param.mode.unwrap_or(mode.Mode.Let),
         name: param.name,

@@ -40,6 +40,7 @@ impl Variant {
 impl Type {
   pub fn eq(self, other: Type) -> bool {
     match (self, other) {
+      (Type.Any, Type.Any) => true,
       (Type.Never, Type.Never) => true,
       (Type.Bool, Type.Bool) => true,
       (Type.Nat, Type.Nat) => true,
@@ -51,6 +52,7 @@ impl Type {
       b.eq(d.*),
       (Type.Adt(a, b), Type.Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
       (Type.Var(a), Type.Var(b)) => a == b,
+      (Type.Any, _) |
       (Type.Never, _) |
       (Type.Bool, _) |
       (Type.Nat, _) |

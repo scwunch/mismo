@@ -2,6 +2,7 @@ import "mode"
 import "utils/slice"
 
 pub enum Type {
+  Any,
   Never,
   Bool,
   Nat,
@@ -41,6 +42,7 @@ impl Type {
 
   pub fn string(self) -> string {
     match self {
+      Any => "Any",
       Never => "Never",
       Bool => "Bool",
       Nat => "Nat",
@@ -57,7 +59,7 @@ impl Type {
 
   pub fn type_args(self) -> Slice<Type> {
     match self {
-      Never | Bool | Nat | Int | Float | String | Var(_) => [],
+      Any | Never | Bool | Nat | Int | Float | String | Var(_) => [],
       Array(typ) => [typ.*],
       Tuple(fields) => fields,
       Fn(params, ret) => params.map(|p| p.typ).append(ret.*),
@@ -67,6 +69,7 @@ impl Type {
 
   pub fn constructor_and_arity_eq(self, other: Type) -> bool {
     match (self, other) {
+      (Any, Any) |
       (Never, Never) |
       (Bool, Bool) |
       (Nat, Nat) |
@@ -78,6 +81,7 @@ impl Type {
       (Fn(a, _), Fn(b, _)) => a.length() == b.length(),
       (Adt(def1, _), Adt(def2, _)) => def1 == def2,
       (Var(a), Var(b)) => a == b,
+      (Any, _) |
       (Never, _) |
       (Bool, _) |
       (Nat, _) |
@@ -94,6 +98,7 @@ impl Type {
 
   pub fn substitute(self, args: Slice<Type>) -> Type {
     match self {
+      Any => Type.Any,
       Never => Type.Never,
       Bool => Type.Bool,
       Nat => Type.Nat,
@@ -111,6 +116,7 @@ impl Type {
   pub fn assignable_to(self, other: Type) -> bool {
     match (self, other) {
       (Never, _) => true,
+      (_, Any) => true,
       (_, Tuple([])) => true, // this rule means a callback slot typed Fn() -> Nil could silently accept a Fn() -> Int and throw away its result.
       (Fn(params, ret), Fn(params2, ret2)) => {
         // parameters are contravariant, return type is covariant

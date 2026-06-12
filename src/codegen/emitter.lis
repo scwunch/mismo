@@ -185,6 +185,7 @@ impl Emitter {
 
   fn emit_type(self: Ref<Emitter>, typ: semantic.Type) {
     match typ {
+      Any => self.emit("anytype"),
       Never => self.emit("noreturn"),
       Tuple([]) => self.emit("void"),
       Bool => self.emit("bool"),

@@ -63,6 +63,7 @@ impl Hasher {
 
   fn write_type(self, t: semantic.Type) {
     match t {
+      Any => self.write_byte(255),
       Never => self.write_byte(0),
       Bool => self.write_byte(1),
       Nat => self.write_byte(2),
