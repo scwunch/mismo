@@ -81,6 +81,8 @@ impl Lexer {
       }
     }
 
+    self.index += 1
+
     let mut indent: uint32 = 0
 
     let next_char = loop {
@@ -89,6 +91,10 @@ impl Lexer {
         '\n' => indent = 0,
         0 => return Token.newline(start, self.index, 0, 0),
         '-' if self.peek_char_at(1) == '-' => {
+          if self.peek_char_at(2) == '-' && indent == 0 {
+            self.skip_block_comment()
+            continue
+          }
           return self.new_line_recursive(start)
         },
         c => break c,
@@ -97,6 +103,25 @@ impl Lexer {
     }
 
     Token.newline(start, self.index, indent, next_char)
+  }
+
+  fn skip_block_comment(self: Ref<Lexer>) {
+    loop {
+      self.index += 1
+      if self.peek_char() == '\n' &&
+      // \n---\n
+      self.peek_char_at(-1) == '-' &&
+      self.peek_char_at(-2) == '-' &&
+      self.peek_char_at(-3) == '-' &&
+      self.peek_char_at(-4) == '\n' {
+        break
+      }
+      if self.index as int == self.source.length() {
+        // unterminated block comment, but we'll let it slide for now
+        return
+      }
+    }
+    self.index += 1
   }
 
   /// Reads an identifier, keyword, or word-operator (and, or, not, is, in).
