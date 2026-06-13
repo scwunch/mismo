@@ -67,8 +67,10 @@ To compile the Mismo compiler:
 - install Rust and Cargo
 - install [Lisette](https://lisette.run/) => `cargo install lisette`
 - clone this repo
-- run `lis build` to build the compiler
-- or `lis run -- --test` to run the tests
+- `lis run -- [args]` to run the Mismo compiler
+- `lis run -- std/prelude.mismo` to compile the prelude
+- `lis run -- PATH.mismo` to compile and run a `.mismo` file
+- `lis run -- --test [test_names]` to run mismo compiler tests
 
 ## Contributing
 
@@ -77,4 +79,3 @@ To compile the Mismo compiler:
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create a new Pull Request
-

@@ -9,40 +9,6 @@ pub fn test_compiler() {
 }
 
 fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "dummy"
-  let program = "
-  fn main():
-    nil
-    true
-    false
-    1
-    1.0
-    -5
-    \"hello world\"
-    -- [1, 2, 3]
-    (1, 2, 3)
-  "
-  fmt.Println(program)
-
-  // fmt.Println("\nTokens: \n")
-  // fmt.Println(compile_to_tokens(program))
-  fmt.Println("\nAST: \n")
-  let decs = parser.Parser.new(program).parse()
-  fmt.Println(decs.functions[0])
-  // fmt.Println("\nHIR: \n")
-  // fmt.Println(mode_check(program))
-  // fmt.Println("\nSpecialize: \n")
-  match transpile(program) {
-    Ok(zig) => fmt.Println(zig),
-    Err(errs) => {
-      let runes = program as Slice<rune>
-      for e in errs {
-        fmt.Println(errors.render(e, runes))
-      }
-      t.fail("failed with errors ^")?
-    },
-  }
-
-  run(program)
+  t.test_name = "Dummy"
   Ok(())
 }

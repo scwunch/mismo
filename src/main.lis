@@ -1,5 +1,6 @@
 import "go:fmt"
 import "go:os"
+import "go:path/filepath"
 
 import "compiler"
 import "lexer"
@@ -18,17 +19,22 @@ fn main() {
       run_tests(rest)
     },
     [_, path] => {
-      let data = os.ReadFile(path)
-      match data {
-        Ok(file_data) => {
-          let source_str = file_data as string
-          compiler.run(source_str)
-        },
-        Err(e) => fmt.Println(e),
+      match run_path(path) {
+        Ok(()) => (),
+        Err(e) => fmt.Fprintln(os.Stderr, e.Error()),
       }
     },
     _ => fmt.Println("Error: no input file provided"),
   }
+}
+
+fn run_path(path: string) -> Result<(), error> {
+  let source_str = os.ReadFile(path)? as string
+  let work_dir = os.Getwd()?
+  let mut opts = compiler.Options.new()
+  opts.work_dir_parent = filepath.Join(work_dir, "zig-out")
+  opts.zig_prelude_path = filepath.Join(work_dir, "zig-out/prelude.zig")
+  Ok(compiler.run(source_str, opts))
 }
 
 fn run_tests(tests: Slice<string>) {

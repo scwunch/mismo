@@ -90,18 +90,15 @@ pub enum BuildResult {
   OsErr(error),
 }
 
-pub fn run(source: string) {
-  let mut opts = Options.new()
-  opts.work_dir_parent = "/home/ryan/Obsidian/Vault/Projects/mismo/zig-out"
-  opts.zig_prelude_path = "/home/ryan/Obsidian/Vault/Projects/mismo/zig-out/prelude.zig"
+pub fn run(source: string, opts: Options) {
   match build(source, opts) {
     Bin(Path(res)) => {
       match run_binary(res, [], opts.io) {
         Ok(_) => (),
-        Err(e) => fmt.Fprintln(os.Stderr, e.Error()),
+        Err(e) => fmt.Fprintln(opts.io.stderr, e.Error()),
       }
     },
-    OsErr(e) => fmt.Fprintln(os.Stderr, e.Error()),
+    OsErr(e) => fmt.Fprintln(opts.io.stderr, e.Error()),
     MismoErrs(errs) => {
       let source = source as Slice<rune>
       for e in errs {
