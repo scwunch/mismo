@@ -3,6 +3,7 @@ import "go:strings"
 import "mode"
 import "semantic"
 import "specialization"
+import "utils/slice"
 
 pub struct Emitter {
   pub reg: specialization.ConcreteRegistry,
@@ -68,7 +69,7 @@ impl Emitter {
       BoolLiteral(b) => self.emit(f"{b}"),
       IntLiteral(i) => self.emit(f"{i}"),
       FloatLiteral(f) => self.emit(f"{f}"),
-      StringLiteral(s) => self.emit(f"\"{s}\""),
+      StringLiteral(s) => self.emit(f"string_from_literal(\"{s}\")"),
       ArrayLiteral(elems, _) => {
         self.emit_list_bracket(elems, self.emit_expression)
       },
@@ -97,8 +98,17 @@ impl Emitter {
   fn emit_call(self: Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {
     let func = self.reg.functions[fn_id]
     self.emit(func.name)
-    self.emit(f"_{fn_id}")
-    self.emit_list_paren(args, self.emit_expression)
+    if !func.is_extern() { self.emit(f"_{fn_id}") }
+    self.emit_list_paren(
+      slice.zip(func.parameters, args),
+      |pa| {
+        let (param, arg) = pa
+        if arg.mode() == mode.Mode.Var && param.mode != mode.Mode.Var {
+          self.emit("&")
+        }
+        self.emit_expression(arg)
+      },
+    )
   }
 
   fn newline(self: Ref<Emitter>) {

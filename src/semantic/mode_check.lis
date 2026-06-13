@@ -144,3 +144,29 @@ impl ModeCheck {
     Ok(mode.Mode.Var)
   }
 }
+
+impl Expression {
+  pub fn mode(self) -> mode.Mode {
+    match self.kind {
+      Nil |
+      BoolLiteral(_) |
+      IntLiteral(_) |
+      FloatLiteral(_) |
+      StringLiteral(_) |
+      ArrayLiteral(_, _) |
+      TupleLiteral(_) => mode.Mode.Var,
+      Identifier(varid) => varid.mode,
+      Assign(_, _) => mode.Mode.Var,
+      Binding(m, _) => m,
+      FieldAccess(obj, _) => obj.mode(),
+      Block([], _) => mode.Mode.Var,
+      Block(exprs, _) => exprs[exprs.length() - 1].mode(),
+      Call(_) | Return(_) | Break(_) | Continue => mode.Mode.Var,
+      SwitchIf(_) => panic("switchif not implemented"),
+      Match(_) => panic("match not implemented"),
+      Loop(_, _) => panic("loop not implemented"),
+      ConcreteCall(_, _) => panic("concrete call node not created yet"),
+      Extern => mode.Mode.Var,
+    }
+  }
+}
