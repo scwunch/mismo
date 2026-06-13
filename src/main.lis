@@ -33,6 +33,7 @@ fn run_path(path: string) -> Result<(), error> {
   let work_dir = os.Getwd()?
   let mut opts = compiler.Options.new()
   opts.work_dir_parent = filepath.Join(work_dir, "zig-out")
+  opts.work_dir = "testing"
   opts.zig_prelude_path = filepath.Join(work_dir, "zig-out/prelude.zig")
   Ok(compiler.run(source_str, opts))
 }

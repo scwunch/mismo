@@ -47,12 +47,30 @@ fn bool(_ Nil) Bool: false
 
 fn print(val String):
    __zig_print(val)
+   __zig_print("\n")
 
 fn panic(str: String) -> Never:
    __zig_panic(str)
 
 fn main():
    print("hello world")
+
+struct Point
+   x Int
+   y Int
+
+enum Color
+   Red(String)
+   Blue
+   Green
+
+enum Option[T]
+   Some(T)
+   None
+
+struct Pair[T]
+   x T
+   y T
 
 --- Bool
 fn bool(self Bool) Bool: self

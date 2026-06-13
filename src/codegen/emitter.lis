@@ -1,3 +1,4 @@
+import "go:strconv"
 import "go:strings"
 
 import "mode"
@@ -7,13 +8,14 @@ import "utils/slice"
 
 pub struct Emitter {
   pub reg: specialization.ConcreteRegistry,
+  type_params: Slice<semantic.TypeParameter>,
   pub buffer: Slice<string>,
   pub indent: int,
 }
 
 impl Emitter {
   pub fn new(reg: Registry) -> Emitter {
-    Emitter { reg, buffer: [], indent: 0 }
+    Emitter { reg, type_params: [], buffer: [], indent: 0 }
   }
 
   pub fn out(self) -> string {
@@ -23,9 +25,11 @@ impl Emitter {
   pub fn emit_program(self: Ref<Emitter>) {
     for (_, t) in self.reg.type_defs {
       self.emit_type_def(t.*)
+      self.newline()
     }
     for (i, func) in self.reg.functions.enumerate() {
       if !func.is_extern() { self.emit_function(func, i) }
+      self.newline()
     }
   }
 
@@ -38,18 +42,24 @@ impl Emitter {
     self.ident(f"{func.name}_{index}")
     self.emit_list_paren(func.parameters, self.emit_parameter)
     self.emit(" ")
-    match func.return_type {
-      Tuple([]) => self.emit("void"),
-      t => self.emit_type(t),
+    match (func.return_type, func.body.kind) {
+      (Tuple([]), Block(exprs, _)) => {
+        self.emit("void ")
+        self.emit_block(exprs)
+      },
+      (Tuple([]), expr) => {
+        self.emit("void ")
+        self.emit_block([func.body])
+      },
+      (ty, expr) => {
+        self.emit_type(ty)
+        self.emit(" ")
+        self.start_block()
+        self.emit("return ")
+        self.emit_expr(expr)
+        self.end_block()
+      },
     }
-    self.start_block()
-    match func.return_type {
-      Tuple([]) => (),
-      _ => self.emit("return "),
-    }
-    self.emit_expr(func.body.kind)
-    self.emit(";")
-    self.end_block()
     self.newline()
   }
 
@@ -69,12 +79,20 @@ impl Emitter {
       BoolLiteral(b) => self.emit(f"{b}"),
       IntLiteral(i) => self.emit(f"{i}"),
       FloatLiteral(f) => self.emit(f"{f}"),
-      StringLiteral(s) => self.emit(f"string_from_literal(\"{s}\")"),
+      StringLiteral(s) => self.emit_string_literal(s),
       ArrayLiteral(elems, _) => {
         self.emit_list_bracket(elems, self.emit_expression)
       },
       TupleLiteral(elems) => {
-        self.emit_list(".{", "}", elems, self.emit_expression)
+        self.emit_list(
+          elems,
+          ".{",
+          "}",
+          |elem| {
+            self.emit_expression(elem)
+            self.emit(", ")
+          },
+        )
       },
       Identifier(varid) => self.ident(varid.name),
       Assign(pattern, value) => panic(f"unhandled expression type: {expr}"),
@@ -84,7 +102,7 @@ impl Emitter {
       SwitchIf(cases) => panic(f"unhandled expression type: {expr}"),
       Match(arms) => panic(f"unhandled expression type: {expr}"),
       Loop(exprs, _) => panic(f"unhandled expression type: {expr}"),
-      Block(exprs, _) => self.emit_block(exprs, self.emit_expression),
+      Block(exprs, _) => self.emit_block(exprs),
       Return(Some(value)) => panic(f"unhandled expression type: {expr}"),
       Return(None) => panic(f"unhandled expression type: {expr}"),
       Break(Some(value)) => panic(f"unhandled expression type: {expr}"),
@@ -93,6 +111,12 @@ impl Emitter {
       FieldAccess(expr, i) => panic(f"unhandled expression type: {expr}"),
       Extern => panic("Oops, we shouldn't be emitting external functions!"),
     }
+  }
+
+  fn emit_string_literal(self: Ref<Emitter>, s: string) {
+    self.emit("string_from_literal(")
+    self.emit(strconv.Quote(s))
+    self.emit(")")
   }
 
   fn emit_call(self: Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {
@@ -124,11 +148,12 @@ impl Emitter {
 
   fn end_block(self: Ref<Emitter>) {
     self.indent -= 1
-    self.newline()
+    // self.newline()
     self.emit("}")
   }
 
   fn emit_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+    self.type_params = type_def.type_parameters
     if type_def.type_parameters.is_empty() {
       self.emit_concrete_type_def(type_def)
     } else {
@@ -153,14 +178,15 @@ impl Emitter {
     fields: Slice<semantic.Field>,
   ) {
     self.emit("struct ")
-    self.emit_block(
-      fields,
-      |field| {
-        self.ident(field.name)
-        self.emit(": ")
-        self.emit_type(field.typ)
-      },
-    )
+    self.start_block()
+    for field in fields {
+      self.ident(field.name)
+      self.emit(": ")
+      self.emit_type(field.typ)
+      self.emit(",")
+      self.newline()
+    }
+    self.end_block()
   }
 
   fn emit_anonymous_enum_def(
@@ -168,13 +194,13 @@ impl Emitter {
     variants: Slice<semantic.Variant>,
   ) {
     self.emit("union(enum) ")
-    self.emit_block(
-      variants,
-      |variant| {
-        self.emit(variant.name)
-        self.emit_list(": struct {", "}", variant.fields, self.emit_type)
-      },
-    )
+    self.start_block()
+    for variant in variants {
+      self.emit(variant.name)
+      self.emit_list(variant.fields, ": struct { ", " },", self.emit_type)
+      self.newline()
+    }
+    self.end_block()
   }
 
   fn emit_generic_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
@@ -191,12 +217,13 @@ impl Emitter {
       Enum(variants) => self.emit_anonymous_enum_def(variants),
     }
     self.emit(";")
+    self.newline()
     self.end_block()
     self.newline()
   }
 
   fn emit_type_param(self: Ref<Emitter>, type_param: semantic.TypeParameter) {
-    self.emit("comtime ")
+    self.emit("comptime ")
     self.emit(type_param.name)
     self.emit(": type")
   }
@@ -234,15 +261,15 @@ impl Emitter {
         self.emit("_t")
         self.emit_list_paren(args, self.emit_type)
       },
-      Var(i) => self.emit(f"T{i}"),
+      Var(i) => self.emit(self.type_params[i].name),
     }
   }
 
   fn emit_list<A>(
     self: Ref<Emitter>,
+    items: Slice<A>,
     start: string,
     end: string,
-    items: Slice<A>,
     action: fn(A) -> (),
   ) {
     self.emit(start)
@@ -297,20 +324,23 @@ impl Emitter {
     }
   }
 
-  fn emit_block<A>(self: Ref<Emitter>, items: Slice<A>, action: fn(A) -> ()) {
-    match items {
-      [] => self.emit("{}"),
-      [a, ..rest] => {
-        self.start_block()
-        action(a)
-        for a in rest {
-          self.emit(",")
-          self.newline()
-          action(a)
+  fn emit_block(self: Ref<Emitter>, items: Slice<semantic.Expression>) {
+    if items.is_empty() {
+      self.emit("{}")
+    } else {
+      self.start_block()
+      for expr in items {
+        match expr.kind {
+          Block(exprs, _) => self.emit_block(exprs),
+          expr => {
+            self.emit_expr(expr)
+            self.emit(";")
+            self.newline()
+          },
         }
-        self.end_block()
-      },
+      }
     }
+    self.end_block()
   }
 
   fn emit_param_type(self: Ref<Emitter>, m: mode.Mode, typ: semantic.Type) {

@@ -11,6 +11,7 @@ pub struct Options {
   pub io: IoStreams,
   pub keep_work_dir: bool,
   pub work_dir_parent: string,
+  pub work_dir: string,
 }
 
 pub struct IoStreams {
@@ -34,6 +35,7 @@ impl Options {
       io: IoStreams.os(),
       keep_work_dir: true,
       work_dir_parent: os.TempDir(),
+      work_dir: "",
     }
   }
 }
@@ -44,7 +46,11 @@ pub struct Path(string)
 /// Check ZigResult.exit_code for compiler failure.
 pub fn build_zig(zig_source: string, opts: Options) -> Result<Path, error> {
   let parent = opts.work_dir_parent
-  let work_dir = os.MkdirTemp(parent, "zigrunner-*")?
+  let work_dir = if opts.work_dir.is_empty() {
+    os.MkdirTemp(parent, "zigrunner-*")?
+  } else {
+    filepath.Join(parent, opts.work_dir)
+  }
   if !opts.keep_work_dir {
     // only cleans the .zig source and cache
     // — the binary is copied out before this runs if needed.
@@ -58,6 +64,7 @@ pub fn build_zig(zig_source: string, opts: Options) -> Result<Path, error> {
     os.O_WRONLY | os.O_APPEND | os.O_CREATE,
     0o644,
   )?
+  src.Truncate(0)?
   match src.WriteString(zig_source) {
     Err(e) | Both(_, e) => return Err(e),
     _ => (),
