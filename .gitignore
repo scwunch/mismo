@@ -2,6 +2,7 @@
 target/
 output.log
 zig-out/zigrunner-*
+zig-out/testing
 
 # IDE
 .cursor/
