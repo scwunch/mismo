@@ -95,7 +95,7 @@ impl ExpressionParser {
       TokenKind.Operator(Not) => return self.handle_prefix(Operator.Not),
       TokenKind.Operator(op) => {
         if self.parser.peek().kind == TokenKind.LeftParen {
-          self.function_call(tok.span, op.sigil())?
+          self.function_call(tok.span, cst.Path.name_(op.sigil()))?
         } else {
           return Err(ParseError.new(
             tok.span,
@@ -113,23 +113,10 @@ impl ExpressionParser {
       TokenKind.Return => cst.return_(tok.span, self.optional_expression()?),
       TokenKind.Break => cst.break_(tok.span, self.optional_expression()?),
       TokenKind.Continue => cst.continue_(tok.span),
-      TokenKind.Identifier(name) => {
-        match name {
-          "true" => cst.bool_lit(tok.span, true),
-          "false" => cst.bool_lit(tok.span, false),
-          "nil" => cst.nil_lit(tok.span),
-          _ => match self.parser.peek().kind {
-            TokenKind.LeftParen | TokenKind.LeftBracket => self.function_call(
-              tok.span,
-              name,
-            )?,
-            _ => cst.identifier(tok.span, name),
-          },
-        }
-      },
+      TokenKind.Identifier(name) => self.identifier(tok.span, name)?,
       TokenKind.LeftParen => self.parse_paren_group(tok.span)?,
       TokenKind.LeftBracket => self.parse_array_literal(tok.span)?,
-      TokenKind.Dot => self.handle_dot(cst.identifier(tok.span, "self"))?,
+      TokenKind.Dot => self.handle_dot(cst.implicit_self(tok.span))?,
       TokenKind.IntLiteral(n) => cst.int_lit(tok.span, n),
       TokenKind.FloatLiteral(n) => cst.float_lit(tok.span, n),
       TokenKind.StringLiteral(s) => cst.string_lit(tok.span, s),
@@ -149,6 +136,38 @@ impl ExpressionParser {
   fn handle_prefix(self: Ref<ExpressionParser>, prefix_op: Operator) -> Result<(), ParseError> {
     self.push_operator(prefix_op)?
     self.read_operand()
+  }
+
+  fn identifier(self: Ref<ExpressionParser>, span: span.Span, name: string) -> Result<cst.Expression, ParseError> {
+    match name {
+      "true" => Ok(cst.bool_lit(span, true)),
+      "false" => Ok(cst.bool_lit(span, false)),
+      "nil" => Ok(cst.nil_lit(span)),
+      _ => {
+        let (span, path) = self.parse_path(span, name)?
+        match self.parser.peek().kind {
+          LeftParen | LeftBracket => Ok(self.function_call(span, path)?),
+          _ => Ok(cst.identifier(span, path)),
+        }
+      },
+    }
+  }
+
+  fn parse_path(
+    self: Ref<ExpressionParser>,
+    mut span_: span.Span,
+    mut name: string,
+  ) -> Result<(span.Span, cst.Path), ParseError> {
+    let mut path = []
+    loop {
+      if self.parser.consume(TokenKind.NamespaceSeparator).is_ok() {
+        span_ = span_.merge(self.parser.peek().span)
+        path = path.append(name)
+        name = self.parser.consume_identifier()?
+      } else {
+        return Ok((span_, cst.Path { namespace: path, name }))
+      }
+    }
   }
 
   fn read_operator(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
@@ -278,26 +297,30 @@ impl ExpressionParser {
 
   fn handle_dot(self: Ref<ExpressionParser>, receiver: cst.Expression) -> Result<cst.Expression, ParseError> {
     let start = receiver.span
-    let ident_span = self.parser.peek().span
-    let name = self.parser.consume_identifier()?
+    let (span, path) = self.parse_path(start, self.parser.consume_identifier()?)?
     match self.parser.peek().kind {
       LeftBracket | LeftParen => {
-        let (span, call) = self.parse_call(start, name)?
+        let (span, call) = self.parse_call(span, path)?
         Ok(cst.dot_call(span, &receiver, call))
       },
-      _ => {
-        let span = start.merge(ident_span)
-        Ok(cst.dot_name(span, &receiver, name))
+      _ => if path.namespace.is_empty() {
+        Ok(cst.dot_name(span, &receiver, path.name))
+      } else {
+        Ok(cst.dot_call(
+          span,
+          &receiver,
+          cst.Call { fn_name: path, type_args: None, args: [] },
+        ))
       },
     }
   }
 
-  fn function_call(self: Ref<ExpressionParser>, start: Span, name: string) -> Result<cst.Expression, ParseError> {
-    let (span, call) = self.parse_call(start, name)?
+  fn function_call(self: Ref<ExpressionParser>, start: Span, fn_name: cst.Path) -> Result<cst.Expression, ParseError> {
+    let (span, call) = self.parse_call(start, fn_name)?
     Ok(cst.call_expr(span, call))
   }
 
-  fn parse_call(self: Ref<ExpressionParser>, start: Span, fn_name: string) -> Result<(span.Span, cst.Call), ParseError> {
+  fn parse_call(self: Ref<ExpressionParser>, start: Span, fn_name: cst.Path) -> Result<(span.Span, cst.Call), ParseError> {
     let type_args = self.parse_type_args()?
     let _ = self.parser.consume(TokenKind.LeftParen)?
     let args = self.parse_list(')')?
@@ -479,4 +502,9 @@ fn unary_op(op: Operator, term: cst.Expression) -> cst.Expression {
     },
     _ => panic(f"{op} is not a unary operator"),
   }
+}
+
+pub enum List<T> {
+  Nil,
+  Cons(T, Ref<List<T>>),
 }

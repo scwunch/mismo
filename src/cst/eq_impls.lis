@@ -96,7 +96,7 @@ impl Expr {
       (TupleLiteral(t1), TupleLiteral(t2)) => {
         slice.compare(t1, t2, Expression.eq)
       },
-      (Identifier(i1), Identifier(i2)) => i1 == i2,
+      (Identifier(i1), Identifier(i2)) => i1.eq(i2),
       (Binding(m1, e1), Binding(m2, e2)) => m1 == m2 && e1.eq(e2.*),
       (Binop(b1), Binop(b2)) => b1.eq(b2.*),
       (If(cond1), If(cond2)) => cond1.eq(cond2),
@@ -112,19 +112,38 @@ impl Expr {
       (Break(None), Break(None)) => true,
       (Break(Some(e1)), Break(Some(e2))) => e1.eq(e2.*),
       (Continue, Continue) => true,
-      (Type(n1, a1), Type(n2, a2)) => {
-        let type_args_eq = match (a1, a2) {
-          (None, None) => true,
-          (Some(t1), Some(t2)) => slice.compare(t1, t2, Type.eq),
-          _ => false,
-        }
-        n1 == n2 && type_args_eq
-      },
+      // (Type(n1, a1), Type(n2, a2)) => {
+      //   let type_args_eq = match (a1, a2) {
+      //     (None, None) => true,
+      //     (Some(t1), Some(t2)) => slice.compare(t1, t2, Type.eq),
+      //     _ => false,
+      //   }
+      //   n1 == n2 && type_args_eq
+      // },
       (DotName(r1, f1), DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
       (DotCall(r1, c1), DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
       (Call(c1), Call(c2)) => c1.eq(c2),
       _ => false,
     }
+  }
+}
+
+impl Path {
+  pub fn eq(self, other: Path) -> bool {
+    self.name == other.name &&
+    slice.compare(self.namespace, other.namespace, |s1, s2| s1 == s2)
+  }
+}
+
+impl Call {
+  pub fn eq(self, other: Call) -> bool {
+    let type_args_eq = match (self.type_args, other.type_args) {
+      (None, None) => true,
+      (Some(a1), Some(a2)) => slice.compare(a1, a2, Type.eq),
+      _ => false,
+    }
+    self.fn_name.eq(other.fn_name) && type_args_eq &&
+    slice.compare(self.args, other.args, Expression.eq)
   }
 }
 

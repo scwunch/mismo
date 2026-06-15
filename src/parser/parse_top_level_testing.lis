@@ -474,7 +474,7 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(
         call,
         cst.Call { 
-          fn_name: "print",
+          fn_name: cst.Path.name_("print"),
           type_args: None,
           args: [cst.string_lit(span.new(17, 30), "hello world")],
         },
@@ -489,7 +489,7 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.call_expr(
       span.new(11, 31),
       cst.Call { 
-        fn_name: "print",
+        fn_name: cst.Path.name_("print"),
         type_args: None,
         args: [cst.string_lit(span.new(17, 30), "hello world")],
       },

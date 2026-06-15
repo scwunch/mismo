@@ -17,7 +17,11 @@ impl Lexer {
     let tok = match self.peek_char() {
       ',' => Token.comma(pos),
       '.' => Token.dot(pos),
-      ':' => Token.colon(pos),
+      ':' => if self.peek_char_at(1) == ':' {
+        Token.namespace_separator(pos)
+      } else {
+        Token.colon(pos)
+      },
       ';' => Token.semicolon(pos),
       '(' => Token.left_paren(pos),
       ')' => Token.right_paren(pos),

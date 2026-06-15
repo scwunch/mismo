@@ -26,6 +26,7 @@ pub enum TokenKind {
   Dot,
   Comma,
   Colon,
+  NamespaceSeparator,
   Semicolon,
   Arrow,
   Newline(uint32, rune),
@@ -81,6 +82,7 @@ impl TokenKind {
       Dot => ".",
       Comma => ",",
       Colon => ":",
+      NamespaceSeparator => "::",
       Semicolon => ";",
       Arrow => "->",
       Newline(indent, c) => f"\\n({indent}{c})",
@@ -226,6 +228,10 @@ impl Token {
 
   pub fn colon(start: uint32) -> Token {
     Token.new(Span { start, end: start + 1 }, TokenKind.Colon)
+  }
+
+  pub fn namespace_separator(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 2 }, TokenKind.NamespaceSeparator)
   }
 
   pub fn newline(start: uint32, end: uint32, indent: uint32, next_char: rune) -> Token {

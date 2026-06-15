@@ -6,6 +6,7 @@ import "utils/slice"
 // type Span = span.Span
 pub type Operator = operator.Operator
 
+#[display]
 pub struct Expression {
   pub span: span.Span,
   pub kind: Expr,
@@ -20,7 +21,7 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
-  Identifier(string),
+  Identifier(Path),
   Binding(mode.Mode, Ref<Expression>),
   Binop(Ref<Binop>),
   Call(Call),
@@ -33,10 +34,22 @@ pub enum Expr {
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
-  Type(string, Option<Slice<Type>>),
+  // Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
   DotCall(Ref<Expression>, Call),
+  TypeDotCall(Type, Call),
   Extern,
+}
+
+pub struct Path {
+  pub namespace: Slice<string>,
+  pub name: string,
+}
+
+impl Path {
+  pub fn name_(name: string) -> Path {
+    Path { name, .. }
+  }
 }
 
 pub struct Binop {
@@ -53,21 +66,9 @@ impl Binop {
 }
 
 pub struct Call {
-  pub fn_name: string,
+  pub fn_name: Path,
   pub type_args: Option<Slice<Type>>,
   pub args: Slice<Expression>,
-}
-
-impl Call {
-  pub fn eq(self, other: Call) -> bool {
-    let type_args_eq = match (self.type_args, other.type_args) {
-      (None, None) => true,
-      (Some(a1), Some(a2)) => slice.compare(a1, a2, Type.eq),
-      _ => false,
-    }
-    self.fn_name == other.fn_name && type_args_eq &&
-    slice.compare(self.args, other.args, Expression.eq)
-  }
 }
 
 pub struct ForLoop {
@@ -134,8 +135,12 @@ pub fn tuple_lit(span: span.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.TupleLiteral(values) }
 }
 
-pub fn identifier(span: span.Span, name: string) -> Expression {
-  Expression { span, kind: Expr.Identifier(name) }
+pub fn identifier(span: span.Span, path: Path) -> Expression {
+  Expression { span, kind: Expr.Identifier(path) }
+}
+
+pub fn implicit_self(span: span.Span) -> Expression {
+  Expression { span, kind: Expr.Identifier(Path { name: "self", .. }) }
 }
 
 pub fn binding(span: span.Span, mode: mode.Mode, expr: Ref<Expression>) -> Expression {
@@ -184,9 +189,9 @@ pub fn not_(span: span.Span, expr: Ref<Expression>) -> Expression {
   Expression { span, kind: Expr.Not(expr) }
 }
 
-pub fn type_expr(span: span.Span, name: string, type_args: Option<Slice<Type>>) -> Expression {
-  Expression { span, kind: Expr.Type(name, type_args) }
-}
+// pub fn type_expr(span: span.Span, name: string, type_args: Option<Slice<Type>>) -> Expression {
+//   Expression { span, kind: Expr.Type(name, type_args) }
+// }
 
 pub fn dot_name(span: span.Span, receiver: Ref<Expression>, field: string) -> Expression {
   Expression { span, kind: Expr.DotName(receiver, field) }
@@ -194,6 +199,10 @@ pub fn dot_name(span: span.Span, receiver: Ref<Expression>, field: string) -> Ex
 
 pub fn dot_call(span: span.Span, receiver: Ref<Expression>, call: Call) -> Expression {
   Expression { span, kind: Expr.DotCall(receiver, call) }
+}
+
+pub fn type_dot_call(span: span.Span, typ: Type, call: Call) -> Expression {
+  Expression { span, kind: Expr.TypeDotCall(typ, call) }
 }
 
 pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
@@ -217,41 +226,42 @@ pub fn extern(span: span.Span) -> Expression {
 
 impl Expression {
   pub fn string(self) -> string {
-    f"{self.span}: {self.kind.string()}"
+    f"{self.span}: {self.kind}"
   }
 }
 
 impl Expr {
-  pub fn string(self) -> string {
-    match self {
-      Expr.Nil => "nil",
-      Expr.BoolLiteral(b) => f"{b}",
-      Expr.IntLiteral(i) => f"{i}",
-      Expr.FloatLiteral(f) => f"{f}",
-      Expr.StringLiteral(s) => f"\"{s}\"",
-      Expr.ArrayLiteral(elems) => f"[{elems.length()} elems]",
-      Expr.TupleLiteral(elems) => f"({elems.length()} elems)",
-      Expr.Identifier(name) => name,
-      Expr.Binding(mode, _) => f"Binding({mode})",
-      Expr.Binop(b) => f"Binop({b.left.kind.string()} {b.op} {b.right.kind.string()})",
-      Expr.Call(c) => f"Call({c.fn_name}[{c.args.length()}])",
-      Expr.If(_) => "If(...)",
-      Expr.While(_) => "While(...)",
-      Expr.For(f) => f"For({f.binding.kind.string()} in {f.iter.kind.string()})",
-      Expr.Block(stmts) => f"Block({stmts.length()})",
-      Expr.Neg(e) => f"Neg({e.kind.string()})",
-      Expr.Not(e) => f"Not({e.kind.string()})",
-      Expr.Return(Some(e)) => f"Return({e.kind.string()})",
-      Expr.Return(None) => "Return",
-      Expr.Break(None) => "Break",
-      Expr.Break(Some(e)) => f"Break({e.kind.string()})",
-      Expr.Continue => "Continue",
-      Expr.Type(name, _) => f"Type({name})",
-      Expr.DotName(r, field) => f"DotName({r.kind.string()}.{field})",
-      Expr.DotCall(r, c) => f"DotCall({r.kind.string()}.{c.fn_name})",
-      Expr.Extern => "<external implementation>",
-    }
-  }
+  // pub fn string(self) -> string {
+  //   match self {
+  //     Expr.Nil => "nil",
+  //     Expr.BoolLiteral(b) => f"{b}",
+  //     Expr.IntLiteral(i) => f"{i}",
+  //     Expr.FloatLiteral(f) => f"{f}",
+  //     Expr.StringLiteral(s) => f"\"{s}\"",
+  //     Expr.ArrayLiteral(elems) => f"[{elems.length()} elems]",
+  //     Expr.TupleLiteral(elems) => f"({elems.length()} elems)",
+  //     Expr.Identifier(name) => name,
+  //     Expr.Binding(mode, _) => f"Binding({mode})",
+  //     Expr.Binop(b) => f"Binop({b.left.kind.string()} {b.op} {b.right.kind.string()})",
+  //     Expr.Call(c) => f"Call({c.fn_name}[{c.args.length()}])",
+  //     Expr.If(_) => "If(...)",
+  //     Expr.While(_) => "While(...)",
+  //     Expr.For(f) => f"For({f.binding.kind.string()} in {f.iter.kind.string()})",
+  //     Expr.Block(stmts) => f"Block({stmts.length()})",
+  //     Expr.Neg(e) => f"Neg({e.kind.string()})",
+  //     Expr.Not(e) => f"Not({e.kind.string()})",
+  //     Expr.Return(Some(e)) => f"Return({e.kind.string()})",
+  //     Expr.Return(None) => "Return",
+  //     Expr.Break(None) => "Break",
+  //     Expr.Break(Some(e)) => f"Break({e.kind.string()})",
+  //     Expr.Continue => "Continue",
+  //     // Expr.Type(name, _) => f"Type({name})",
+  //     Expr.DotName(r, field) => f"DotName({r.kind.string()}.{field})",
+  //     Expr.DotCall(r, c) => f"DotCall({r.kind.string()}.{c.fn_name})",
+  //     Expr.TypeDotCall(t, c) => f"TypeDotCall({t}, {c.fn_name})",
+  //     Expr.Extern => "<external implementation>",
+  //   }
+  // }
 
   pub fn is_extern(self) -> bool {
     if let Expr.Extern = self { true } else { false }

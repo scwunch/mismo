@@ -109,7 +109,7 @@ fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let tc = TypeCheck.new(&env, func)
 
   // Known identifier "a"
-  match tc.infer(cst.identifier(span.new(0, 1), "a")) {
+  match tc.infer(cst.identifier(span.new(0, 1), cst.Path.name_("a"))) {
     Ok(expr) => match expr.kind {
       Expr.Identifier(v) => t.should_eq(v.typ, Type.Int)?,
       _ => t.fail(f"expected Identifier, got {expr.kind}")?,
@@ -118,7 +118,7 @@ fn test_infer_identifier(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Unknown identifier "unknown"
-  match tc.infer(cst.identifier(span.new(0, 7), "unknown")) {
+  match tc.infer(cst.identifier(span.new(0, 7), cst.Path.name_("unknown"))) {
     Ok(_) => t.fail("expected error for unknown identifier")?,
     Err(e) => t.should_be_true(
       e.code() == 2002,
@@ -284,7 +284,7 @@ fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), strin
   // Assignment: x = 42
   match tc.infer(cst.binop_expr(
     span.new(0, 6),
-    cst.identifier(span.new(0, 1), "x"),
+    cst.identifier(span.new(0, 1), cst.Path.name_("x")),
     operator.Operator.Assign,
     cst.int_lit(span.new(5, 6), 42),
   )) {
@@ -298,7 +298,7 @@ fn test_infer_binding_and_assign(t: Ref<testing.TestRunner>) -> Result<(), strin
   // Assignment to unknown variable: z = 99
   match tc.infer(cst.binop_expr(
     span.new(0, 6),
-    cst.identifier(span.new(0, 1), "z"),
+    cst.identifier(span.new(0, 1), cst.Path.name_("z")),
     operator.Operator.Assign,
     cst.int_lit(span.new(5, 6), 99),
   )) {
@@ -448,7 +448,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 4),
     kind: Expr.StringLiteral("hi"),
   }
-  match tc.call("foo", [], [arg_str], span.new(0, 4)) {
+  match tc.call(cst.Path.name_("foo"), [], [arg_str], span.new(0, 4)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => t.should_eq(
         fncall.fun.parameters[0].typ,
@@ -461,7 +461,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(4) => selects overload 1 (Int)
   let arg_int = Expression { span: span.new(0, 1), kind: Expr.IntLiteral(4) }
-  match tc.call("foo", [], [arg_int], span.new(0, 1)) {
+  match tc.call(cst.Path.name_("foo"), [], [arg_int], span.new(0, 1)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => t.should_eq(fncall.fun.parameters[0].typ, Type.Int)?,
       _ => t.fail("expected Call")?,
@@ -474,7 +474,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 4),
     kind: Expr.BoolLiteral(true),
   }
-  match tc.call("foo", [], [arg_bool], span.new(0, 4)) {
+  match tc.call(cst.Path.name_("foo"), [], [arg_bool], span.new(0, 4)) {
     Ok(_) => t.fail("expected NoMatchError")?,
     Err(e) => t.should_be_true(
       e.code() == 2102,
@@ -483,7 +483,7 @@ fn test_call_simple(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // foo() => ArgArityError (wrong arity)
-  match tc.call("foo", [], [], span.new(0, 3)) {
+  match tc.call(cst.Path.name_("foo"), [], [], span.new(0, 3)) {
     Ok(_) => t.fail("expected ArgArityError")?,
     Err(e) => t.should_be_true(
       e.code() == 2102,
@@ -516,7 +516,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(63) => selects overload 1 (concrete Int beats type var)
   let arg_int = Expression { span: span.new(0, 2), kind: Expr.IntLiteral(63) }
-  match tc3.call("foo", [], [arg_int], span.new(0, 2)) {
+  match tc3.call(cst.Path.name_("foo"), [], [arg_int], span.new(0, 2)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -534,7 +534,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 4),
     kind: Expr.StringLiteral("hi"),
   }
-  match tc3.call("foo", [], [arg_str], span.new(0, 4)) {
+  match tc3.call(cst.Path.name_("foo"), [], [arg_str], span.new(0, 4)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -574,7 +574,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&arr_arr_int),
   }
-  match tc8.call("foo", [], [arg_arr], span.new(0, 0)) {
+  match tc8.call(cst.Path.name_("foo"), [], [arg_arr], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -598,7 +598,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&arr_arr_str),
   }
-  match tc8.call("foo", [], [arg_arr_str], span.new(0, 0)) {
+  match tc8.call(cst.Path.name_("foo"), [], [arg_arr_str], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -653,7 +653,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&fn_int),
   }
-  match tc10.call("foo", [], [arg_fn_int], span.new(0, 0)) {
+  match tc10.call(cst.Path.name_("foo"), [], [arg_fn_int], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -677,7 +677,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&fn_str),
   }
-  match tc10.call("foo", [], [arg_fn_str], span.new(0, 0)) {
+  match tc10.call(cst.Path.name_("foo"), [], [arg_fn_str], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -717,7 +717,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&tup_str),
   }
-  match tc11.call("foo", [], [arg_tup_str], span.new(0, 0)) {
+  match tc11.call(cst.Path.name_("foo"), [], [arg_tup_str], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -741,7 +741,7 @@ fn test_call_specificity(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&tup_bool),
   }
-  match tc11.call("foo", [], [arg_tup_bool], span.new(0, 0)) {
+  match tc11.call(cst.Path.name_("foo"), [], [arg_tup_bool], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -816,7 +816,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.StringLiteral("world"),
   }
-  match tc4.call("foo", [], [arg_opt_str, arg_world], span.new(0, 0)) {
+  match tc4.call(
+    cst.Path.name_("foo"),
+    [],
+    [arg_opt_str, arg_world],
+    span.new(0, 0),
+  ) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -831,7 +836,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // foo(Option.Some("hello"), 55) => DoubleTypeArgBoundError (T would be String and Int)
   let arg_55 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(55) }
-  match tc4.call("foo", [], [arg_opt_str, arg_55], span.new(0, 0)) {
+  match tc4.call(
+    cst.Path.name_("foo"),
+    [],
+    [arg_opt_str, arg_55],
+    span.new(0, 0),
+  ) {
     Ok(_) => t.fail("expected error for double type arg bind")?,
     Err(e) => {
       match e {
@@ -861,7 +871,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     kind: Expr.Identifier(&opt_int),
   }
   let arg_0 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(0) }
-  match tc4.call("foo", [], [arg_opt_int, arg_0], span.new(0, 0)) {
+  match tc4.call(
+    cst.Path.name_("foo"),
+    [],
+    [arg_opt_int, arg_0],
+    span.new(0, 0),
+  ) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -894,7 +909,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // foo(3, 5) => AmbiguousFnCallError (both match Int,Int equally)
   let arg_3 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(3) }
   let arg_5 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(5) }
-  match tc5.call("foo", [], [arg_3, arg_5], span.new(0, 0)) {
+  match tc5.call(cst.Path.name_("foo"), [], [arg_3, arg_5], span.new(0, 0)) {
     Ok(_) => t.fail("expected AmbiguousFnCallError")?,
     Err(e) => t.should_be_true(
       e.code() == 2103,
@@ -908,7 +923,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     kind: Expr.StringLiteral("hi"),
   }
   let arg_1 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
-  match tc5.call("foo", [], [arg_hi, arg_1], span.new(0, 0)) {
+  match tc5.call(cst.Path.name_("foo"), [], [arg_hi, arg_1], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         let param0_typ = fncall.fun.parameters[0].typ
@@ -928,7 +943,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.StringLiteral("hi"),
   }
-  match tc5.call("foo", [], [arg_0b, arg_hib], span.new(0, 0)) {
+  match tc5.call(cst.Path.name_("foo"), [], [arg_0b, arg_hib], span.new(0, 0)) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         let param1_typ = fncall.fun.parameters[1].typ
@@ -954,7 +969,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let tc6 = TypeCheck.new(&env6, dummy)
 
   // foo() => UnboundTypeParamError (T only appears in return type)
-  match tc6.call("foo", [], [], span.new(0, 3)) {
+  match tc6.call(cst.Path.name_("foo"), [], [], span.new(0, 3)) {
     Ok(_) => t.fail("expected error for unbound type param")?,
     Err(e) => {
       match e {
@@ -995,7 +1010,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // foo(1, 2) => AmbiguousFnCallError
   let arg9_1 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(1) }
   let arg9_2 = Expression { span: span.new(0, 0), kind: Expr.IntLiteral(2) }
-  match tc9.call("foo", [], [arg9_1, arg9_2], span.new(0, 0)) {
+  match tc9.call(cst.Path.name_("foo"), [], [arg9_1, arg9_2], span.new(0, 0)) {
     Ok(_) => t.fail("expected AmbiguousFnCallError")?,
     Err(e) => t.should_be_true(
       e.code() == 2103,
@@ -1009,7 +1024,12 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.StringLiteral("hi"),
   }
-  match tc9.call("foo", [], [arg9_int, arg9_str], span.new(0, 0)) {
+  match tc9.call(
+    cst.Path.name_("foo"),
+    [],
+    [arg9_int, arg9_str],
+    span.new(0, 0),
+  ) {
     Ok(expr) => match expr {
       Expr.Call(fncall) => {
         t.should_be_true(
@@ -1053,7 +1073,7 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
     span: span.new(0, 0),
     kind: Expr.Identifier(&never_var),
   }
-  match tc7.call("foo", [], [arg_never], span.new(0, 0)) {
+  match tc7.call(cst.Path.name_("foo"), [], [arg_never], span.new(0, 0)) {
     Ok(_) => t.fail("expected NoMatchError for Never argument")?,
     Err(e) => t.should_be_true(
       e.code() == 2102,
@@ -1069,7 +1089,7 @@ fn test_call_edge(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let tc12 = TypeCheck.new(&env12, dummy)
 
   // foo() => AmbiguousFnCallError (identical params, return type doesn't break tie)
-  match tc12.call("foo", [], [], span.new(0, 3)) {
+  match tc12.call(cst.Path.name_("foo"), [], [], span.new(0, 3)) {
     Ok(_) => t.fail("expected AmbiguousFnCallError for zero-arity ambiguity")?,
     Err(e) => t.should_be_true(
       e.code() == 2103,

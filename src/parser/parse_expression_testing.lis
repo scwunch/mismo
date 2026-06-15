@@ -271,7 +271,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
       t.should_eq(expr.span, span.new(0, 17))?
-      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq_repr(call.fn_name, "awesome")?
       t.should_be_true(call.type_args.is_none(), "Expected no type args")?
       t.should_be_true(
@@ -291,7 +291,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
       t.should_eq(expr.span, span.new(0, 16))?
-      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq_repr(call.fn_name, "awesome")?
       match call.type_args {
         Some(type_args) => {
@@ -317,7 +317,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     cst.Expr.DotName(receiver, field) => {
       t.should_eq(expr.span, span.new(0, 8))?
-      t.should_eq(receiver.kind, cst.Expr.Identifier("self"))?
+      t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq_repr(field, "awesome")?
     },
     _ => return t.fail(f"Expected DotName; got {expr.kind}"),
@@ -336,7 +336,10 @@ fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
   parser = Parser.new("-x")
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
-  t.should_eq(expr.kind, cst.Expr.Neg(&cst.identifier(span.new(1, 2), "x")))?
+  t.should_eq(
+    expr.kind,
+    cst.Expr.Neg(&cst.identifier(span.new(1, 2), cst.Path.name_("x"))),
+  )?
   t.should_eq(expr.span, span.new(0, 2))?
   Ok(())
 }
@@ -346,7 +349,10 @@ fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut parser = Parser.new("not x")
   let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
-  t.should_eq(expr.kind, cst.Expr.Not(&cst.identifier(span.new(4, 5), "x")))?
+  t.should_eq(
+    expr.kind,
+    cst.Expr.Not(&cst.identifier(span.new(4, 5), cst.Path.name_("x"))),
+  )?
   t.should_eq(expr.span, span.new(0, 5))?
   Ok(())
 }
@@ -362,7 +368,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(b.op, Operator.Assign)?
       match b.left.kind {
         cst.Expr.Binding(mode.Mode.Let, id_ref) => {
-          t.should_eq(id_ref.kind, cst.Expr.Identifier("x"))?
+          t.should_eq(id_ref.kind, cst.Expr.Identifier(cst.Path.name_("x")))?
           t.should_eq_repr(id_ref.span, span.new(4, 5))?
         },
         _ => return t.fail("Expected Binding(Let)"),
@@ -380,7 +386,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(b.op, Operator.Assign)?
       match b.left.kind {
         Binding(Var, id_ref) => {
-          t.should_eq(id_ref.kind, cst.Expr.Identifier("y"))?
+          t.should_eq(id_ref.kind, cst.Expr.Identifier(cst.Path.name_("y")))?
           t.should_eq_repr(id_ref.span, span.new(4, 5))?
         },
         _ => return t.fail("Expected Binding(Var)"),

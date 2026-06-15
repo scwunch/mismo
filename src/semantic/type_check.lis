@@ -85,76 +85,77 @@ impl TypeCheck {
 
   fn infer(self, node: cst.Expression) -> Result<Expression, errors.TypeError> {
     let expr = match node.kind {
-      cst.Expr.Nil => Expr.Nil,
-      cst.Expr.BoolLiteral(b) => Expr.BoolLiteral(b),
-      cst.Expr.IntLiteral(i) => Expr.IntLiteral(i),
-      cst.Expr.FloatLiteral(f) => Expr.FloatLiteral(f),
-      cst.Expr.StringLiteral(s) => Expr.StringLiteral(s),
-      cst.Expr.ArrayLiteral(elems) => self.array(elems, node.span)?,
-      cst.Expr.TupleLiteral(elems) => Expr.TupleLiteral(
+      Nil => Expr.Nil,
+      BoolLiteral(b) => Expr.BoolLiteral(b),
+      IntLiteral(i) => Expr.IntLiteral(i),
+      FloatLiteral(f) => Expr.FloatLiteral(f),
+      StringLiteral(s) => Expr.StringLiteral(s),
+      ArrayLiteral(elems) => self.array(elems, node.span)?,
+      TupleLiteral(elems) => Expr.TupleLiteral(
         slice.map_result(elems, self.infer)?,
       ),
-      cst.Expr.Identifier(name) => match self.get(name) {
-        Some(varid) => Expr.Identifier(varid),
-        None => return Err(errors.MissingNameError.new(name, node.span)),
+      Identifier(path) => if path.namespace.is_empty() {
+        match self.get(path.name) {
+          Some(varid) => Expr.Identifier(varid),
+          None => return Err(errors.MissingNameError.new(path.name, node.span)),
+        }
+      } else {
+        panic("TODO: implement TypeCheck.resolve_path(Path)")
       },
-      cst.Expr.Binding(m, expr) => {
+      Binding(m, expr) => {
         let e = self.infer(expr.*)?
         Expr.Binding(m, &e)
       },
-      cst.Expr.Binop(binop) => self.binop(binop.*, node.span)?,
-      cst.Expr.Call(call) => self.call(
+      Binop(binop) => self.binop(binop.*, node.span)?,
+      Call(call) => self.call(
         call.fn_name,
         slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
         slice.map_result(call.args, self.infer)?,
         node.span,
       )?,
-      cst.Expr.If(cond) => self.if_expr(cond, node.span)?,
-      cst.Expr.While(cond) => self.while_expr(cond, node.span)?,
-      cst.Expr.For(for_loop) => self.for_expr(for_loop.*, node.span)?,
-      cst.Expr.Block(exprs) => self.block(exprs, node.span)?,
-      cst.Expr.Neg(expr) => self.call(
-        "neg",
+      If(cond) => self.if_expr(cond, node.span)?,
+      While(cond) => self.while_expr(cond, node.span)?,
+      For(for_loop) => self.for_expr(for_loop.*, node.span)?,
+      Block(exprs) => self.block(exprs, node.span)?,
+      Neg(expr) => self.call(
+        cst.Path.name_("neg"),
         [],
         [self.infer(expr.*)?],
         node.span,
       )?,
-      cst.Expr.Not(expr) => self.call(
-        "not",
+      Not(expr) => self.call(
+        cst.Path.name_("not"),
         [],
         [self.infer(expr.*)?],
         node.span,
       )?,
-      cst.Expr.Return(None) => Expr.Return(None),
-      cst.Expr.Return(Some(expr)) => {
+      Return(None) => Expr.Return(None),
+      Return(Some(expr)) => {
         let e = self.infer(expr.*)?
         Expr.Return(Some(&e))
       },
-      cst.Expr.Break(None) => Expr.Break(None),
-      cst.Expr.Break(Some(expr)) => {
+      Break(None) => Expr.Break(None),
+      Break(Some(expr)) => {
         let e = self.infer(expr.*)?
         Expr.Break(Some(&e))
       },
-      cst.Expr.Continue => Expr.Continue,
-      cst.Expr.Type(name, type_args) => {
-        self.env.env.error(errors.ParseError.new(
-          node.span,
-          "unexpected type expression",
-        ))
-        Expr.Nil
-      },
-      cst.Expr.DotName(expr, string) => self.dot_name(
-        self.infer(expr.*)?,
-        string,
-        node.span,
-      )?,
-      cst.Expr.DotCall(expr, call) => self.call(
+      Continue => Expr.Continue,
+      // Type(name, type_args) => {
+      //   self.env.env.error(errors.ParseError.new(
+      //     node.span,
+      //     "unexpected type expression",
+      //   ))
+      //   Expr.Nil
+      // },
+      DotName(expr, name) => self.dot_name(self.infer(expr.*)?, name, node.span)?,
+      DotCall(expr, call) => self.call(
         call.fn_name,
         slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
         [self.infer(expr.*)?].append(slice.map_result(call.args, self.infer)?...),
         node.span,
       )?,
-      cst.Expr.Extern => Expr.Extern,
+      TypeDotCall(a, b) => panic("TODO: handle TypeDotCall"),
+      Extern => Expr.Extern,
     }
     Ok(Expression { span: node.span, kind: expr })
   }
@@ -214,14 +215,17 @@ impl TypeCheck {
   fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, errors.TypeError> {
     if binop.op == operator.Operator.Assign {
       match binop.left.kind {
-        cst.Expr.Identifier(name) => match self.get(name) {
+        Identifier(path) if !path.namespace.is_empty() => {
+          Err(errors.InvalidAssignmentTargetError.new(binop.left.span, path))
+        },
+        Identifier(path) => match self.get(path.name) {
           Some(varid) => {
             let value = self.infer(binop.right)?
             Ok(Expr.Assign(varid, &value))
           },
           None => {
             self.env.env.error(errors.MissingNameError.new(
-              name,
+              path.name,
               binop.left.span,
             ))
             let _ = self.infer(binop.right)?
@@ -238,7 +242,7 @@ impl TypeCheck {
       }
     } else {
       self.call(
-        binop.op.string(),
+        cst.Path.name_(binop.op.sigil()),
         [],
         [self.infer(binop.left)?, self.infer(binop.right)?],
         span,
@@ -273,18 +277,18 @@ impl TypeCheck {
         }
       }
     }
-    self.call(name, [], [expr], span)
+    self.call(cst.Path.name_(name), [], [expr], span)
   }
 
   fn call(
     self,
-    fname: string,
+    fname: cst.Path,
     type_args: Slice<Type>,
     args: Slice<Expression>,
     span: span.Span,
   ) -> Result<Expr, errors.TypeError> {
-    if type_args.is_empty() {
-      let local_funs = self.get_local_functions(fname)
+    if type_args.is_empty() && fname.namespace.is_empty() {
+      let local_funs = self.get_local_functions(fname.name)
       for fun in local_funs {
         if let Type.Fn(params, _) = fun.typ {
           if args.length() != params.length() { break }
@@ -301,9 +305,12 @@ impl TypeCheck {
         }
       }
     }
-    if !type_args.is_empty() { panic("not handling explicit type args yet") }
-    let candidates = match self.env.env.signatures.get(fname) {
-      None => return Err(errors.MissingNameError.new(fname, span)),
+    if !type_args.is_empty() { panic("TODO: handle explicit type args yet") }
+    if !fname.namespace.is_empty() {
+      panic("TODO: handle namespaced function call")
+    }
+    let candidates = match self.env.env.signatures.get(fname.name) {
+      None => return Err(errors.MissingNameError.new(fname.name, span)),
       Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
     }
     let mut matches = []
