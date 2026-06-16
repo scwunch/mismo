@@ -48,11 +48,12 @@ impl TestFailure {
 pub struct TestRunner {
   pub test_name: string,
   status: bool,
+  pub panic_on_fail: bool,
 }
 
 impl TestRunner {
   pub fn new(test_name: string) -> TestRunner {
-    TestRunner { test_name, status: true }
+    TestRunner { test_name, status: true, panic_on_fail: false }
   }
 
   pub fn passed(self) -> bool {
@@ -60,6 +61,7 @@ impl TestRunner {
   }
 
   pub fn fail(self: Ref<TestRunner>, msg: string) -> Result<(), string> {
+    if self.panic_on_fail { panic(f"{self.test_name} failed: msg") }
     self.status = false
     Err(msg)
   }
