@@ -132,13 +132,6 @@ impl TypeCheck {
         Expr.Break(Some(&e))
       },
       Continue => Expr.Continue,
-      // Type(name, type_args) => {
-      //   self.env.env.error(errors.ParseError.new(
-      //     node.span,
-      //     "unexpected type expression",
-      //   ))
-      //   Expr.Nil
-      // },
       DotName(expr, name) => self.dot_name(self.infer(expr.*)?, name, node.span)?,
       DotCall(expr, call) => self.call(
         call.fn_name,

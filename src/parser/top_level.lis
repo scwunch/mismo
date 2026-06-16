@@ -108,11 +108,6 @@ impl Parser {
         _ => self.parse_type()?,
       }
     }
-    // let ret_type = if self.peek().kind == TokenKind.Colon {
-    //   cst.Type.new(self.peek().span, "Nil", [])
-    // } else {
-    //   self.parse_type()?
-    // }
     span = span.merge(ret_type.span)
     Ok(cst.Signature.new(span, name, type_params, params, ret_type))
   }
@@ -158,31 +153,7 @@ impl Parser {
   }
 
   fn parse_fields(self: Ref<Parser>) -> Result<Slice<cst.Field>, ParseError> {
-    // let _ = self.consume_newline(0)
     self.parse_list('\n', self.parse_field)
-    // let mut fields = []
-    // loop {
-    //   match self.consume_newline() {
-    //     Ok(indent) => {
-    //       if indent > 0 {
-    //         fields = fields.append(self.parse_field())
-    //       } else {
-    //         break
-    //       }
-    //     },
-    //     Err(tok) => return Err(ParseError.new(tok.span, f"Expected struct fields; got {tok.kind}"))
-    //   }
-
-    //   let indent = self.consume_newline().map_err(
-    //     |tok| ParseError.new(tok.span, f"Expected struct fields; got {tok.kind}")
-    //   )?
-    //   if indent > 0 {
-    //     fields = fields.append(self.parse_field())
-    //   } else {
-    //     break
-    //   }
-    // }
-    // Ok(fields)
   }
 
   fn parse_field(self: Ref<Parser>) -> Result<cst.Field, ParseError> {

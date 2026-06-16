@@ -142,57 +142,6 @@ impl Parser {
     Ok(items)
   }
 
-  // fn parse_list_old<Item>(
-  //   self: Ref<Parser>,
-  //   end: TokenKind,
-  //   fun: fn() -> Result<Item, ParseError>,
-  // ) -> Result<Slice<Item>, ParseError> {
-  //   let mut items = []
-  //   let indent = self.current_line_indent
-  //   while self.peek().kind != end && self.peek().kind != TokenKind.EOF {
-  //     if let TokenKind.Newline(i, c) = self.peek().kind {
-  //       if i > indent {
-  //         // ignore newline, since next item is indented
-  //         let _ = self.next()
-  //         continue
-  //       } else {
-  //         // syntax error, unless the closing token follows this newline
-  //         self.try_or_backtrack(|| {
-  //           let _ = self.consume(TokenKind.Newline(indent))?
-  //           if self.peek().kind == end {
-  //             Ok(())
-  //           } else {
-  //             Err(ParseError.new(
-  //               self.peek().span,
-  //               "list items must be indented deeper than line of list start",
-  //             ))
-  //           }
-  //         })?
-  //         break
-  //       }
-  //     }
-
-  //     items = items.append(fun()?)
-
-  //     // optional comma
-  //     let _ = self.consume(TokenKind.Comma)
-  //   }
-  //   Ok(items)
-  // }
-
-  // fn try_or_backtrack<R, E>(self: Ref<Parser>, fun: fn() -> Result<R, E>) -> Result<R, E> {
-  //   let state = self.*
-  //   // let index = self.lexer.index
-  //   // let peeked = self.peeked
-  //   let res = fun()
-  //   if res.is_err() {
-  //     // self.lexer.index = index
-  //     // self.peeked = peeked
-  //     self.* = state
-  //   }
-  //   res
-  // }
-
   fn parse_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
     let span = self.peek().span
     let Ok(name) = self.consume_identifier() else {

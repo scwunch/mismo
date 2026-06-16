@@ -1,10 +1,4 @@
-// import "testing"
-
 pub fn test() {
-  // let _ = testing.test_suite(
-  //   "ExpressionParser",
-  //   [test_parse_tuple_literals]
-  //   )
   test_top_level()
   test_expression()
 }

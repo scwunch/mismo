@@ -113,14 +113,6 @@ impl Expr {
       (Break(None), Break(None)) => true,
       (Break(Some(e1)), Break(Some(e2))) => e1.eq(e2.*),
       (Continue, Continue) => true,
-      // (Type(n1, a1), Type(n2, a2)) => {
-      //   let type_args_eq = match (a1, a2) {
-      //     (None, None) => true,
-      //     (Some(t1), Some(t2)) => slice.compare(t1, t2, Type.eq),
-      //     _ => false,
-      //   }
-      //   n1 == n2 && type_args_eq
-      // },
       (DotName(r1, f1), DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
       (DotCall(r1, c1), DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
       (Call(c1), Call(c2)) => c1.eq(c2),
