@@ -223,7 +223,7 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   match expr.kind {
     cst.Expr.Call(c) => {
-      t.should_eq_repr(c.fn_name, "awesome")?
+      t.should_eq(c.fn_name, cst.Path.name_("awesome"))?
       t.should_be_true(c.type_args.is_none(), "Expected no type args")?
       t.should_be_true(
         c.args.length() == 3,
@@ -236,19 +236,22 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
     _ => return t.fail(f"Expected Call; got {expr.kind}"),
   }
 
-  parser = Parser.new("awesome[Int](1)")
+  parser = Parser.new("module::awesome[Int](1)")
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Call(c) => {
-      t.should_eq_repr(c.fn_name, "awesome")?
+      t.should_eq(
+        c.fn_name,
+        cst.Path { name: "awesome", namespace: ["module"] },
+      )?
       match c.type_args {
         Some(type_args) => {
           t.should_be_true(
             type_args.length() == 1,
             f"Expected 1 type arg; got {type_args.length()}",
           )?
-          t.should_eq(type_args[0], cst.typ(8, 11, "Int", []))?
+          t.should_eq(type_args[0], cst.typ(16, 19, "Int", []))?
         },
         _ => return t.fail("Expected type args"),
       }
@@ -272,7 +275,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.Expr.DotCall(receiver, call) => {
       t.should_eq(expr.span, span.new(0, 17))?
       t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
-      t.should_eq_repr(call.fn_name, "awesome")?
+      t.should_eq(call.fn_name, cst.Path.name_("awesome"))?
       t.should_be_true(call.type_args.is_none(), "Expected no type args")?
       t.should_be_true(
         call.args.length() == 3,
@@ -285,21 +288,24 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
     _ => return t.fail(f"Expected DotCall; got {expr.kind}"),
   }
 
-  parser = Parser.new(".awesome[Int](1)")
+  parser = Parser.new(".module::awesome[Int](1)")
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
-      t.should_eq(expr.span, span.new(0, 16))?
+      t.should_eq(expr.span, span.new(0, 24))?
       t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
-      t.should_eq_repr(call.fn_name, "awesome")?
+      t.should_eq(
+        call.fn_name,
+        cst.Path { name: "awesome", namespace: ["module"] },
+      )?
       match call.type_args {
         Some(type_args) => {
           t.should_be_true(
             type_args.length() == 1,
             f"Expected 1 type arg; got {type_args.length()}",
           )?
-          t.should_eq(type_args[0], cst.typ(9, 12, "Int", []))?
+          t.should_eq(type_args[0], cst.typ(17, 20, "Int", []))?
         },
         _ => return t.fail("Expected type args"),
       }

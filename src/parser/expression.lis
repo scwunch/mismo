@@ -296,7 +296,7 @@ impl ExpressionParser {
   }
 
   fn handle_dot(self: Ref<ExpressionParser>, receiver: cst.Expression) -> Result<cst.Expression, ParseError> {
-    let start = receiver.span
+    let start = receiver.span.merge(self.parser.peek().span)
     let (span, path) = self.parse_path(start, self.parser.consume_identifier()?)?
     match self.parser.peek().kind {
       LeftBracket | LeftParen => {
