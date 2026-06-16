@@ -44,6 +44,19 @@ impl Parser {
     tok
   }
 
+  fn parse_path(self: Ref<Parser>, mut span_: span.Span, mut name: string) -> Result<(span.Span, cst.Path), ParseError> {
+    let mut path = []
+    loop {
+      if self.consume(TokenKind.NamespaceSeparator).is_ok() {
+        span_ = span_.merge(self.peek().span)
+        path = path.append(name)
+        name = self.consume_identifier()?
+      } else {
+        return Ok((span_, cst.Path { namespace: path, name }))
+      }
+    }
+  }
+
   // consume and return the string representation of an identifier, keyword, or operator
   // e.g. "let", "if", "+", "*"
   //
@@ -181,16 +194,17 @@ impl Parser {
   // }
 
   fn parse_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
-    let mut span = self.peek().span
+    let span = self.peek().span
     let Ok(name) = self.consume_identifier() else {
       return self.parse_tuple_or_fn_type()
     }
+    let (span, path) = self.parse_path(span, name)?
     let mut type_args = []
     if self.consume(TokenKind.LeftBracket).is_ok() {
       type_args = self.parse_list(']', self.parse_type)?
       span = span.merge(self.consume(TokenKind.RightBracket)?)
     }
-    Ok(cst.Type.new(span, name, type_args))
+    Ok(cst.Type.new(span, path, type_args))
   }
 
   fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, ParseError> {

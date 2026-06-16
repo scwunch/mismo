@@ -148,7 +148,7 @@ fn test_parse_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Type"
   let mut parser = Parser.new("Type")
   match parser.parse_type() {
-    Ok(typ) => t.should_eq(typ, cst.Type.new(span.new(0, 4), "Type", []))?,
+    Ok(typ) => t.should_eq(typ, cst.typ(0, 4, "Type", []))?,
     Err(e) => t.fail(e.message())?,
   }
 

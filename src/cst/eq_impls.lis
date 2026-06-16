@@ -12,7 +12,7 @@ impl TypeKind {
   pub fn eq(self, other: TypeKind) -> bool {
     match (self, other) {
       (TypeKind.Nominal(name1, args1), TypeKind.Nominal(name2, args2)) => {
-        name1 == name2 && slice.compare(args1, args2, Type.eq)
+        name1.eq(name2) && slice.compare(args1, args2, Type.eq)
       },
       (TypeKind.Tuple(args1), TypeKind.Tuple(args2)) => {
         slice.compare(args1, args2, Type.eq)

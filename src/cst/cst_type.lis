@@ -7,7 +7,7 @@ pub struct Type {
 }
 
 pub enum TypeKind {
-  Nominal(string, Slice<Type>),
+  Nominal(Path, Slice<Type>),
   Tuple(Slice<Type>),
   Fn(Slice<ParamType>, Ref<Type>),
 }
@@ -44,7 +44,7 @@ impl ParamType {
 }
 
 impl Type {
-  pub fn new(span: span.Span, name: string, type_args: Slice<Type>) -> Type {
+  pub fn new(span: span.Span, name: Path, type_args: Slice<Type>) -> Type {
     Type { span, kind: TypeKind.Nominal(name, type_args) }
   }
 
@@ -60,6 +60,6 @@ impl Type {
 pub fn typ(start: uint32, end: uint32, name: string, type_args: Slice<Type>) -> Type {
   Type { 
     span: span.Span { start, end },
-    kind: TypeKind.Nominal(name, type_args),
+    kind: TypeKind.Nominal(Path.name_(name), type_args),
   }
 }

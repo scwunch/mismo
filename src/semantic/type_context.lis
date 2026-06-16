@@ -37,7 +37,7 @@ impl TypeContext {
       cst.TypeKind.Nominal(name, type_args) => {
         self.eval_nominal_type(
           typ.span,
-          name,
+          name.name, // TODO: fix eval_nominal_type to take `Path` instead of `string`
           slice.map_result(type_args, self.eval_type)?,
         )
       },
