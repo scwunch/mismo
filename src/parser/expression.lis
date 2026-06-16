@@ -477,13 +477,6 @@ impl Parser {
 //   }
 // }
 
-// fn collect_tuple_terms(t1: cst.Expression) -> Slice<cst.Expression> {
-//   match t1.kind {
-//     cst.Expr.TupleLiteral(elements) => elements,
-//     _ => [t1],
-//   }
-// }
-
 fn unary_op(op: Operator, term: cst.Expression) -> cst.Expression {
   match op {
     Neg => {

@@ -189,10 +189,6 @@ pub fn not_(span: span.Span, expr: Ref<Expression>) -> Expression {
   Expression { span, kind: Expr.Not(expr) }
 }
 
-// pub fn type_expr(span: span.Span, name: string, type_args: Option<Slice<Type>>) -> Expression {
-//   Expression { span, kind: Expr.Type(name, type_args) }
-// }
-
 pub fn dot_name(span: span.Span, receiver: Ref<Expression>, field: string) -> Expression {
   Expression { span, kind: Expr.DotName(receiver, field) }
 }
@@ -267,20 +263,3 @@ impl Expr {
     if let Expr.Extern = self { true } else { false }
   }
 }
-
-// struct PatternExpr {
-//   span: Span,
-//   pattern: Pattern,
-// }
-
-// enum Pattern {
-//   Any,
-//   Binding(string),
-//   NewBinding(Mode, string),
-//   Constructor(string, Ref<Pattern>),
-//   IntLiteral(int),
-//   FloatLiteral(float64),
-//   StringLiteral(string),
-//   Slice(Slice<Pattern>),
-//   Rest(string),
-// }

@@ -5,8 +5,6 @@ import "span"
 import "testing"
 
 pub fn test_expression() {
-  let _ = mode.Mode.Let
-  // stop lisette from removing mode import
   let _ = testing.test_suite(
     "ExpressionParser",
     [
