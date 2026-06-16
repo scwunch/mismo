@@ -7,6 +7,7 @@ pub struct TypeDef {
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
   pub kind: TypeKind,
+  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
 }
 
 pub enum TypeKind {
@@ -102,7 +103,7 @@ impl TypeDef {
     type_parameters: Slice<TypeParameter>,
     kind: TypeKind,
   ) -> TypeDef {
-    TypeDef { span, name, type_parameters, kind }
+    TypeDef { span, name, type_parameters, kind, signatures: Map.new() }
   }
 }
 

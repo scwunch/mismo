@@ -139,7 +139,19 @@ impl TypeCheck {
         [self.infer(expr.*)?].append(slice.map_result(call.args, self.infer)?...),
         node.span,
       )?,
-      TypeDotCall(a, b) => panic("TODO: handle TypeDotCall"),
+      TypeDotCall(path, type_args, call) => {
+        // TODO: add module resolution here too
+        let type_def = self.env.env.type_defs
+          .get(path.name)
+          .ok_or_else(|| errors.MissingNameError.new(path.name, node.span) as errors.TypeError)?
+        resolve_overload(
+          type_def.signatures,
+          call.fn_name.name,
+          slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
+          slice.map_result(call.args, self.infer)?,
+          node.span,
+        )
+      },
       Extern => Expr.Extern,
     }
     Ok(Expression { span: node.span, kind: expr })
@@ -291,36 +303,9 @@ impl TypeCheck {
       }
     }
     if !type_args.is_empty() { panic("TODO: handle explicit type args yet") }
-    if !fname.namespace.is_empty() {
-      panic("TODO: handle namespaced function call")
-    }
-    let candidates = match self.env.env.signatures.get(fname.name) {
-      None => return Err(errors.MissingNameError.new(fname.name, span)),
-      Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
-    }
-    let mut matches = []
-    for cand in candidates {
-      if let OverloadCandidate.Ok(call) = cand {
-        matches = matches.append(call)
-      }
-    }
-    let maximal = matches.filter(|call| {
-      !matches.any(|other| other.fun.better_than(call.fun.*))
-    })
-    match maximal {
-      [call] => Ok(Expr.Call(call)),
-      _ => if matches.is_empty() {
-        Err(errors.NoMatchError.new(
-          span,
-          candidates.map(|fun| match fun {
-            Err(def, e) => (def.signature(), e),
-            Ok(_) => panic("unreachable"),
-          }),
-        ))
-      } else {
-        Err(errors.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
-      },
-    }
+    let mut module = self.env.env.*
+    if !fname.namespace.is_empty() { module = module.get_module(span, fname)? }
+    resolve_overload(module.signatures, fname.name, type_args, args, span)
   }
 
   fn get_local_functions(self, fname: string) -> Slice<Ref<Variable>> {
@@ -431,5 +416,39 @@ fn match_types(
     } else {
       Err(errors.TypeMismatchError.new(span, f"{param}", f"{arg}"))
     }
+  }
+}
+
+fn resolve_overload(
+  signatures: Map<string, Slice<Ref<FunctionDef>>>,
+  fname: string,
+  type_args: Slice<Type>,
+  args: Slice<Expression>,
+  span: span.Span,
+) -> Result<Expr, errors.TypeError> {
+  let candidates = match signatures.get(fname) {
+    None => return Err(errors.MissingNameError.new(fname, span)),
+    Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
+  }
+  let mut matches = []
+  for cand in candidates {
+    if let OverloadCandidate.Ok(call) = cand { matches = matches.append(call) }
+  }
+  let maximal = matches.filter(|call| {
+    !matches.any(|other| other.fun.better_than(call.fun.*))
+  })
+  match maximal {
+    [call] => Ok(Expr.Call(call)),
+    _ => if matches.is_empty() {
+      Err(errors.NoMatchError.new(
+        span,
+        candidates.map(|fun| match fun {
+          Err(def, e) => (def.signature(), e),
+          Ok(_) => panic("unreachable"),
+        }),
+      ))
+    } else {
+      Err(errors.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
+    },
   }
 }

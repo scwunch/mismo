@@ -148,7 +148,7 @@ impl ExpressionParser {
         let type_args = self.parse_type_args()?
         match (type_args, self.parser.peek().kind) {
           (Some(type_args), Dot) => {
-            self.parse_type_dot_call(cst.Type.new(span, path, type_args))
+            self.parse_type_dot_call(span, path, type_args)
           },
           (_, LeftParen) => self.function_call(span, path, type_args),
           _ => Ok(cst.identifier(span, path)),
@@ -157,16 +157,27 @@ impl ExpressionParser {
     }
   }
 
-  fn parse_type_dot_call(self: Ref<ExpressionParser>, receiver: cst.Type) -> Result<cst.Expression, ParseError> {
+  fn parse_type_dot_call(
+    self: Ref<ExpressionParser>,
+    typ_span: Span,
+    type_path: cst.Path,
+    type_args: Slice<cst.Type>,
+  ) -> Result<cst.Expression, ParseError> {
     let _ = self.parser.consume(lexer.TokenKind.Dot)?
     let name = self.parser.consume_identifier()?
-    let (span_, path) = self.parser.parse_path(receiver.span, name)?
-    let type_args = self.parse_type_args()?
-    let (span_, call) = match self.parser.peek().kind {
-      LeftParen => self.parse_call(span_, path, type_args)?,
-      _ => (span_, cst.Call { fn_name: path, type_args, .. }),
+    let (span_, path) = self.parser.parse_path(typ_span, name)?
+    if !path.namespace.is_empty() {
+      return Err(ParseError.new(
+        span_,
+        "static method calls cannot be namespaced",
+      ))
     }
-    Ok(cst.type_dot_call(span_, receiver, call))
+    let call_type_args = self.parse_type_args()?
+    let (span_, call) = match self.parser.peek().kind {
+      LeftParen => self.parse_call(span_, path, call_type_args)?,
+      _ => (span_, cst.Call { fn_name: path, type_args: call_type_args, .. }),
+    }
+    Ok(cst.type_dot_call(span_, type_path, type_args, call))
   }
 
   fn read_operator(self: Ref<ExpressionParser>) -> Result<(), ParseError> {

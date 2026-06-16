@@ -37,7 +37,7 @@ pub enum Expr {
   // Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
   DotCall(Ref<Expression>, Call),
-  TypeDotCall(Type, Call),
+  TypeDotCall(Path, Slice<Type>, Call),
   Extern,
 }
 
@@ -197,8 +197,13 @@ pub fn dot_call(span: span.Span, receiver: Ref<Expression>, call: Call) -> Expre
   Expression { span, kind: Expr.DotCall(receiver, call) }
 }
 
-pub fn type_dot_call(span: span.Span, typ: Type, call: Call) -> Expression {
-  Expression { span, kind: Expr.TypeDotCall(typ, call) }
+pub fn type_dot_call(
+  span: span.Span,
+  path: Path,
+  type_args: Slice<Type>,
+  call: Call,
+) -> Expression {
+  Expression { span, kind: Expr.TypeDotCall(path, type_args, call) }
 }
 
 pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
