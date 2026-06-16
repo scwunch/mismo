@@ -15,10 +15,7 @@ pub fn analyze(items: cst.Declarations) -> TypeEnv {
     match TypeCheck.new(&env, func.*).check(body, func.return_type) {
       Ok(expr) => {
         func.body = expr
-        match ModeCheck.new().consume(expr) {
-          Ok(_) => (),
-          Err(e) => env.error(e),
-        }
+        if let Err(e) = ModeCheck.new().consume(expr) { env.error(e) }
       },
       Err(e) => env.error(e),
     }

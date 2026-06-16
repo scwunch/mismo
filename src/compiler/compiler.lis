@@ -93,9 +93,8 @@ pub enum BuildResult {
 pub fn run(source: string, opts: Options) {
   match build(source, opts) {
     Bin(Path(res)) => {
-      match run_binary(res, [], opts.io) {
-        Ok(_) => (),
-        Err(e) => fmt.Fprintln(opts.io.stderr, e.Error()),
+      if let Err(e) = run_binary(res, [], opts.io) {
+        fmt.Fprintln(opts.io.stderr, e.Error())
       }
     },
     OsErr(e) => fmt.Fprintln(opts.io.stderr, e.Error()),

@@ -83,6 +83,7 @@ impl Expression {
 }
 
 impl Expr {
+  #[allow(float_cmp)]
   pub fn eq(self, other: Expr) -> bool {
     match (self, other) {
       (Nil, Nil) => true,

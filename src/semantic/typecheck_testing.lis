@@ -44,10 +44,7 @@ fn test_new_and_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
     None => t.fail("expected to find 'b'")?,
   }
 
-  match tc.get("z") {
-    Some(_) => t.fail("did not expect to find 'z'")?,
-    None => (),
-  }
+  if tc.get("z").is_some() { t.fail("did not expect to find 'z'")? }
 
   Ok(())
 }

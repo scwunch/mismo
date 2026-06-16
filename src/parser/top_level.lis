@@ -20,12 +20,9 @@ impl Parser {
           "Expected top-level definition (fn, import, struct, enum)",
         )),
       }
-      match result {
-        Ok(_) => (),
-        Err(e) => {
-          self.emit_error(e)
-          self.recover_to_next_def()
-        },
+      if let Err(e) = result {
+        self.emit_error(e)
+        self.recover_to_next_def()
       }
     }
   }
@@ -104,7 +101,7 @@ impl Parser {
     } else {
       match self.peek().kind {
         Colon | Newline(0, _) => cst.Type.new(self.peek().span, "Nil", []),
-        _ => self.parse_type()?
+        _ => self.parse_type()?,
       }
     }
     // let ret_type = if self.peek().kind == TokenKind.Colon {

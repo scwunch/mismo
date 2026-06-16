@@ -120,9 +120,8 @@ fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   let other = MonoMorphKey.from_call(semantic.FnCall.new(ref_fn, [Type.Int], []))
-  match cache.get(other) {
-    Some(_) => t.fail("expected None for non-existent key")?,
-    None => (),
+  if let Some(_) = cache.get(other) {
+    t.fail("expected None for non-existent key")?
   }
 
   Ok(())

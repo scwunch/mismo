@@ -47,12 +47,10 @@ impl Type {
       (Int, Int) => true,
       (Float, Float) => true,
       (String, String) => true,
-      (Array(a), Array(b)) |
-      (Pointer(a), Pointer(b)) => a.eq(b.*),
+      (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.eq(b.*),
       (Slice(a), Slice(b)) => a.eq(b.*),
       (Tuple(a), Tuple(b)) => slice.compare(a, b, Type.eq),
-      (Fn(a, b), Fn(c, d)) => slice.compare(a, c, ParamType.eq) &&
-      b.eq(d.*),
+      (Fn(a, b), Fn(c, d)) => slice.compare(a, c, ParamType.eq) && b.eq(d.*),
       (Adt(a, b), Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
       (Var(a), Var(b)) => a == b,
       (Any, _) |
@@ -63,8 +61,8 @@ impl Type {
       (Float, _) |
       (String, _) |
       (Array(_), _) |
-      (Slice(_), _)|
-      (Pointer(_),_)|
+      (Slice(_), _) |
+      (Pointer(_), _) |
       (Tuple(_), _) |
       (Fn(_, _), _) |
       (Adt(_, _), _) |
@@ -104,6 +102,7 @@ impl Expression {
 }
 
 impl Expr {
+  #[allow(float_cmp)]
   pub fn eq(self, other: Expr) -> bool {
     match (self, other) {
       (Expr.Nil, Expr.Nil) => true,

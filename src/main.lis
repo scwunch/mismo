@@ -19,10 +19,7 @@ fn main() {
       run_tests(rest)
     },
     [_, path] => {
-      match run_path(path) {
-        Ok(()) => (),
-        Err(e) => fmt.Fprintln(os.Stderr, e.Error()),
-      }
+      if let Err(e) = run_path(path) { fmt.Fprintln(os.Stderr, e.Error()) }
     },
     _ => fmt.Println("Error: no input file provided"),
   }

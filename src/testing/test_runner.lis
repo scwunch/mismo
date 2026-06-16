@@ -5,10 +5,7 @@ pub fn test(
   test_fn: fn(Ref<TestRunner>) -> Result<(), string>,
 ) -> TestRunner {
   let t = TestRunner.new(test_name)
-  match test_fn(&t) {
-    Ok(_) => (),
-    Err(e) => fmt.Println(e),
-  }
+  if let Err(e) = test_fn(&t) { fmt.Println(e) }
   t
 }
 

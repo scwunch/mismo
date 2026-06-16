@@ -273,12 +273,10 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Struct"
   let mut parser = Parser.new("struct Point \n  x: Int\n  y: Int\n")
 
-  match parser.parse_struct() {
-    Ok(_) => (),
-    Err(e) => t.fail(e.message())?,
-  }
+  if let Err(e) = parser.parse_struct() { t.fail(e.message())? }
   let s = parser.defs.types.get(0).ok_or("no struct found")?
   t.should_eq_repr(s.name, "Point")?
+
   t.should_be_true(
     s.type_parameters.is_empty(),
     "type parameters should be empty",
@@ -303,10 +301,7 @@ fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
 
   // struct with type parameters
   let mut parser = Parser.new("struct Point[T]\n  x: T\n  y: T\n")
-  match parser.parse_struct() {
-    Ok(_) => (),
-    Err(e) => t.fail(e.message())?,
-  }
+  if let Err(e) = parser.parse_struct() { t.fail(e.message())? }
   let s = parser.defs.types.get(0).ok_or("no struct found")?
   t.should_eq_repr(s.name, "Point")?
   t.should_be_true(
