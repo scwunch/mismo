@@ -5,6 +5,7 @@ import "span"
 import "utils/slice"
 
 pub struct TypeEnv {
+  pub imports: Map<string, TypeEnv>,
   pub type_defs: Map<string, Ref<TypeDef>>,
   pub function_defs: Slice<FunctionDef>,
   pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
@@ -13,12 +14,7 @@ pub struct TypeEnv {
 
 impl TypeEnv {
   pub fn new() -> TypeEnv {
-    TypeEnv { 
-      type_defs: Map.new(),
-      function_defs: Slice.new(),
-      signatures: Map.new(),
-      errors: Slice.new(),
-    }
+    TypeEnv { .. }
   }
 
   pub fn register_types(self: Ref<TypeEnv>, type_defs: Slice<cst.TypeDecl>) {
@@ -170,5 +166,27 @@ impl TypeEnv {
 
   pub fn error(self: Ref<TypeEnv>, err: errors.TypeError) {
     self.errors = self.errors.append(err)
+  }
+
+  pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<TypeEnv, errors.TypeError> {
+    self.imports
+      .get(path.namespace.join("::"))
+      .ok_or_else(|| errors.MissingNameError.new(
+        path.namespace.join("::"),
+        span,
+      ))
+  }
+
+  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Result<Type, errors.TypeError> {
+    match self.type_defs.get(name) {
+      None => {
+        Err(errors.MissingNameError.new(name, span))
+      },
+      Some(def) => {
+        let n = def.type_parameters.length()
+        check_arity(span, name, type_args.length(), n)?
+        Ok(Type.Adt(def, type_args))
+      },
+    }
   }
 }
