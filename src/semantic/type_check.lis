@@ -76,7 +76,7 @@ impl TypeCheck {
   }
 
   fn infer(self, node: cst.Expression) -> Result<Expression, errors.TypeError> {
-    let expr = match node.kind {
+    let expr: Expr = match node.kind {
       Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
       IntLiteral(i) => Expr.IntLiteral(i),
@@ -139,19 +139,12 @@ impl TypeCheck {
         [self.infer(expr.*)?].append(slice.map_result(call.args, self.infer)?...),
         node.span,
       )?,
-      TypeDotCall(path, type_args, call) => {
-        // TODO: add module resolution here too
-        let type_def = self.env.env.type_defs
-          .get(path.name)
-          .ok_or_else(|| errors.MissingNameError.new(path.name, node.span) as errors.TypeError)?
-        resolve_overload(
-          type_def.signatures,
-          call.fn_name.name,
-          slice.map_result(call.type_args.unwrap_or([]), self.env.eval_type)?,
-          slice.map_result(call.args, self.infer)?,
-          node.span,
-        )
-      },
+      TypeDotCall(path, type_args, call) => self.type_dot_call(
+        path,
+        slice.map_result(type_args, self.env.eval_type)?,
+        call,
+        node.span,
+      )?,
       Extern => Expr.Extern,
     }
     Ok(Expression { span: node.span, kind: expr })
@@ -188,7 +181,8 @@ impl TypeCheck {
       }
     }
     types = types.append(expressions[expressions.length() - 1].typ())
-    Ok(Expr.Block(expressions, types[0]))
+    let expr = Expr.Block(expressions, types[0])
+    Ok(expr)
   }
 
   fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
@@ -275,6 +269,34 @@ impl TypeCheck {
       }
     }
     self.call(cst.Path.name_(name), [], [expr], span)
+  }
+
+  fn type_dot_call(
+    self,
+    type_path: cst.Path,
+    type_args: Slice<Type>,
+    call: cst.Call,
+    span: span.Span,
+  ) -> Result<Expr, errors.TypeError> {
+    let type_args = match call.type_args {
+      Some(extra_type_args) => {
+        let extra = slice.map_result(extra_type_args, self.env.eval_type)?
+        type_args.append(extra...)
+      },
+      None => type_args,
+    }
+    let args = slice.map_result(call.args, self.infer)?
+    // TODO: add module resolution here too
+    let Some(type_def) = self.env.env.type_defs.get(type_path.name) else {
+      return Err(errors.MissingNameError.new(type_path.name, span))
+    }
+    resolve_overload(
+      type_def.signatures,
+      call.fn_name.name,
+      type_args,
+      args,
+      span,
+    )
   }
 
   fn call(
@@ -426,6 +448,8 @@ fn resolve_overload(
   args: Slice<Expression>,
   span: span.Span,
 ) -> Result<Expr, errors.TypeError> {
+  let _ = type_args
+  // TODO: if type_args present, use them!
   let candidates = match signatures.get(fname) {
     None => return Err(errors.MissingNameError.new(fname, span)),
     Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),

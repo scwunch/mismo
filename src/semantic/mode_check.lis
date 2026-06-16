@@ -56,6 +56,7 @@ impl ModeCheck {
       Expr.Match(_) => panic("match not implemented"),
       Expr.Loop(_, _) => panic("loop not implemented"),
       Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
+      Expr.Constructor(_, _) => Ok(mode.Mode.Var),
       Expr.Extern => Ok(mode.Mode.Var),
     }
   }
@@ -166,6 +167,7 @@ impl Expression {
       Match(_) => panic("match not implemented"),
       Loop(_, _) => panic("loop not implemented"),
       ConcreteCall(_, _) => panic("concrete call node not created yet"),
+      Constructor(_, _) => mode.Mode.Var,
       Extern => mode.Mode.Var,
     }
   }

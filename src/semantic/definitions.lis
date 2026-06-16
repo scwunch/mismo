@@ -36,6 +36,12 @@ pub struct Field {
   pub typ: Type,
 }
 
+impl Field {
+  pub fn to_param(self) -> Parameter {
+    Parameter.new(self.span, mode.Mode.Var, self.name, self.typ)
+  }
+}
+
 pub struct Variant {
   pub span: span.Span,
   pub name: string,

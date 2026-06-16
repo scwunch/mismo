@@ -1,9 +1,11 @@
 import "span"
 
+pub type Span = span.Span
+
 pub interface Diagnostic {
   // impl error
   fn code(self) -> int // eg E0132
-  fn span(self) -> span.Span
+  fn span(self) -> Span
   fn message(self) -> string
 
   // fn labels() -> Slice<Label>    // Secondary highlights (e.g., pointing to the live borrow)
@@ -61,12 +63,12 @@ pub interface SyntaxError {
 
 #[display]
 pub struct ParseError {
-  _s_: span.Span,
+  _s_: Span,
   pub msg: string,
 }
 
 impl ParseError {
-  pub fn new(span: span.Span, msg: string) -> ParseError {
+  pub fn new(span: Span, msg: string) -> ParseError {
     ParseError { _s_: span, msg }
   }
 
@@ -78,7 +80,7 @@ impl ParseError {
     1000
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 
@@ -93,12 +95,12 @@ pub interface TypeError {
 
 pub struct DuplicateNameError {
   pub name: string,
-  pub span1: span.Span,
-  pub span2: span.Span,
+  pub span1: Span,
+  pub span2: Span,
 }
 
 impl DuplicateNameError {
-  pub fn new(name: string, span1: span.Span, span2: span.Span) -> DuplicateNameError {
+  pub fn new(name: string, span1: Span, span2: Span) -> DuplicateNameError {
     DuplicateNameError { name, span1, span2 }
   }
 
@@ -110,18 +112,18 @@ impl DuplicateNameError {
     f"{self.name} is defined twice: {self.span1} and {self.span2}"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self.span1
   }
 }
 
 pub struct MissingNameError {
   pub name: string,
-  pub _s_: span.Span,
+  pub _s_: Span,
 }
 
 impl MissingNameError {
-  pub fn new(name: string, span: span.Span) -> MissingNameError {
+  pub fn new(name: string, span: Span) -> MissingNameError {
     MissingNameError { name, _s_: span }
   }
 
@@ -133,18 +135,18 @@ impl MissingNameError {
     f"\"{self.name}\" is not defined"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct InvalidAssignmentTargetError<Node> {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub node: Node,
 }
 
 impl<Node> InvalidAssignmentTargetError<Node> {
-  pub fn new(span: span.Span, node: Node) -> InvalidAssignmentTargetError<Node> {
+  pub fn new(span: Span, node: Node) -> InvalidAssignmentTargetError<Node> {
     InvalidAssignmentTargetError { _s_: span, node }
   }
 
@@ -156,20 +158,20 @@ impl<Node> InvalidAssignmentTargetError<Node> {
     f"invalid assignment target: {self.node}"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct TypeParameterArityError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub name: string,
   pub expected: int,
   pub actual: int,
 }
 
 impl TypeParameterArityError {
-  pub fn new(span: span.Span, name: string, expected: int, actual: int) -> TypeParameterArityError {
+  pub fn new(span: Span, name: string, expected: int, actual: int) -> TypeParameterArityError {
     TypeParameterArityError { _s_: span, name, expected, actual }
   }
 
@@ -181,18 +183,18 @@ impl TypeParameterArityError {
     f"\"{self.name}\" expects {self.expected} type arguments but {self.actual} were provided"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct NoMatchError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub errs: Slice<(string, TypeError)>,
 }
 
 impl NoMatchError {
-  pub fn new(span: span.Span, errs: Slice<(string, TypeError)>) -> NoMatchError {
+  pub fn new(span: Span, errs: Slice<(string, TypeError)>) -> NoMatchError {
     NoMatchError { _s_: span, errs }
   }
 
@@ -205,18 +207,18 @@ impl NoMatchError {
     f"No matching overloads found.  Errors:\n\t{errs}"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct AmbiguousFunctionCallError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub calls: Slice<string>,
 }
 
 impl AmbiguousFunctionCallError {
-  pub fn new(span: span.Span, calls: Slice<string>) -> AmbiguousFunctionCallError {
+  pub fn new(span: Span, calls: Slice<string>) -> AmbiguousFunctionCallError {
     AmbiguousFunctionCallError { _s_: span, calls }
   }
 
@@ -224,7 +226,7 @@ impl AmbiguousFunctionCallError {
     2103
   }
 
-  fn span(self) -> span.Span {
+  fn span(self) -> Span {
     self._s_
   }
 
@@ -235,14 +237,14 @@ impl AmbiguousFunctionCallError {
 }
 
 pub struct ArgArityError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub name: string,
   pub expected: int,
   pub actual: int,
 }
 
 impl ArgArityError {
-  pub fn new(span: span.Span, name: string, expected: int, actual: int) -> ArgArityError {
+  pub fn new(span: Span, name: string, expected: int, actual: int) -> ArgArityError {
     ArgArityError { _s_: span, name, expected, actual }
   }
 
@@ -254,17 +256,17 @@ impl ArgArityError {
     f"\"{self.name}\" expects {self.expected} arguments but {self.actual} were provided"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct EmptyArrayLiteralError {
-  pub _s_: span.Span,
+  pub _s_: Span,
 }
 
 impl EmptyArrayLiteralError {
-  pub fn new(span: span.Span) -> EmptyArrayLiteralError {
+  pub fn new(span: Span) -> EmptyArrayLiteralError {
     EmptyArrayLiteralError { _s_: span }
   }
 
@@ -276,18 +278,18 @@ impl EmptyArrayLiteralError {
     "Cannot infer type of empty array literal.  Use `Array[Type].new` to create an empty array of a specific type."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct HeterogeneousArrayLiteralError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub types: string,
 }
 
 impl HeterogeneousArrayLiteralError {
-  pub fn new(span: span.Span, types: string) -> HeterogeneousArrayLiteralError {
+  pub fn new(span: Span, types: string) -> HeterogeneousArrayLiteralError {
     HeterogeneousArrayLiteralError { _s_: span, types }
   }
 
@@ -299,19 +301,19 @@ impl HeterogeneousArrayLiteralError {
     f"Array literals must have all elements of the same type.  Found: {self.types}."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct TypeMismatchError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub expected: string,
   pub actual: string,
 }
 
 impl TypeMismatchError {
-  pub fn new(span: span.Span, expected: string, actual: string) -> TypeMismatchError {
+  pub fn new(span: Span, expected: string, actual: string) -> TypeMismatchError {
     TypeMismatchError { _s_: span, expected, actual }
   }
 
@@ -323,20 +325,20 @@ impl TypeMismatchError {
     f"Expected {self.expected} but got {self.actual}."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct DoubleTypeArgBoundError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub type_param: int,
   pub type1: string,
   pub type2: string,
 }
 
 impl DoubleTypeArgBoundError {
-  pub fn new(span: span.Span, type_param: int, type1: string, type2: string) -> DoubleTypeArgBoundError {
+  pub fn new(span: Span, type_param: int, type1: string, type2: string) -> DoubleTypeArgBoundError {
     DoubleTypeArgBoundError { _s_: span, type_param, type1, type2 }
   }
 
@@ -348,18 +350,18 @@ impl DoubleTypeArgBoundError {
     f"Type parameter {self.type_param} bound to more than one type: {self.type1} and {self.type2}"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct UnboundTypeParamError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub type_param: string,
 }
 
 impl UnboundTypeParamError {
-  pub fn new(span: span.Span, type_param: string) -> UnboundTypeParamError {
+  pub fn new(span: Span, type_param: string) -> UnboundTypeParamError {
     UnboundTypeParamError { _s_: span, type_param }
   }
 
@@ -371,7 +373,7 @@ impl UnboundTypeParamError {
     f"Type parameter {self.type_param} could not be inferred from call."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
@@ -382,12 +384,12 @@ pub interface ModeError {
 
 pub struct UseAfterConsumeError {
   pub name: string,
-  pub use: span.Span,
-  pub consumed: span.Span,
+  pub use: Span,
+  pub consumed: Span,
 }
 
 impl UseAfterConsumeError {
-  pub fn new(name: string, use: span.Span, consumed: span.Span) -> UseAfterConsumeError {
+  pub fn new(name: string, use: Span, consumed: Span) -> UseAfterConsumeError {
     UseAfterConsumeError { name, use, consumed }
   }
 
@@ -399,18 +401,18 @@ impl UseAfterConsumeError {
     f"Cannot use variable '{self.name}'; it has already been consumed at {self.consumed}."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self.use
   }
 }
 
 pub struct ConsumeBorrowError {
   pub borrow: string,
-  pub _s_: span.Span,
+  pub _s_: Span,
 }
 
 impl ConsumeBorrowError {
-  pub fn new(borrow: string, _s_: span.Span) -> ConsumeBorrowError {
+  pub fn new(borrow: string, _s_: Span) -> ConsumeBorrowError {
     ConsumeBorrowError { borrow, _s_ }
   }
 
@@ -422,19 +424,19 @@ impl ConsumeBorrowError {
     f"Cannot consume borrow '{self.borrow}';"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
 
 pub struct ModeMismatchError {
-  pub _s_: span.Span,
+  pub _s_: Span,
   pub expected: string,
   pub actual: string,
 }
 
 impl ModeMismatchError {
-  pub fn new(span: span.Span, expected: string, actual: string) -> ModeMismatchError {
+  pub fn new(span: Span, expected: string, actual: string) -> ModeMismatchError {
     ModeMismatchError { _s_: span, expected, actual }
   }
 
@@ -446,7 +448,7 @@ impl ModeMismatchError {
     f"Expected mode {self.expected} but got {self.actual}."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self._s_
   }
 }
@@ -470,15 +472,15 @@ impl NoMainFunctionError {
     "No main function found."
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     span.new(0, 0)
   }
 }
 
-pub struct MultipleMainFunctionsError { spans: Slice<span.Span> }
+pub struct MultipleMainFunctionsError { spans: Slice<Span> }
 
 impl MultipleMainFunctionsError {
-  pub fn new(spans: Slice<span.Span>) -> MultipleMainFunctionsError {
+  pub fn new(spans: Slice<Span>) -> MultipleMainFunctionsError {
     MultipleMainFunctionsError { spans }
   }
 
@@ -490,7 +492,27 @@ impl MultipleMainFunctionsError {
     f"Multiple main function found: {self.spans}"
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> Span {
     self.spans[0]
+  }
+}
+
+pub struct OverloadCanonicalConstructorError { _s_: Span, name: string }
+
+impl OverloadCanonicalConstructorError {
+  pub fn new(span: Span, name: string) -> OverloadCanonicalConstructorError {
+    OverloadCanonicalConstructorError { _s_: span, name }
+  }
+
+  pub fn code(self) -> int {
+    2202
+  }
+
+  pub fn message(self) -> string {
+    f"'{self.name}' is a type, and its canonical constructor cannot be overloaded."
+  }
+
+  pub fn span(self) -> Span {
+    self._s_
   }
 }

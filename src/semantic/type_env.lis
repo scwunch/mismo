@@ -50,34 +50,29 @@ impl TypeEnv {
       let ctx = self.type_context(def.type_parameters)
       match decl.body {
         cst.TypeBody.Struct(fields) => {
-          def.kind = TypeKind.Struct(fields.map(|field| {
-            Field { 
-              span: field.span,
-              name: field.name,
-              typ: ctx
-                .eval_type(field.typ)
-                .unwrap_or_else(|e| {
-                  self.error(e)
-                  Type.Never
-                }),
-            }
-          }))
+          let fields = ctx.eval_struct_def(fields)
+          def.kind = TypeKind.Struct(fields)
+
+          // constructor
+          let self_type = Type.Adt(
+            def,
+            def.type_parameters.enumerate().map(|(i, _)| Type.Var(i)),
+          )
+          self.add_function(FunctionDef.new(
+            def.span,
+            -1,
+            def.name,
+            def.type_parameters,
+            fields.map(Field.to_param),
+            self_type,
+            Expression.new(
+              def.span,
+              Expr.Constructor(self_type, fields.map(|f| f.name)),
+            ),
+          ))
         },
         cst.TypeBody.Enum(variants) => {
-          def.kind = TypeKind.Enum(variants.map(|variant| {
-            Variant { 
-              span: variant.span,
-              name: variant.name,
-              fields: variant.payload.map(|typ| {
-                ctx
-                  .eval_type(typ)
-                  .unwrap_or_else(|e| {
-                    self.error(e)
-                    Type.Never
-                  })
-              }),
-            }
-          }))
+          def.kind = ctx.eval_enum_def(variants)
         },
       }
     }
@@ -90,6 +85,12 @@ impl TypeEnv {
     self.function_defs = functions.map(self.eval_function)
     for i in 0..self.function_defs.length() {
       let def = &self.function_defs[i]
+      if let Some(def) = self.type_defs.get(def.name) {
+        self.error(errors.OverloadCanonicalConstructorError.new(
+          def.span,
+          def.name,
+        ))
+      }
       match self.signatures.get(def.name) {
         Some(existing) => {
           self.signatures[def.name] = existing.append(def)
@@ -168,5 +169,39 @@ impl TypeEnv {
         Ok(Type.Adt(def, type_args))
       },
     }
+  }
+}
+
+impl TypeContext {
+  fn eval_struct_def(self, fields: Slice<cst.Field>) -> Slice<Field> {
+    fields.map(|field| {
+      Field { 
+        span: field.span,
+        name: field.name,
+        typ: self
+          .eval_type(field.typ)
+          .unwrap_or_else(|e| {
+            self.env.error(e)
+            Type.Never
+          }),
+      }
+    })
+  }
+
+  fn eval_enum_def(self, variants: Slice<cst.Variant>) -> TypeKind {
+    TypeKind.Enum(variants.map(|variant| {
+      Variant { 
+        span: variant.span,
+        name: variant.name,
+        fields: variant.payload.map(|typ| {
+          self
+            .eval_type(typ)
+            .unwrap_or_else(|e| {
+              self.env.error(e)
+              Type.Never
+            })
+        }),
+      }
+    }))
   }
 }

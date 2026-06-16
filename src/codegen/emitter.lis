@@ -109,6 +109,7 @@ impl Emitter {
       Break(None) => panic(f"unhandled expression type: {expr}"),
       Continue => panic(f"unhandled expression type: {expr}"),
       FieldAccess(expr, i) => panic(f"unhandled expression type: {expr}"),
+      Constructor(typ, args) => self.emit_constructor(typ, args),
       Extern => panic("Oops, we shouldn't be emitting external functions!"),
     }
   }
@@ -133,6 +134,15 @@ impl Emitter {
         self.emit_expression(arg)
       },
     )
+  }
+
+  fn emit_constructor(
+    self: Ref<Emitter>,
+    typ: semantic.Type,
+    args: Slice<string>,
+  ) {
+    self.emit(typ.string())
+    self.emit_list(args, "{", "}", |a| self.emit(f".{a}: {a}"))
   }
 
   fn newline(self: Ref<Emitter>) {
