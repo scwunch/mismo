@@ -3,6 +3,7 @@ import "go:os"
 import "go:path/filepath"
 
 import "compiler"
+import "errors"
 import "lexer"
 import "parser"
 import "semantic"
@@ -12,16 +13,32 @@ import "specialization"
 fn main() {
   match os.Args {
     [_] => {
-      fmt.Println("Usage: mismo <input_file>")
+      fmt.Println("Usage: mismo run <input_file>")
     },
     [_, "--test", ..rest] => {
       fmt.Println("Running tests...")
       run_tests(rest)
     },
-    [_, path] => {
-      if let Err(e) = run_path(path) { fmt.Fprintln(os.Stderr, e.Error()) }
+    [_, "run", path, ..args] => if let Err(e) = run_path(path) {
+      fmt.Fprintln(os.Stderr, e.Error())
     },
-    _ => fmt.Println("Error: no input file provided"),
+    [_, cmd, path, ..args] => {
+      let source_str = match os.ReadFile(path) {
+        Ok(s) => s as string,
+        Err(e) => {
+          fmt.Fprintln(os.Stderr, e.Error())
+          return
+        },
+      }
+
+      if let Err(errs) = sub_cmd(cmd, source_str, args) {
+        let runes = source_str as Slice<rune>
+        for e in errs {
+          fmt.Fprintln(os.Stderr, errors.render(e, runes))
+        }
+      }
+    },
+    _ => fmt.Println("Usage: mismo run <file.mismo>"),
   }
 }
 
@@ -33,6 +50,37 @@ fn run_path(path: string) -> Result<(), error> {
   opts.work_dir = "testing"
   opts.zig_prelude_path = filepath.Join(work_dir, "zig-out/prelude.zig")
   Ok(compiler.run(source_str, opts))
+}
+
+fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slice<errors.Diagnostic>> {
+  match cmd {
+    "lex" => fmt.Println(compiler.compile_to_tokens(source)),
+    "parse" => fmt.Println(compiler.compile_to_ast(source)?),
+    "typecheck" => fmt.Println(compiler.type_check(source)?),
+    "check" => fmt.Println(compiler.mode_check(source)?),
+    "specialize" => fmt.Println(compiler.specialize(source)?),
+    "transpile" => fmt.Println(compiler.transpile(source)?),
+    "build" => {
+      let mut opts = compiler.Options.new()
+      let Ok(work_dir) = os.Getwd() else {
+        fmt.Fprintln(os.Stderr, "couldn't get current work directory")
+        return Err([])
+      }
+      opts.work_dir_parent = filepath.Join(work_dir, "zig-out")
+      opts.work_dir = "testing"
+      opts.zig_prelude_path = filepath.Join(work_dir, "zig-out/prelude.zig")
+      match compiler.build(source, opts) {
+        Bin(bin) => fmt.Println(bin),
+        MismoErrs(errs) => return Err(errs),
+        OsErr(e) => {
+          fmt.Fprintln(os.Stderr, e.Error())
+          return Err([])
+        },
+      }
+    },
+    _ => fmt.Println(f"Error: unrecognized sub command \"{cmd}\""),
+  }
+  Ok(())
 }
 
 fn run_tests(tests: Slice<string>) {
