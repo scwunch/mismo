@@ -1,3 +1,6 @@
+import "go:fmt"
+import "go:os"
+
 import "span"
 
 pub type Span = span.Span
@@ -26,6 +29,13 @@ pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
     if i == self.span().start as int { return span.Location { line, col } }
   }
   span.Location { line, col }
+}
+
+pub fn report(errs: Slice<Diagnostic>, source: string) {
+  let source = source as Slice<rune>
+  for e in errs {
+    fmt.Fprintln(os.Stderr, render(e, source))
+  }
 }
 
 pub fn render(self: Diagnostic, source: Slice<rune>) -> string {

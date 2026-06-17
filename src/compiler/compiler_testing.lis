@@ -10,5 +10,64 @@ pub fn test_compiler() {
 
 fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Dummy"
+
+  t.should_eq(Source(" asdf\n  asdf"), Source("asdfasdf"))?
+  t.shouldnt_eq(Source("asdf"), Source("Asdf"))?
+
+  let source = "fn print(s String): nil" +
+  "
+fn main():
+  print(\"hello world\")
+  "
+  match transpile(source) {
+    Err(errs) => {
+      let _ = t.fail(f"unexpected compilation failure: \n{errs}")
+      errors.report(errs, source)
+      return Err("")
+    },
+    Ok(zig) => t.should_eq(
+      Source(zig),
+      Source(
+        "pub fn main_0() void {
+        _ = print_1(&string_from_literal(\"hello world\"));
+        }
+
+      pub fn print_1(s: *const String_t) void {
+        _ = .{};
+        }
+    ",
+      ),
+    )?,
+  }
+  run(source, Options.new())
   Ok(())
+}
+
+// struct Source { src: Slice<string> }
+struct Source(string)
+
+impl Source {
+  fn equals(self, other: Source) -> bool {
+    let mut i = 0
+    let mut j = 0
+    let self = self.0 as Slice<rune>
+    let other = other.0 as Slice<rune>
+    loop {
+      match (self.get(i), other.get(j)) {
+        (Some(a), Some(b)) if a == b => {
+          i += 1
+          j += 1
+        },
+        (Some(a), Some(b)) => {
+          if a == ' ' || a == '\n' {
+            i += 1
+          } else if b == ' ' || b == '\n' { j += 1 } else { return false }
+        },
+        (Some(' '), _) | (Some('\n'), _) => i += 1,
+        (_, Some(' ')) | (_, Some('\n')) => j += 1,
+        (None, None) => return true,
+        _ => false,
+      }
+    }
+  }
 }
