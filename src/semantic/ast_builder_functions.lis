@@ -33,7 +33,7 @@ fn ident_expr(var_: Ref<Variable>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Identifier(var_) }
 }
 
-fn assign_expr(var_: Ref<Variable>, expr: Ref<Expression>) -> Expression {
+pub fn assign_expr(var_: Ref<Variable>, expr: Ref<Expression>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Assign(var_, expr) }
 }
 
@@ -52,22 +52,22 @@ fn call_expr(
   }
 }
 
-fn concrete_call_expr(id: int, args: Slice<Expression>) -> Expression {
+pub fn concrete_call_expr(id: int, args: Slice<Expression>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.ConcreteCall(id, args) }
 }
 
-fn switch_if_expr(cases: Slice<(Expression, Expression)>) -> Expression {
+pub fn switch_if_expr(cases: Slice<(Expression, Expression)>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.SwitchIf(SwitchIf.new(cases)) }
 }
 
-fn match_expr(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Expression {
-  Expression { 
-    span: span.new(0, 0),
-    kind: Expr.Match(Match.new(subject, cases)),
-  }
-}
+// fn match_expr(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Expression {
+//   Expression {
+//     span: span.new(0, 0),
+//     kind: Expr.Match(Match.new(subject, cases)),
+//   }
+// }
 
-fn loop_expr(body: Slice<Expression>, typ: Type) -> Expression {
+pub fn loop_expr(body: Slice<Expression>, typ: Type) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Loop(body, typ) }
 }
 
@@ -79,29 +79,29 @@ fn return_expr(val: Option<Ref<Expression>>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Return(val) }
 }
 
-fn break_expr(val: Option<Ref<Expression>>) -> Expression {
+pub fn break_expr(val: Option<Ref<Expression>>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Break(val) }
 }
 
-fn continue_expr() -> Expression {
+pub fn continue_expr() -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Continue }
 }
 
-fn field_access_expr(obj: Ref<Expression>, idx: int) -> Expression {
+pub fn field_access_expr(obj: Ref<Expression>, idx: int) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.FieldAccess(obj, idx) }
 }
 
-fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
+pub fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Constructor(typ, fields) }
 }
 
-fn extern_expr() -> Expression {
+pub fn extern_expr() -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Extern }
 }
 
-fn match_case(pattern: Expression, expr: Expression) -> MatchCase {
-  MatchCase.new(pattern, expr)
-}
+// fn match_case(pattern: Expression, expr: Expression) -> MatchCase {
+//   MatchCase.new(pattern, expr)
+// }
 
 fn var_(mode: mode.Mode, name: string, typ: Type) -> Ref<Variable> {
   &Variable.new(mode, name, typ, 0)

@@ -41,7 +41,7 @@ impl Operator {
     self.sigil()
   }
 
-  pub fn eq(self, other: Operator) -> bool {
+  pub fn equals(self, other: Operator) -> bool {
     self == other
   }
 

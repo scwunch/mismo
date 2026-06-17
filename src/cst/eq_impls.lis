@@ -1,24 +1,23 @@
 import "mode"
 import "span"
-import "utils/slice"
 
 impl Type {
-  pub fn eq(self, other: Type) -> bool {
-    self.span == other.span && self.kind.eq(other.kind)
+  pub fn equals(self, other: Type) -> bool {
+    self.span == other.span && self.kind.equals(other.kind)
   }
 }
 
 impl TypeKind {
-  pub fn eq(self, other: TypeKind) -> bool {
+  pub fn equals(self, other: TypeKind) -> bool {
     match (self, other) {
       (TypeKind.Nominal(name1, args1), TypeKind.Nominal(name2, args2)) => {
-        name1.eq(name2) && slice.compare(args1, args2, Type.eq)
+        name1.equals(name2) && args1.equals(args2)
       },
       (TypeKind.Tuple(args1), TypeKind.Tuple(args2)) => {
-        slice.compare(args1, args2, Type.eq)
+        args1.equals(args2)
       },
       (TypeKind.Fn(params1, ret1), TypeKind.Fn(params2, ret2)) => {
-        slice.compare(params1, params2, ParamType.eq) && ret1.eq(ret2.*)
+        params1.equals(params2) && ret1.equals(ret2.*)
       },
       _ => false,
     }
@@ -26,65 +25,58 @@ impl TypeKind {
 }
 
 impl ParamType {
-  pub fn eq(self, other: ParamType) -> bool {
-    self.mode == other.mode && self.typ.eq(other.typ)
+  pub fn equals(self, other: ParamType) -> bool {
+    self.mode == other.mode && self.typ.equals(other.typ)
   }
 }
 
 impl Field {
-  pub fn eq(self, other: Field) -> bool {
-    self.span == other.span && self.name == other.name && self.typ.eq(other.typ)
+  pub fn equals(self, other: Field) -> bool {
+    self.span == other.span && self.name == other.name &&
+    self.typ.equals(other.typ)
   }
 }
 
 impl TypeParameter {
-  pub fn eq(self, other: TypeParameter) -> bool {
+  pub fn equals(self, other: TypeParameter) -> bool {
     self.span == other.span && self.name == other.name
   }
 }
 
 impl TypeDecl {
-  pub fn eq(self, other: TypeDecl) -> bool {
+  pub fn equals(self, other: TypeDecl) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
-    self.body.eq(other.body)
+    self.type_parameters.equals(other.type_parameters) &&
+    self.body.equals(other.body)
   }
 }
 
 impl TypeBody {
-  pub fn eq(self, other: TypeBody) -> bool {
+  pub fn equals(self, other: TypeBody) -> bool {
     match (self, other) {
-      (TypeBody.Struct(s1), TypeBody.Struct(s2)) => slice.compare(
-        s1,
-        s2,
-        Field.eq,
-      ),
-      (TypeBody.Enum(e1), TypeBody.Enum(e2)) => slice.compare(
-        e1,
-        e2,
-        Variant.eq,
-      ),
+      (TypeBody.Struct(s1), TypeBody.Struct(s2)) => s1.equals(s2),
+      (TypeBody.Enum(e1), TypeBody.Enum(e2)) => e1.equals(e2),
       _ => false,
     }
   }
 }
 
 impl Variant {
-  pub fn eq(self, other: Variant) -> bool {
+  pub fn equals(self, other: Variant) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.payload, other.payload, Type.eq)
+    self.payload.equals(other.payload)
   }
 }
 
 impl Expression {
-  pub fn eq(self, other: Expression) -> bool {
-    self.span == other.span && self.kind.eq(other.kind)
+  pub fn equals(self, other: Expression) -> bool {
+    self.span == other.span && self.kind.equals(other.kind)
   }
 }
 
 impl Expr {
   #[allow(float_cmp)]
-  pub fn eq(self, other: Expr) -> bool {
+  pub fn equals(self, other: Expr) -> bool {
     match (self, other) {
       (Nil, Nil) => true,
       (BoolLiteral(b1), BoolLiteral(b2)) => b1 == b2,
@@ -92,70 +84,65 @@ impl Expr {
       (FloatLiteral(f1), FloatLiteral(f2)) => f1 == f2,
       (StringLiteral(s1), StringLiteral(s2)) => s1 == s2,
       (ArrayLiteral(a1), ArrayLiteral(a2)) => {
-        slice.compare(a1, a2, Expression.eq)
+        a1.equals(a2)
       },
       (TupleLiteral(t1), TupleLiteral(t2)) => {
-        slice.compare(t1, t2, Expression.eq)
+        t1.equals(t2)
       },
-      (Identifier(i1), Identifier(i2)) => i1.eq(i2),
-      (Binding(m1, e1), Binding(m2, e2)) => m1 == m2 && e1.eq(e2.*),
-      (Binop(b1), Binop(b2)) => b1.eq(b2.*),
-      (If(cond1), If(cond2)) => cond1.eq(cond2),
-      (While(cond1), While(cond2)) => cond1.eq(cond2),
-      (For(f1), For(f2)) => f1.eq(f2.*),
+      (Identifier(i1), Identifier(i2)) => i1.equals(i2),
+      (Binding(m1, e1), Binding(m2, e2)) => m1 == m2 && e1.equals(e2.*),
+      (Binop(b1), Binop(b2)) => b1.equals(b2.*),
+      (If(cond1), If(cond2)) => cond1.equals(cond2),
+      (While(cond1), While(cond2)) => cond1.equals(cond2),
+      (For(f1), For(f2)) => f1.equals(f2.*),
       (Block(exprs1), Block(exprs2)) => {
-        slice.compare(exprs1, exprs2, Expression.eq)
+        exprs1.equals(exprs2)
       },
-      (Neg(e1), Neg(e2)) => e1.eq(e2.*),
-      (Not(e1), Not(e2)) => e1.eq(e2.*),
-      (Return(Some(e1)), Return(Some(e2))) => e1.eq(e2.*),
+      (Neg(e1), Neg(e2)) => e1.equals(e2.*),
+      (Not(e1), Not(e2)) => e1.equals(e2.*),
+      (Return(Some(e1)), Return(Some(e2))) => e1.equals(e2.*),
       (Return(None), Return(None)) => true,
       (Break(None), Break(None)) => true,
-      (Break(Some(e1)), Break(Some(e2))) => e1.eq(e2.*),
+      (Break(Some(e1)), Break(Some(e2))) => e1.equals(e2.*),
       (Continue, Continue) => true,
-      (DotName(r1, f1), DotName(r2, f2)) => r1.eq(r2.*) && f1 == f2,
-      (DotCall(r1, c1), DotCall(r2, c2)) => r1.eq(r2.*) && c1.eq(c2),
-      (Call(c1), Call(c2)) => c1.eq(c2),
+      (DotName(r1, f1), DotName(r2, f2)) => r1.equals(r2.*) && f1 == f2,
+      (DotCall(r1, c1), DotCall(r2, c2)) => r1.equals(r2.*) && c1.equals(c2),
+      (Call(c1), Call(c2)) => c1.equals(c2),
       _ => false,
     }
   }
 }
 
 impl Path {
-  pub fn eq(self, other: Path) -> bool {
-    self.name == other.name &&
-    slice.compare(self.namespace, other.namespace, |s1, s2| s1 == s2)
+  pub fn equals(self, other: Path) -> bool {
+    self.name == other.name && self.namespace.equals(other.namespace)
   }
 }
 
 impl Call {
-  pub fn eq(self, other: Call) -> bool {
+  pub fn equals(self, other: Call) -> bool {
     let type_args_eq = match (self.type_args, other.type_args) {
       (None, None) => true,
-      (Some(a1), Some(a2)) => slice.compare(a1, a2, Type.eq),
+      (Some(a1), Some(a2)) => a1.equals(a2),
       _ => false,
     }
-    self.fn_name.eq(other.fn_name) && type_args_eq &&
-    slice.compare(self.args, other.args, Expression.eq)
+    self.fn_name.equals(other.fn_name) && type_args_eq &&
+    self.args.equals(other.args)
   }
 }
 
 impl Conditional {
-  pub fn eq(self, other: Conditional) -> bool {
+  pub fn equals(self, other: Conditional) -> bool {
     match (self, other) {
       (
         Conditional.Binary { subject: s1, ops: o1 },
         Conditional.Binary { subject: s2, ops: o2 },
-      ) => s1 == s2 && slice.compare(o1, o2, Comparison.eq),
+      ) => s1 == s2 && o1.equals(o2),
       (
         Conditional.Unary { expr: e1, consequent: c1 },
         Conditional.Unary { expr: e2, consequent: c2 },
       ) => e1 == e2 && c1 == c2,
-      (Conditional.Multi(c1), Conditional.Multi(c2)) => slice.compare(
-        c1,
-        c2,
-        Conditional.eq,
-      ),
+      (Conditional.Multi(c1), Conditional.Multi(c2)) => c1.equals(c2),
       (Conditional.Else { consequent: c1 }, Conditional.Else { consequent: c2 }) => c1 ==
       c2,
       _ => false,
@@ -164,33 +151,33 @@ impl Conditional {
 }
 
 impl Comparison {
-  pub fn eq(self, other: Comparison) -> bool {
-    self.op == other.op && slice.compare(self.objects, other.objects, Branch.eq)
+  pub fn equals(self, other: Comparison) -> bool {
+    self.op == other.op && self.objects.equals(other.objects)
   }
 }
 
 impl Branch {
-  pub fn eq(self, other: Branch) -> bool {
-    self.object.eq(other.object.*) && self.then.eq(other.then)
+  pub fn equals(self, other: Branch) -> bool {
+    self.object.equals(other.object.*) && self.then.equals(other.then)
   }
 }
 
 impl Consequent {
-  pub fn eq(self, other: Consequent) -> bool {
+  pub fn equals(self, other: Consequent) -> bool {
     match (self, other) {
-      (Consequent.And(c1), Consequent.And(c2)) => c1.eq(c2),
-      (Consequent.Or(c1), Consequent.Or(c2)) => c1.eq(c2),
-      (Consequent.Do(e1), Consequent.Do(e2)) => e1.eq(e2.*),
+      (Consequent.And(c1), Consequent.And(c2)) => c1.equals(c2),
+      (Consequent.Or(c1), Consequent.Or(c2)) => c1.equals(c2),
+      (Consequent.Do(e1), Consequent.Do(e2)) => e1.equals(e2.*),
       _ => false,
     }
   }
 }
 
 impl Parameter {
-  pub fn eq(self, other: Parameter) -> bool {
+  pub fn equals(self, other: Parameter) -> bool {
     self.span == other.span && self.mode == other.mode &&
     self.name == other.name &&
-    self.typ.eq(other.typ)
+    self.typ.equals(other.typ)
   }
 }
 

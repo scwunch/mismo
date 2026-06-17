@@ -198,7 +198,8 @@ fn test_call_downgrade(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // A Var arg can be passed to a Let param (downgrade), and is not consumed
   let v = var_(mode.Mode.Var, "x", Type.Int)
   let fn_def = FunctionDef.mock(
-    "f", [],
+    "f",
+    [],
     [Parameter.let_("a", Type.Int)],
     Type.Tuple([]),
   )
@@ -208,9 +209,7 @@ fn test_call_downgrade(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // Variable was not consumed — can still use it
-  if let Err(e) = mc.infer(ident_expr(v)) {
-    t.fail(e.message())?
-  }
+  if let Err(e) = mc.infer(ident_expr(v)) { t.fail(e.message())? }
 
   Ok(())
 }
@@ -222,7 +221,8 @@ fn test_call_var_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // A Var arg passed to a Var param is consumed
   let v = var_(mode.Mode.Var, "x", Type.Int)
   let fn_def = FunctionDef.mock(
-    "f", [],
+    "f",
+    [],
     [Parameter.var_("a", Type.Int)],
     Type.Tuple([]),
   )
@@ -250,7 +250,8 @@ fn test_call_mode_mismatch(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // A Let arg cannot be passed to a Mut param
   let v = var_(mode.Mode.Let, "x", Type.Int)
   let fn_def = FunctionDef.mock(
-    "f", [],
+    "f",
+    [],
     [Parameter.mut_("a", Type.Int)],
     Type.Tuple([]),
   )

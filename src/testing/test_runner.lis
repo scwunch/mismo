@@ -71,7 +71,7 @@ impl TestRunner {
     val: A,
     expected: B,
   ) -> Result<(), string> {
-    if val.eq(expected) {
+    if val.equals(expected) {
       Ok(())
     } else {
       self.fail(f"\n  Expected: {expected};\n    Actual: {val}")
@@ -103,7 +103,7 @@ impl TestRunner {
     val: A,
     expected: B,
   ) -> Result<(), string> {
-    if val.eq(expected) {
+    if val.equals(expected) {
       self.fail(f"Expected {val} to not be {expected}")
     } else {
       Ok(())
@@ -120,7 +120,7 @@ impl TestRunner {
 }
 
 pub interface Equatable<Self: Equatable<Self, Other>, Other: Equatable<Other, Self>> {
-  fn eq(self, other: Other) -> bool
+  fn equals(self, other: Other) -> bool
 }
 
 pub interface Testable<Self> {

@@ -165,7 +165,7 @@ impl TypeCheck {
         ),
         Expr.Return(opt_expr) => {
           let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
-          if !self.return_type.eq(actual) {
+          if !self.return_type.equals(actual) {
             return Err(errors.TypeMismatchError.new(
               span,
               f"{self.return_type}",
@@ -418,7 +418,7 @@ fn match_types(
         bindings[idx] = arg
         Ok(())
       },
-      existing => if existing.eq(arg) {
+      existing => if existing.equals(arg) {
         Ok(())
       } else {
         Err(errors.DoubleTypeArgBoundError.new(

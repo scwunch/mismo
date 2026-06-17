@@ -21,13 +21,13 @@ pub fn test() {
 }
 
 impl TokenKind {
-  pub fn eq(self, other: TokenKind) -> bool {
+  pub fn equals(self, other: TokenKind) -> bool {
     self == other
   }
 }
 
 impl Token {
-  pub fn eq(self, other: Token) -> bool {
+  pub fn equals(self, other: Token) -> bool {
     self == other
   }
 }

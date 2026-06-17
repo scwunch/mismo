@@ -1,44 +1,45 @@
 import "utils/slice"
 
 impl TypeDef {
-  pub fn eq(self, other: TypeDef) -> bool {
+  pub fn equals(self, other: TypeDef) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
-    self.kind.eq(other.kind)
+    self.type_parameters.equals(other.type_parameters) &&
+    self.kind.equals(other.kind)
   }
 }
 
 impl TypeParameter {
-  pub fn eq(self, other: TypeParameter) -> bool {
+  pub fn equals(self, other: TypeParameter) -> bool {
     self.span == other.span && self.name == other.name
   }
 }
 
 impl TypeKind {
-  pub fn eq(self, other: TypeKind) -> bool {
+  pub fn equals(self, other: TypeKind) -> bool {
     match (self, other) {
-      (TypeKind.Struct(a), TypeKind.Struct(b)) => slice.compare(a, b, Field.eq),
-      (TypeKind.Enum(a), TypeKind.Enum(b)) => slice.compare(a, b, Variant.eq),
+      (TypeKind.Struct(a), TypeKind.Struct(b)) => a.equals(b),
+      (TypeKind.Enum(a), TypeKind.Enum(b)) => a.equals(b),
       _ => false,
     }
   }
 }
 
 impl Field {
-  pub fn eq(self, other: Field) -> bool {
-    self.span == other.span && self.name == other.name && self.typ.eq(other.typ)
+  pub fn equals(self, other: Field) -> bool {
+    self.span == other.span && self.name == other.name &&
+    self.typ.equals(other.typ)
   }
 }
 
 impl Variant {
-  pub fn eq(self, other: Variant) -> bool {
+  pub fn equals(self, other: Variant) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.fields, other.fields, Type.eq)
+    self.fields.equals(other.fields)
   }
 }
 
 impl Type {
-  pub fn eq(self, other: Type) -> bool {
+  pub fn equals(self, other: Type) -> bool {
     match (self, other) {
       (Any, Any) => true,
       (Never, Never) => true,
@@ -47,11 +48,11 @@ impl Type {
       (Int, Int) => true,
       (Float, Float) => true,
       (String, String) => true,
-      (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.eq(b.*),
-      (Slice(a), Slice(b)) => a.eq(b.*),
-      (Tuple(a), Tuple(b)) => slice.compare(a, b, Type.eq),
-      (Fn(a, b), Fn(c, d)) => slice.compare(a, c, ParamType.eq) && b.eq(d.*),
-      (Adt(a, b), Adt(c, d)) => a == c && slice.compare(b, d, Type.eq),
+      (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
+      (Slice(a), Slice(b)) => a.equals(b.*),
+      (Tuple(a), Tuple(b)) => a.equals(b),
+      (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
+      (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),
       (Var(a), Var(b)) => a == b,
       (Any, _) |
       (Never, _) |
@@ -72,77 +73,59 @@ impl Type {
 }
 
 impl ParamType {
-  pub fn eq(self, other: ParamType) -> bool {
-    self.mode == other.mode && self.typ.eq(other.typ)
+  pub fn equals(self, other: ParamType) -> bool {
+    self.mode == other.mode && self.typ.equals(other.typ)
   }
 }
 
 impl Parameter {
-  pub fn eq(self, other: Parameter) -> bool {
+  pub fn equals(self, other: Parameter) -> bool {
     self.span == other.span && self.mode == other.mode &&
     self.name == other.name &&
-    self.typ.eq(other.typ)
+    self.typ.equals(other.typ)
   }
 }
 
 impl FunctionDef {
-  pub fn eq(self, other: FunctionDef) -> bool {
+  pub fn equals(self, other: FunctionDef) -> bool {
     self.span == other.span && self.name == other.name &&
-    slice.compare(self.type_parameters, other.type_parameters, TypeParameter.eq) &&
-    slice.compare(self.parameters, other.parameters, Parameter.eq) &&
-    self.return_type.eq(other.return_type) &&
-    self.body.eq(other.body)
+    self.type_parameters.equals(other.type_parameters) &&
+    self.parameters.equals(other.parameters) &&
+    self.return_type.equals(other.return_type) &&
+    self.body.equals(other.body)
   }
 }
 
 impl Expression {
-  pub fn eq(self, other: Expression) -> bool {
-    self.span == other.span && self.kind.eq(other.kind)
+  pub fn equals(self, other: Expression) -> bool {
+    self.span == other.span && self.kind.equals(other.kind)
   }
 }
 
 impl Expr {
   #[allow(float_cmp)]
-  pub fn eq(self, other: Expr) -> bool {
+  pub fn equals(self, other: Expr) -> bool {
     match (self, other) {
       (Expr.Nil, Expr.Nil) => true,
       (Expr.BoolLiteral(a), Expr.BoolLiteral(b)) => a == b,
       (Expr.IntLiteral(a), Expr.IntLiteral(b)) => a == b,
       (Expr.FloatLiteral(a), Expr.FloatLiteral(b)) => a == b,
       (Expr.StringLiteral(a), Expr.StringLiteral(b)) => a == b,
-      (Expr.ArrayLiteral(a1, t1), Expr.ArrayLiteral(a2, t2)) => slice.compare(
-        a1,
-        a2,
-        Expression.eq,
-      ) &&
-      t1.eq(t2),
-      (Expr.TupleLiteral(a), Expr.TupleLiteral(b)) => slice.compare(
-        a,
-        b,
-        Expression.eq,
-      ),
+      (Expr.ArrayLiteral(a1, t1), Expr.ArrayLiteral(a2, t2)) => a1.equals(a2) &&
+      t1.equals(t2),
+      (Expr.TupleLiteral(a), Expr.TupleLiteral(b)) => a.equals(b),
       (Expr.Identifier(a), Expr.Identifier(b)) => a == b,
-      (Expr.Assign(a1, a2), Expr.Assign(b1, b2)) => a1 == b1 && a2.eq(b2.*),
-      (Expr.Binding(m1, a), Expr.Binding(m2, b)) => m1 == m2 && a.eq(b.*),
-      (Expr.Call(a), Expr.Call(b)) => a.eq(b),
-      (Expr.SwitchIf(a), Expr.SwitchIf(b)) => a.eq(b),
-      (Expr.Match(a), Expr.Match(b)) => a.eq(b),
-      (Expr.Loop(a1, t1), Expr.Loop(a2, t2)) => slice.compare(
-        a1,
-        a2,
-        Expression.eq,
-      ) &&
-      t1.eq(t2),
-      (Expr.Block(a1, t1), Expr.Block(a2, t2)) => slice.compare(
-        a1,
-        a2,
-        Expression.eq,
-      ) &&
-      t1.eq(t2),
+      (Expr.Assign(a1, a2), Expr.Assign(b1, b2)) => a1 == b1 && a2.equals(b2.*),
+      (Expr.Binding(m1, a), Expr.Binding(m2, b)) => m1 == m2 && a.equals(b.*),
+      (Expr.Call(a), Expr.Call(b)) => a.equals(b),
+      (Expr.SwitchIf(a), Expr.SwitchIf(b)) => a.equals(b),
+      (Expr.Match(a), Expr.Match(b)) => a.equals(b),
+      (Expr.Loop(a1, t1), Expr.Loop(a2, t2)) => a1.equals(a2) && t1.equals(t2),
+      (Expr.Block(a1, t1), Expr.Block(a2, t2)) => a1.equals(a2) && t1.equals(t2),
       (Expr.Return(None), Expr.Return(None)) => true,
-      (Expr.Return(Some(a)), Expr.Return(Some(b))) => a.eq(b.*),
+      (Expr.Return(Some(a)), Expr.Return(Some(b))) => a.equals(b.*),
       (Expr.Break(None), Expr.Break(None)) => true,
-      (Expr.Break(Some(a)), Expr.Break(Some(b))) => a.eq(b.*),
+      (Expr.Break(Some(a)), Expr.Break(Some(b))) => a.equals(b.*),
       (Expr.Continue, Expr.Continue) => true,
       (Expr.FieldAccess(a1, i1), Expr.FieldAccess(a2, i2)) => a1 == a2 &&
       i1 == i2,
@@ -152,32 +135,31 @@ impl Expr {
 }
 
 impl FnCall {
-  pub fn eq(self, other: FnCall) -> bool {
-    self.fun == other.fun && slice.compare(self.args, other.args, Expression.eq)
+  pub fn equals(self, other: FnCall) -> bool {
+    self.fun == other.fun && self.args.equals(other.args)
   }
 }
 
 impl SwitchIf {
-  pub fn eq(self, other: SwitchIf) -> bool {
+  pub fn equals(self, other: SwitchIf) -> bool {
     if self.cases.length() != other.cases.length() { return false }
     for i in 0..self.cases.length() {
       let (a1, a2) = self.cases[i]
       let (b1, b2) = other.cases[i]
-      if !a1.eq(b1) || !a2.eq(b2) { return false }
+      if !a1.equals(b1) || !a2.equals(b2) { return false }
     }
     true
   }
 }
 
 impl Match {
-  pub fn eq(self, other: Match) -> bool {
-    self.subject.eq(other.subject.*) &&
-    slice.compare(self.cases, other.cases, MatchCase.eq)
+  pub fn equals(self, other: Match) -> bool {
+    self.subject.equals(other.subject.*) && self.cases.equals(other.cases)
   }
 }
 
 impl MatchCase {
-  pub fn eq(self, other: MatchCase) -> bool {
-    self.pattern.eq(other.pattern) && self.expr.eq(other.expr)
+  pub fn equals(self, other: MatchCase) -> bool {
+    self.pattern.equals(other.pattern) && self.expr.equals(other.expr)
   }
 }

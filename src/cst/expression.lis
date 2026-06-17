@@ -1,7 +1,6 @@
 import "mode"
 import "operator"
 import "span"
-import "utils/slice"
 
 // type Span = span.Span
 pub type Operator = operator.Operator
@@ -59,9 +58,9 @@ pub struct Binop {
 }
 
 impl Binop {
-  pub fn eq(self, other: Binop) -> bool {
-    self.left.eq(other.left) && self.op == other.op &&
-    self.right.eq(other.right)
+  pub fn equals(self, other: Binop) -> bool {
+    self.left.equals(other.left) && self.op == other.op &&
+    self.right.equals(other.right)
   }
 }
 
@@ -78,9 +77,9 @@ pub struct ForLoop {
 }
 
 impl ForLoop {
-  pub fn eq(self, other: ForLoop) -> bool {
-    self.binding.eq(other.binding) && self.iter.eq(other.iter) &&
-    self.body.eq(other.body)
+  pub fn equals(self, other: ForLoop) -> bool {
+    self.binding.equals(other.binding) && self.iter.equals(other.iter) &&
+    self.body.equals(other.body)
   }
 }
 

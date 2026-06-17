@@ -8,7 +8,7 @@ pub fn test() {
 }
 
 impl Location {
-  pub fn eq(self, other: Location) -> bool {
+  pub fn equals(self, other: Location) -> bool {
     self == other
   }
 }

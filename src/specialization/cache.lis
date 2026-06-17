@@ -15,7 +15,7 @@ impl Cache {
     match self.map.get(hash) {
       Some(pairs) => {
         for (k, v) in pairs {
-          if k.eq(key) { return Some(v) }
+          if k.equals(key) { return Some(v) }
         }
         None
       },
@@ -29,7 +29,7 @@ impl Cache {
       Some(pairs) => {
         let mut pairs = pairs
         for (i, (k, _)) in pairs.enumerate() {
-          if k.eq(key) { pairs[i] = (key, value) }
+          if k.equals(key) { pairs[i] = (key, value) }
         }
         self.map[index] = pairs.append((key, value))
       },

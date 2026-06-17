@@ -134,7 +134,7 @@ impl Type {
         slice.zip(params, params2).all(|p| p.1.assignable_to(p.0)) &&
         ret.assignable_to(ret2.*)
       },
-      _ => self.eq(other),
+      _ => self.equals(other),
     }
   }
 

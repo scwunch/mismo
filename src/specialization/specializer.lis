@@ -1,6 +1,5 @@
 import "errors"
 import "semantic"
-import "utils/slice"
 
 type Expr = semantic.Expr
 
@@ -32,9 +31,8 @@ impl MonoMorphKey {
     MonoMorphKey { fun: call.fun, type_args: call.type_args as Slice<Type> }
   }
 
-  fn eq(self, key: MonoMorphKey) -> bool {
-    self.fun == key.fun &&
-    slice.compare(self.type_args, key.type_args, semantic.Type.eq)
+  fn equals(self, key: MonoMorphKey) -> bool {
+    self.fun == key.fun && self.type_args.equals(key.type_args)
   }
 }
 
