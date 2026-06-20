@@ -30,7 +30,7 @@ impl TypeCheck {
 
   fn new_blank() -> TypeCheck {
     let env = &TypeEnv.new()
-    let dummy = FunctionDef.mock("dummy", [], [], Type.Tuple([]))
+    let dummy = FunctionDef.mock("dummy", [], [], Type.nil())
     TypeCheck.new(env, dummy)
   }
 }
@@ -159,12 +159,12 @@ impl TypeCheck {
       let expr = self.infer(node)?
       expressions = expressions.append(expr)
       match expr.kind {
-        Expr.Assign(varid, _) => self.bindings = &List.Cons(
+        Expr.Declare(_, varid, _) | Expr.Assign(varid, _) => self.bindings = &List.Cons(
           varid,
           self.bindings,
         ),
         Expr.Return(opt_expr) => {
-          let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
+          let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
           if !self.return_type.equals(actual) {
             return Err(dx.TypeMismatchError.new(
               span,
@@ -174,7 +174,7 @@ impl TypeCheck {
           }
         },
         Expr.Break(opt_expr) => {
-          let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
+          let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
           types = types.append(ty)
         },
         _ => (),

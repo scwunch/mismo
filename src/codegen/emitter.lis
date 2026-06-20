@@ -72,15 +72,11 @@ impl Emitter {
 
   fn emit_statement(self: Ref<Emitter>, expr: semantic.Expression) {
     match expr.kind {
-      Assign(_, _) | Break(_) | Return(_) | Continue => {
-        self.emit_expr(expr.kind)
-        self.emit(";")
-      },
-      _ => {
-        self.emit("_ = ")
-        self.emit_expr(expr.kind)
-      },
+      Declare(_, _, _) | Assign(_, _) | Break(_) | Return(_) | Continue => (),
+      _ => self.emit("_ = "),
     }
+    self.emit_expr(expr.kind)
+    self.emit(";")
   }
 
   fn emit_expression(self: Ref<Emitter>, expr: semantic.Expression) {
@@ -136,12 +132,15 @@ impl Emitter {
     value: semantic.Expr,
   ) {
     match m {
-      Var => self.emit("var "),
       Let => self.emit("const "),
-      _ => self.emit("letvarconstsomething "),
+      _ => self.emit("var "),
     }
     self.emit(name)
     self.emit(" = ")
+    match m {
+      Var => (),
+      _ => self.emit("&"),
+    }
     self.emit_expr(value)
   }
 
@@ -375,7 +374,6 @@ impl Emitter {
           Block(exprs, _) => self.emit_block(exprs),
           _ => {
             self.emit_statement(expr)
-            self.emit(";")
             self.newline()
           },
         }
