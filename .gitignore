@@ -1,6 +1,7 @@
 # output
 target/
 output.log
+output.json
 zig-out/zigrunner-*
 zig-out/testing
 
