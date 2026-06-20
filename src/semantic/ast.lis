@@ -2,12 +2,14 @@ import "mode"
 import "span"
 
 #[display]
+#[json]
 pub struct Expression {
   pub span: span.Span,
   pub kind: Expr,
 }
 
 #[display]
+#[json]
 pub enum Expr {
   Nil,
   BoolLiteral(bool),
@@ -34,6 +36,7 @@ pub enum Expr {
 }
 
 #[display]
+#[json]
 pub struct FnCall {
   pub fun: Ref<FunctionDef>,
   pub type_args: Slice<Type>,
@@ -50,6 +53,7 @@ impl FnCall {
   }
 }
 
+#[json]
 pub struct SwitchIf {
   pub cases: Slice<(Expression, Expression)>,
 }
@@ -60,6 +64,7 @@ impl SwitchIf {
   }
 }
 
+#[json]
 pub struct Match {
   pub subject: Ref<Expression>,
   pub cases: Slice<MatchCase>,
@@ -71,6 +76,7 @@ impl Match {
   }
 }
 
+#[json]
 pub struct MatchCase {
   pub pattern: Expression,
   pub expr: Expression,

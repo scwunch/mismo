@@ -1,6 +1,7 @@
 import "mode"
 import "utils/slice"
 
+#[json]
 pub enum Type {
   Any,
   Never,
@@ -18,6 +19,7 @@ pub enum Type {
   Var(int),
 }
 
+#[json]
 pub struct ParamType {
   pub mode: mode.Mode,
   pub typ: Type,

@@ -1,5 +1,5 @@
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 import "utils/slice"
@@ -15,7 +15,7 @@ impl TypeEnv {
 }
 
 impl TypeContext {
-  fn eval_type(self, typ: cst.Type) -> Result<Type, errors.TypeError> {
+  fn eval_type(self, typ: cst.Type) -> Result<Type, dx.TypeError> {
     match typ.kind {
       cst.TypeKind.Tuple(types) => {
         Ok(Type.Tuple(slice.map_result(types, self.eval_type)?))
@@ -40,7 +40,7 @@ impl TypeContext {
     span: span.Span,
     path: cst.Path,
     type_args: Slice<Type>,
-  ) -> Result<Type, errors.TypeError> {
+  ) -> Result<Type, dx.TypeError> {
     if path.namespace.is_empty() {
       // try to match type param
       if let Some(res_t) = self.type_of_type_param(span, path.name, type_args) {
@@ -62,13 +62,13 @@ impl TypeContext {
     span: span.Span,
     name: string,
     type_args: Slice<Type>,
-  ) -> Option<Result<Type, errors.TypeError>> {
+  ) -> Option<Result<Type, dx.TypeError>> {
     for (i, tp) in self.type_params.enumerate() {
       if name == tp.name {
         return if type_args.is_empty() {
           Some(Ok(Type.Var(i)))
         } else {
-          let e = errors.TypeParameterArityError.new(
+          let e = dx.TypeParameterArityError.new(
             span,
             f"type parameter {tp.name}",
             0,
@@ -81,7 +81,7 @@ impl TypeContext {
     None
   }
 
-  fn primitive_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Option<Result<Type, errors.TypeError>> {
+  fn primitive_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Option<Result<Type, dx.TypeError>> {
     let primitive = match name {
       "Any" => Type.Any,
       "Never" => Type.Never,
@@ -111,7 +111,7 @@ impl TypeContext {
     Some(check_arity(span, name, type_args.length(), 0).map(|_| primitive))
   }
 
-  fn eval_param(self, param: cst.Parameter) -> Result<Parameter, errors.TypeError> {
+  fn eval_param(self, param: cst.Parameter) -> Result<Parameter, dx.TypeError> {
     let typ = self.eval_type(param.typ)?
     Ok(
       Parameter { 
@@ -123,16 +123,16 @@ impl TypeContext {
     )
   }
 
-  fn eval_param_type(self, param: cst.ParamType) -> Result<ParamType, errors.TypeError> {
+  fn eval_param_type(self, param: cst.ParamType) -> Result<ParamType, dx.TypeError> {
     let typ = self.eval_type(param.typ)?
     Ok(ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
   }
 }
 
-fn check_arity(span: span.Span, name: string, type_args: int, type_params: int) -> Result<(), errors.TypeError> {
+fn check_arity(span: span.Span, name: string, type_args: int, type_params: int) -> Result<(), dx.TypeError> {
   if type_args == type_params {
     Ok(())
   } else {
-    Err(errors.TypeParameterArityError.new(span, name, type_args, type_params))
+    Err(dx.TypeParameterArityError.new(span, name, type_args, type_params))
   }
 }

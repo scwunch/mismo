@@ -1,15 +1,15 @@
-import "errors"
+import dx "diagnostics"
 import "semantic"
 
 type Expr = semantic.Expr
 
-pub fn specialize(reg: semantic.TypeEnv) -> Result<ConcreteRegistry, errors.SpecializationError> {
+pub fn specialize(reg: semantic.TypeEnv) -> Result<ConcreteRegistry, dx.SpecializationError> {
   let main = match reg.signatures.get("main") {
     Some([main]) => main,
     Some(funs) => Err(
-      errors.MultipleMainFunctionsError.new(funs.map(|f| f.span)) as errors.SpecializationError,
+      dx.MultipleMainFunctionsError.new(funs.map(|f| f.span)) as dx.SpecializationError,
     )?,
-    None => Err(errors.NoMainFunctionError.new() as errors.SpecializationError)?,
+    None => Err(dx.NoMainFunctionError.new() as dx.SpecializationError)?,
   }
 
   let mut spec = Specializer.new()

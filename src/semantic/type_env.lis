@@ -1,15 +1,16 @@
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 import "utils/slice"
 
+#[json]
 pub struct TypeEnv {
   pub imports: Map<string, TypeEnv>,
   pub type_defs: Map<string, Ref<TypeDef>>,
-  pub function_defs: Slice<FunctionDef>,
+  pub function_defs: Slice<Ref<FunctionDef>>,
   pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
-  pub errors: Slice<errors.TypeError>,
+  pub errors: Slice<dx.TypeError>,
 }
 
 impl TypeEnv {
@@ -20,7 +21,7 @@ impl TypeEnv {
   pub fn register_types(self: Ref<TypeEnv>, type_defs: Slice<cst.TypeDecl>) {
     for t in type_defs {
       match self.type_defs.get(t.name) {
-        Some(def) => self.error(errors.DuplicateNameError.new(
+        Some(def) => self.error(dx.DuplicateNameError.new(
           t.name,
           t.span,
           def.span,
@@ -58,18 +59,20 @@ impl TypeEnv {
             def,
             def.type_parameters.enumerate().map(|(i, _)| Type.Var(i)),
           )
-          self.add_function(FunctionDef.new(
-            def.span,
-            -1,
-            def.name,
-            def.type_parameters,
-            fields.map(Field.to_param),
-            self_type,
-            Expression.new(
+          self.add_function(
+            &FunctionDef.new(
               def.span,
-              Expr.Constructor(self_type, fields.map(|f| f.name)),
+              -1,
+              def.name,
+              def.type_parameters,
+              fields.map(Field.to_param),
+              self_type,
+              Expression.new(
+                def.span,
+                Expr.Constructor(self_type, fields.map(|f| f.name)),
+              ),
             ),
-          ))
+          )
         },
         cst.TypeBody.Enum(variants) => {
           def.kind = ctx.eval_enum_def(variants)
@@ -84,12 +87,9 @@ impl TypeEnv {
   ) {
     self.function_defs = functions.map(self.eval_function)
     for i in 0..self.function_defs.length() {
-      let def = &self.function_defs[i]
+      let def = self.function_defs[i]
       if let Some(def) = self.type_defs.get(def.name) {
-        self.error(errors.OverloadCanonicalConstructorError.new(
-          def.span,
-          def.name,
-        ))
+        self.error(dx.OverloadCanonicalConstructorError.new(def.span, def.name))
       }
       match self.signatures.get(def.name) {
         Some(existing) => {
@@ -100,12 +100,13 @@ impl TypeEnv {
     }
   }
 
-  pub fn eval_function(self: Ref<TypeEnv>, func: cst.FunctionDecl) -> FunctionDef {
-    self
-      .try_eval_function(func)
-      .unwrap_or_else(|e| {
+  pub fn eval_function(self: Ref<TypeEnv>, func: cst.FunctionDecl) -> Ref<FunctionDef> {
+    // we should write this as Result.unwrap_or_else but that causes a go build type error
+    match self.try_eval_function(func) {
+      Ok(func) => func,
+      Err(e) => {
         self.error(e)
-        FunctionDef.new(
+        &FunctionDef.new(
           func.span,
           -1,
           func.signature.name,
@@ -114,13 +115,14 @@ impl TypeEnv {
           Type.nil(),
           Expression.blank(),
         )
-      })
+      },
+    }
   }
 
-  pub fn add_function(self: Ref<TypeEnv>, func: FunctionDef) {
+  pub fn add_function(self: Ref<TypeEnv>, func: Ref<FunctionDef>) {
     let i = self.function_defs.length()
     self.function_defs = self.function_defs.append(func)
-    let def = &self.function_defs[i]
+    let def = self.function_defs[i]
     match self.signatures.get(def.name) {
       Some(existing) => {
         self.signatures[def.name] = existing.append(def)
@@ -129,7 +131,7 @@ impl TypeEnv {
     }
   }
 
-  pub fn try_eval_function(self: Ref<TypeEnv>, func: cst.FunctionDecl) -> Result<FunctionDef, errors.TypeError> {
+  pub fn try_eval_function(self: Ref<TypeEnv>, func: cst.FunctionDecl) -> Result<Ref<FunctionDef>, dx.TypeError> {
     let span = func.span
     let name = func.signature.name
     let type_params = func.signature.type_parameters.map(|param| {
@@ -142,26 +144,23 @@ impl TypeEnv {
     }
     let return_type = ctx.eval_type(func.signature.return_type)?
     let body = Expression.blank()
-    Ok(FunctionDef.new(span, -1, name, type_params, params, return_type, body))
+    Ok(&FunctionDef.new(span, -1, name, type_params, params, return_type, body))
   }
 
-  pub fn error(self: Ref<TypeEnv>, err: errors.TypeError) {
+  pub fn error(self: Ref<TypeEnv>, err: dx.TypeError) {
     self.errors = self.errors.append(err)
   }
 
-  pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<TypeEnv, errors.TypeError> {
+  pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<TypeEnv, dx.TypeError> {
     self.imports
       .get(path.namespace.join("::"))
-      .ok_or_else(|| errors.MissingNameError.new(
-        path.namespace.join("::"),
-        span,
-      ))
+      .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))
   }
 
-  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Result<Type, errors.TypeError> {
+  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Result<Type, dx.TypeError> {
     match self.type_defs.get(name) {
       None => {
-        Err(errors.MissingNameError.new(name, span))
+        Err(dx.MissingNameError.new(name, span))
       },
       Some(def) => {
         let n = def.type_parameters.length()

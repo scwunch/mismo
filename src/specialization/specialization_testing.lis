@@ -19,12 +19,14 @@ pub fn test_specialization() {
 fn test_specializer_add_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.add_function"
   let mut env = semantic.TypeEnv.new()
-  env.add_function(semantic.FunctionDef.mock(
-    "identity",
-    [TypeParameter.mock("T")],
-    [Parameter.let_("x", Type.Var(0))],
-    Type.Var(0),
-  ))
+  env.add_function(
+    &semantic.FunctionDef.mock(
+      "identity",
+      [TypeParameter.mock("T")],
+      [Parameter.let_("x", Type.Var(0))],
+      Type.Var(0),
+    ),
+  )
 
   let mut spec = Specializer.new()
   let ref_fn = env.signatures["identity"][0]
@@ -43,12 +45,14 @@ fn test_specializer_add_function(t: Ref<testing.TestRunner>) -> Result<(), strin
 fn test_specializer_index_of(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.index_of"
   let mut env = semantic.TypeEnv.new()
-  env.add_function(semantic.FunctionDef.mock(
-    "identity",
-    [TypeParameter.mock("T")],
-    [Parameter.let_("x", Type.Var(0))],
-    Type.Var(0),
-  ))
+  env.add_function(
+    &semantic.FunctionDef.mock(
+      "identity",
+      [TypeParameter.mock("T")],
+      [Parameter.let_("x", Type.Var(0))],
+      Type.Var(0),
+    ),
+  )
 
   let mut spec = Specializer.new()
   let ref_fn = env.signatures["identity"][0]
@@ -74,12 +78,14 @@ fn test_specializer_index_of(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.substitute"
   let mut env = semantic.TypeEnv.new()
-  env.add_function(semantic.FunctionDef.mock(
-    "identity",
-    [TypeParameter.mock("T")],
-    [Parameter.let_("x", Type.Var(0))],
-    Type.Var(0),
-  ))
+  env.add_function(
+    &semantic.FunctionDef.mock(
+      "identity",
+      [TypeParameter.mock("T")],
+      [Parameter.let_("x", Type.Var(0))],
+      Type.Var(0),
+    ),
+  )
 
   let mut spec = Specializer.new()
   let ref_fn = env.signatures["identity"][0]
@@ -106,7 +112,7 @@ fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string>
 fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Cache.get"
   let mut env = semantic.TypeEnv.new()
-  env.add_function(semantic.FunctionDef.mock("f", [], [], Type.nil()))
+  env.add_function(&semantic.FunctionDef.mock("f", [], [], Type.nil()))
 
   let ref_fn = env.signatures["f"][0]
   let mut cache = Cache.new()
@@ -130,7 +136,7 @@ fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn test_cache_insert(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Cache.insert"
   let mut env = semantic.TypeEnv.new()
-  env.add_function(semantic.FunctionDef.mock("f", [], [], Type.nil()))
+  env.add_function(&semantic.FunctionDef.mock("f", [], [], Type.nil()))
 
   let ref_fn = env.signatures["f"][0]
   let mut cache = Cache.new()
@@ -155,13 +161,15 @@ fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "specialize"
   let mut env = semantic.TypeEnv.new()
 
-  env.add_function(semantic.FunctionDef.mock("main", [], [], Type.nil()))
-  env.add_function(semantic.FunctionDef.mock(
-    "foo",
-    [TypeParameter.mock("T")],
-    [Parameter.let_("a", Type.Var(0))],
-    Type.nil(),
-  ))
+  env.add_function(&semantic.FunctionDef.mock("main", [], [], Type.nil()))
+  env.add_function(
+    &semantic.FunctionDef.mock(
+      "foo",
+      [TypeParameter.mock("T")],
+      [Parameter.let_("a", Type.Var(0))],
+      Type.nil(),
+    ),
+  )
 
   let main = env.signatures["main"][0]
   let foo = env.signatures["foo"][0]

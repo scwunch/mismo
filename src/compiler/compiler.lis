@@ -4,7 +4,7 @@ import "go:os"
 
 import "codegen"
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "lexer"
 import "parser"
 import "semantic"
@@ -20,55 +20,55 @@ pub fn compile_to_tokens(source: string) -> Slice<lexer.Token> {
   }
 }
 
-pub fn compile_to_ast(source: string) -> Result<cst.Declarations, Slice<errors.Diagnostic>> {
+pub fn compile_to_ast(source: string) -> Result<cst.Declarations, Slice<dx.Diagnostic>> {
   let mut parser = parser.Parser.new(source)
   let decs = parser.parse()
   if decs.errors.is_empty() {
     Ok(decs)
   } else {
-    Err(decs.errors.map(|e| e as errors.Diagnostic))
+    Err(decs.errors.map(|e| e as dx.Diagnostic))
   }
 }
 
-pub fn type_check(source: string) -> Result<semantic.TypeEnv, Slice<errors.Diagnostic>> {
+pub fn type_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
   let decs = compile_to_ast(source)?
   let env = semantic.analyze_type_check(decs)
   if env.errors.is_empty() {
     Ok(env)
   } else {
-    Err(env.errors.map(|e| e as errors.Diagnostic))
+    Err(env.errors.map(|e| e as dx.Diagnostic))
   }
 }
 
-pub fn mode_check(source: string) -> Result<semantic.TypeEnv, Slice<errors.Diagnostic>> {
+pub fn mode_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
   let decs = compile_to_ast(source)?
   let env = semantic.analyze(decs)
   if env.errors.is_empty() {
     Ok(env)
   } else {
-    Err(env.errors.map(|e| e as errors.Diagnostic))
+    Err(env.errors.map(|e| e as dx.Diagnostic))
   }
 }
 
 pub enum MonomorphizationOut {
   Ok(specialization.ConcreteRegistry),
-  SpecError(errors.SpecializationError),
-  TypeErrors(Slice<errors.TypeError>),
+  SpecError(dx.SpecializationError),
+  TypeErrors(Slice<dx.TypeError>),
 }
 
-pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Slice<errors.Diagnostic>> {
+pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Slice<dx.Diagnostic>> {
   let reg = mode_check(source)?
   if reg.errors.is_empty() {
     match specialization.specialize(reg) {
       Ok(reg) => Ok(reg),
-      Err(e) => Err([e as errors.Diagnostic]),
+      Err(e) => Err([e as dx.Diagnostic]),
     }
   } else {
-    Err(reg.errors.map(|e| e as errors.Diagnostic))
+    Err(reg.errors.map(|e| e as dx.Diagnostic))
   }
 }
 
-pub fn transpile(source: string) -> Result<string, Slice<errors.Diagnostic>> {
+pub fn transpile(source: string) -> Result<string, Slice<dx.Diagnostic>> {
   specialize(source).map(codegen.generate)
 }
 
@@ -86,7 +86,7 @@ pub fn build(source: string, opts: Options) -> BuildResult {
 
 pub enum BuildResult {
   Bin(Path),
-  MismoErrs(Slice<errors.Diagnostic>),
+  MismoErrs(Slice<dx.Diagnostic>),
   OsErr(error),
 }
 
@@ -98,10 +98,10 @@ pub fn run(source: string, opts: Options) {
       }
     },
     OsErr(e) => fmt.Fprintln(opts.io.stderr, e.Error()),
-    MismoErrs(errs) => {
+    MismoErrs(errors) => {
       let source = source as Slice<rune>
-      for e in errs {
-        fmt.Println(errors.render(e, source))
+      for e in errors {
+        fmt.Println(dx.render(e, source))
       }
     },
   }

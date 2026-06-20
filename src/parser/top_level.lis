@@ -1,4 +1,5 @@
 import "cst"
+import dx "diagnostics"
 import "lexer"
 
 impl Parser {

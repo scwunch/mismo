@@ -1,17 +1,20 @@
 import "mode"
 import "span"
 
+#[json]
 pub struct Type {
   pub span: span.Span,
   pub kind: TypeKind,
 }
 
+#[json]
 pub enum TypeKind {
   Nominal(Path, Slice<Type>),
   Tuple(Slice<Type>),
   Fn(Slice<ParamType>, Ref<Type>),
 }
 
+#[json]
 pub struct ParamType {
   pub mode: Option<mode.Mode>,
   pub typ: Type,

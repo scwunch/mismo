@@ -25,6 +25,10 @@ impl Span {
     f"{self.start}..{self.end}"
   }
 
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    Ok(f"\"{self.string()}\"" as Slice<byte>)
+  }
+
   pub fn before(self, other: Span) -> bool {
     self.start < other.start
   }

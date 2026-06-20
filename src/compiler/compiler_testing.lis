@@ -1,6 +1,6 @@
 import "go:fmt"
 
-import "errors"
+import dx "diagnostics"
 import "parser"
 import "testing"
 
@@ -8,7 +8,7 @@ pub fn test_compiler() {
   let _ = testing.test_suite("Compiler", [test_dummy])
 }
 
-fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+pub fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Dummy"
 
   t.should_eq(Source(" asdf\n  asdf"), Source("asdfasdf"))?
@@ -19,10 +19,23 @@ fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn main():
   print(\"hello world\")
   "
+  match specialize(source) {
+    Err(errors) => {
+      let _ = t.fail("unexpected compilation failure")
+      dx.report(errors, source)
+      return Err("")
+    },
+    Ok(reg) => {
+      for f in reg.functions {
+        fmt.Println(f.name)
+        fmt.Println(f.body)
+      }
+    },
+  }
   match transpile(source) {
-    Err(errs) => {
-      let _ = t.fail(f"unexpected compilation failure: \n{errs}")
-      errors.report(errs, source)
+    Err(errors) => {
+      let _ = t.fail(f"unexpected compilation failure: \n{errors}")
+      dx.report(errors, source)
       return Err("")
     },
     Ok(zig) => t.should_eq(
@@ -39,7 +52,7 @@ fn main():
       ),
     )?,
   }
-  run(source, Options.new())
+  // run(source, Options.new())
   Ok(())
 }
 

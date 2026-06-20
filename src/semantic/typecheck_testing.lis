@@ -1,5 +1,5 @@
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "operator"
 import "span"
@@ -842,7 +842,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(_) => t.fail("expected error for double type arg bind")?,
     Err(e) => {
       match e {
-        errors.NoMatchError { errs, .. } as e => {
+        dx.NoMatchError { errs, .. } as e => {
           if !errs.any(|fn_err| {
             fn_err.1.code() == 2100
           }) {
@@ -970,7 +970,7 @@ fn test_call_type_vars(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Ok(_) => t.fail("expected error for unbound type param")?,
     Err(e) => {
       match e {
-        errors.NoMatchError { errs, .. } as e => {
+        dx.NoMatchError { errs, .. } as e => {
           if !errs.any(|fn_err| {
             fn_err.1.code() == 2101
           }) {

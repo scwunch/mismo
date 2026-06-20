@@ -1,9 +1,10 @@
+import "go:encoding/json"
 import "go:fmt"
 import "go:os"
 import "go:path/filepath"
 
 import "compiler"
-import "errors"
+import dx "diagnostics"
 import "lexer"
 import "parser"
 import "semantic"
@@ -31,10 +32,10 @@ fn main() {
         },
       }
 
-      if let Err(errs) = sub_cmd(cmd, source_str, args) {
+      if let Err(errors) = sub_cmd(cmd, source_str, args) {
         let runes = source_str as Slice<rune>
-        for e in errs {
-          fmt.Fprintln(os.Stderr, errors.render(e, runes))
+        for e in errors {
+          fmt.Fprintln(os.Stderr, dx.render(e, runes))
         }
       }
     },
@@ -52,14 +53,17 @@ fn run_path(path: string) -> Result<(), error> {
   Ok(compiler.run(source_str, opts))
 }
 
-fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slice<errors.Diagnostic>> {
-  match cmd {
-    "lex" => fmt.Println(compiler.compile_to_tokens(source)),
-    "parse" => fmt.Println(compiler.compile_to_ast(source)?),
-    "typecheck" => fmt.Println(compiler.type_check(source)?),
-    "check" => fmt.Println(compiler.mode_check(source)?),
-    "specialize" => fmt.Println(compiler.specialize(source)?),
-    "transpile" => fmt.Println(compiler.transpile(source)?),
+fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slice<dx.Diagnostic>> {
+  let res = match cmd {
+    "lex" => json.MarshalIndent(compiler.compile_to_tokens(source), "", "  "),
+    "parse" => json.MarshalIndent(compiler.compile_to_ast(source)?, "", "  "),
+    "typecheck" => json.MarshalIndent(compiler.type_check(source)?, "", "  "),
+    "check" => json.MarshalIndent(compiler.mode_check(source)?, "", "  "),
+    "specialize" => json.MarshalIndent(compiler.specialize(source)?, "", "  "),
+    "transpile" => {
+      fmt.Println(compiler.transpile(source)?)
+      return Ok(())
+    },
     "build" => {
       let mut opts = compiler.Options.new()
       let Ok(work_dir) = os.Getwd() else {
@@ -77,8 +81,16 @@ fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slic
           return Err([])
         },
       }
+      return Ok(())
     },
-    _ => fmt.Println(f"Error: unrecognized sub command \"{cmd}\""),
+    _ => {
+      fmt.Println(f"Error: unrecognized sub command \"{cmd}\"")
+      return Err([])
+    },
+  }
+  match res {
+    Ok(bytes) => fmt.Println(bytes as string),
+    Err(e) => fmt.Fprintln(os.Stderr, e.Error()),
   }
   Ok(())
 }

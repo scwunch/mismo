@@ -6,12 +6,14 @@ import "span"
 pub type Operator = operator.Operator
 
 #[display]
+#[json]
 pub struct Expression {
   pub span: span.Span,
   pub kind: Expr,
 }
 
 #[display]
+#[json]
 pub enum Expr {
   Nil,
   BoolLiteral(bool),
@@ -40,6 +42,7 @@ pub enum Expr {
   Extern,
 }
 
+#[json]
 pub struct Path {
   pub namespace: Slice<string>,
   pub name: string,
@@ -51,6 +54,7 @@ impl Path {
   }
 }
 
+#[json]
 pub struct Binop {
   pub left: Expression,
   pub op: Operator,
@@ -64,12 +68,14 @@ impl Binop {
   }
 }
 
+#[json]
 pub struct Call {
   pub fn_name: Path,
   pub type_args: Option<Slice<Type>>,
   pub args: Slice<Expression>,
 }
 
+#[json]
 pub struct ForLoop {
   pub binding: Expression,
   pub iter: Expression,
@@ -83,6 +89,7 @@ impl ForLoop {
   }
 }
 
+#[json]
 pub enum Conditional {
   Binary { subject: Ref<Expression>, ops: Slice<Comparison> },
   Unary { expr: Ref<Expression>, consequent: Ref<Expression> },
@@ -90,16 +97,19 @@ pub enum Conditional {
   Else { consequent: Ref<Expression> },
 }
 
+#[json]
 pub struct Comparison {
   pub op: Operator,
   pub objects: Slice<Branch>,
 }
 
+#[json]
 pub struct Branch {
   pub object: Ref<Expression>,
   pub then: Consequent,
 }
 
+#[json]
 pub enum Consequent {
   And(Conditional),
   Or(Conditional),

@@ -1,5 +1,5 @@
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 import "testing"
@@ -398,7 +398,7 @@ fn test_eval_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 
   match env.try_eval_function(decl) {
-    Ok(func) => t.should_eq(func, FunctionDef.mock("foo", [], [], Type.Int))?,
+    Ok(func) => t.should_eq(func.*, FunctionDef.mock("foo", [], [], Type.Int))?,
     Err(e) => t.fail(e.message())?,
   }
 

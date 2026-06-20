@@ -1,4 +1,5 @@
 import "cst"
+import dx "diagnostics"
 
 pub fn analyze(items: cst.Declarations) -> TypeEnv {
   let mut env = TypeEnv.new()
@@ -9,8 +10,9 @@ pub fn analyze(items: cst.Declarations) -> TypeEnv {
   // evaluate fields, variants, and canonical constructors
   env.fill_out_type_info(items.types)
 
+  // testing.dbg(env.signatures)
   for i in 0..items.functions.length() {
-    let func = &env.function_defs[i]
+    let func = env.function_defs[i]
     let body = items.functions[i].body
     match TypeCheck.new(&env, func.*).check(body, func.return_type) {
       Ok(expr) => {
@@ -33,7 +35,7 @@ pub fn analyze_type_check(items: cst.Declarations) -> TypeEnv {
   env.register_functions(items.functions)
 
   for i in 0..env.function_defs.length() {
-    let func = &env.function_defs[i]
+    let func = env.function_defs[i]
     let body = items.functions[i].body
     match TypeCheck.new(&env, func.*).check(body, func.return_type) {
       Ok(expr) => {

@@ -1,4 +1,4 @@
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 import "utils/slice"
@@ -10,7 +10,7 @@ impl ModeCheck {
     ModeCheck {}
   }
 
-  fn infer(self, node: Expression) -> Result<mode.Mode, errors.TypeError> {
+  fn infer(self, node: Expression) -> Result<mode.Mode, dx.TypeError> {
     match node.kind {
       Expr.Nil |
       Expr.BoolLiteral(_) |
@@ -31,7 +31,7 @@ impl ModeCheck {
         if src_mode.assignable_to(dest_mode) {
           Ok(dest_mode)
         } else {
-          Err(errors.ModeMismatchError.new(
+          Err(dx.ModeMismatchError.new(
             expr.span,
             dest_mode.string(),
             src_mode.string(),
@@ -61,7 +61,7 @@ impl ModeCheck {
     }
   }
 
-  fn consume(self, node: Expression) -> Result<(), errors.TypeError> {
+  fn consume(self, node: Expression) -> Result<(), dx.TypeError> {
     match node.kind {
       Expr.Identifier(varid) => self.consume_ident(varid, node.span),
       Expr.FieldAccess(obj, i) => {
@@ -74,15 +74,15 @@ impl ModeCheck {
         if m == mode.Mode.Var {
           Ok(())
         } else {
-          Err(errors.ConsumeBorrowError.new(f"{node.kind}", node.span))
+          Err(dx.ConsumeBorrowError.new(f"{node.kind}", node.span))
         }
       },
     }
   }
 
-  fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, errors.TypeError> {
+  fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, dx.TypeError> {
     if let Some(consumed) = varid.consumed {
-      return Err(errors.UseAfterConsumeError.new(
+      return Err(dx.UseAfterConsumeError.new(
         varid.name,
         used,
         span.Span { 
@@ -94,17 +94,17 @@ impl ModeCheck {
     Ok(varid.mode)
   }
 
-  fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), errors.TypeError> {
+  fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), dx.TypeError> {
     let _ = self.use_ident(varid, span)?
     if varid.mode == mode.Mode.Var {
       varid.consumed = Some(span.start)
       Ok(())
     } else {
-      Err(errors.ConsumeBorrowError.new(varid.name, span))
+      Err(dx.ConsumeBorrowError.new(varid.name, span))
     }
   }
 
-  fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, errors.TypeError> {
+  fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, dx.TypeError> {
     let mut m = mode.Mode.Var
     for expr in exprs[..exprs.length() - 1] {
       if let Expr.Break(Some(expr)) = expr.kind {
@@ -116,7 +116,7 @@ impl ModeCheck {
     Ok(m.union(self.infer(exprs[exprs.length() - 1])?))
   }
 
-  fn consume_block(self, exprs: Slice<Expression>) -> Result<(), errors.TypeError> {
+  fn consume_block(self, exprs: Slice<Expression>) -> Result<(), dx.TypeError> {
     for expr in exprs[..exprs.length() - 1] {
       if let Expr.Break(Some(expr)) = expr.kind {
         self.consume(expr.*)?
@@ -127,14 +127,14 @@ impl ModeCheck {
     self.consume(exprs[exprs.length() - 1])
   }
 
-  fn call(self, call: FnCall) -> Result<mode.Mode, errors.TypeError> {
+  fn call(self, call: FnCall) -> Result<mode.Mode, dx.TypeError> {
     for (arg, param) in slice.zip(call.args, call.fun.parameters) {
       if param.mode == mode.Mode.Var {
         self.consume(arg)?
       } else {
         let m = self.infer(arg)?
         if !m.assignable_to(param.mode) {
-          return Err(errors.ModeMismatchError.new(
+          return Err(dx.ModeMismatchError.new(
             arg.span,
             param.mode.string(),
             m.string(),

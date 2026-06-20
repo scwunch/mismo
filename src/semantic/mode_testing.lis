@@ -1,4 +1,4 @@
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 import "testing"

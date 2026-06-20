@@ -1,6 +1,10 @@
+import "go:encoding/json"
 import "go:fmt"
 
-pub fn dbg<A>(a: A) -> A {
-  fmt.Println(a)
-  a
+pub fn dbg<A>(a: A) {
+  let str = match json.MarshalIndent(a, "", "  ") {
+    Ok(bytes) => bytes as string,
+    Err(e) => e.Error(),
+  }
+  fmt.Println(str)
 }

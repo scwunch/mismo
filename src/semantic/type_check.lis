@@ -1,5 +1,5 @@
 import "cst"
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "operator"
 import "span"
@@ -63,10 +63,10 @@ impl TypeCheck {
 }
 
 impl TypeCheck {
-  fn check(self, expr: cst.Expression, expected: Type) -> Result<Expression, errors.TypeError> {
+  fn check(self, expr: cst.Expression, expected: Type) -> Result<Expression, dx.TypeError> {
     let actual = self.infer(expr)?
     if !actual.typ().assignable_to(expected) {
-      return Err(errors.TypeMismatchError.new(
+      return Err(dx.TypeMismatchError.new(
         actual.span,
         expected.string(),
         actual.typ().string(),
@@ -75,7 +75,7 @@ impl TypeCheck {
     Ok(actual)
   }
 
-  fn infer(self, node: cst.Expression) -> Result<Expression, errors.TypeError> {
+  fn infer(self, node: cst.Expression) -> Result<Expression, dx.TypeError> {
     let expr: Expr = match node.kind {
       Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
@@ -89,7 +89,7 @@ impl TypeCheck {
       Identifier(path) => if path.namespace.is_empty() {
         match self.get(path.name) {
           Some(varid) => Expr.Identifier(varid),
-          None => return Err(errors.MissingNameError.new(path.name, node.span)),
+          None => return Err(dx.MissingNameError.new(path.name, node.span)),
         }
       } else {
         panic("TODO: implement TypeCheck.resolve_path(Path)")
@@ -150,7 +150,7 @@ impl TypeCheck {
     Ok(Expression { span: node.span, kind: expr })
   }
 
-  fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, dx.TypeError> {
     let mut self = self
     if exprs.is_empty() { return Ok(Expr.Nil) }
     let mut expressions = []
@@ -166,7 +166,7 @@ impl TypeCheck {
         Expr.Return(opt_expr) => {
           let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.Tuple([]))
           if !self.return_type.equals(actual) {
-            return Err(errors.TypeMismatchError.new(
+            return Err(dx.TypeMismatchError.new(
               span,
               f"{self.return_type}",
               f"{actual}",
@@ -185,8 +185,8 @@ impl TypeCheck {
     Ok(expr)
   }
 
-  fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, errors.TypeError> {
-    if elems.is_empty() { return Err(errors.EmptyArrayLiteralError.new(span)) }
+  fn array(self, elems: Slice<cst.Expression>, span: span.Span) -> Result<Expr, dx.TypeError> {
+    if elems.is_empty() { return Err(dx.EmptyArrayLiteralError.new(span)) }
     let inferred = slice.map_result(elems, self.infer)?
 
     let mut elem_type = inferred[0].typ()
@@ -195,7 +195,7 @@ impl TypeCheck {
         Some(t) => elem_type = t,
         None => {
           let types = inferred.map(|e| f"{e.typ()}").join(", ")
-          return Err(errors.HeterogeneousArrayLiteralError.new(span, types))
+          return Err(dx.HeterogeneousArrayLiteralError.new(span, types))
         },
       }
     }
@@ -203,11 +203,11 @@ impl TypeCheck {
     Ok(Expr.ArrayLiteral(inferred, elem_type))
   }
 
-  fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.TypeError> {
     if binop.op == operator.Operator.Assign {
       match binop.left.kind {
         Identifier(path) if !path.namespace.is_empty() => {
-          Err(errors.InvalidAssignmentTargetError.new(binop.left.span, path))
+          Err(dx.InvalidAssignmentTargetError.new(binop.left.span, path))
         },
         Identifier(path) => match self.get(path.name) {
           Some(varid) => {
@@ -215,7 +215,7 @@ impl TypeCheck {
             Ok(Expr.Assign(varid, &value))
           },
           None => {
-            self.env.env.error(errors.MissingNameError.new(
+            self.env.env.error(dx.MissingNameError.new(
               path.name,
               binop.left.span,
             ))
@@ -224,7 +224,7 @@ impl TypeCheck {
           },
         },
         _ => {
-          self.env.env.error(errors.InvalidAssignmentTargetError.new(
+          self.env.env.error(dx.InvalidAssignmentTargetError.new(
             binop.left.span,
             binop.left,
           ))
@@ -241,25 +241,25 @@ impl TypeCheck {
     }
   }
 
-  fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.TypeError> {
     let _ = cond
     let _ = span
     panic("not implemented yet")
   }
 
-  fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.TypeError> {
     let _ = cond
     let _ = span
     panic("not implemented yet")
   }
 
-  fn for_expr(self, for_loop: cst.ForLoop, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn for_expr(self, for_loop: cst.ForLoop, span: span.Span) -> Result<Expr, dx.TypeError> {
     let _ = for_loop
     let _ = span
     panic("not implemented yet")
   }
 
-  fn dot_name(self, expr: Expression, name: string, span: span.Span) -> Result<Expr, errors.TypeError> {
+  fn dot_name(self, expr: Expression, name: string, span: span.Span) -> Result<Expr, dx.TypeError> {
     let typ = expr.typ()
     if let Type.Adt(def, args) = typ {
       if let TypeKind.Struct(fields) = def.kind {
@@ -277,7 +277,7 @@ impl TypeCheck {
     type_args: Slice<Type>,
     call: cst.Call,
     span: span.Span,
-  ) -> Result<Expr, errors.TypeError> {
+  ) -> Result<Expr, dx.TypeError> {
     let type_args = match call.type_args {
       Some(extra_type_args) => {
         let extra = slice.map_result(extra_type_args, self.env.eval_type)?
@@ -288,7 +288,7 @@ impl TypeCheck {
     let args = slice.map_result(call.args, self.infer)?
     // TODO: add module resolution here too
     let Some(type_def) = self.env.env.type_defs.get(type_path.name) else {
-      return Err(errors.MissingNameError.new(type_path.name, span))
+      return Err(dx.MissingNameError.new(type_path.name, span))
     }
     resolve_overload(
       type_def.signatures,
@@ -305,7 +305,7 @@ impl TypeCheck {
     type_args: Slice<Type>,
     args: Slice<Expression>,
     span: span.Span,
-  ) -> Result<Expr, errors.TypeError> {
+  ) -> Result<Expr, dx.TypeError> {
     if type_args.is_empty() && fname.namespace.is_empty() {
       let local_funs = self.get_local_functions(fname.name)
       for fun in local_funs {
@@ -369,7 +369,7 @@ impl Variable {
 
 enum OverloadCandidate {
   Ok(FnCall),
-  Err(Ref<FunctionDef>, errors.TypeError),
+  Err(Ref<FunctionDef>, dx.TypeError),
 }
 
 fn try_match_candidate(
@@ -380,7 +380,7 @@ fn try_match_candidate(
   if fun.parameters.length() != args.length() {
     return OverloadCandidate.Err(
       fun,
-      errors.ArgArityError.new(
+      dx.ArgArityError.new(
         span,
         fun.name,
         fun.parameters.length(),
@@ -398,7 +398,7 @@ fn try_match_candidate(
     if let Type.Var(-1) = t {
       return OverloadCandidate.Err(
         fun,
-        errors.UnboundTypeParamError.new(span, fun.type_parameters[i].name),
+        dx.UnboundTypeParamError.new(span, fun.type_parameters[i].name),
       )
     }
   }
@@ -411,7 +411,7 @@ fn match_types(
   arg: Type,
   mut bindings: Slice<Type>,
   span: span.Span,
-) -> Result<(), errors.TypeError> {
+) -> Result<(), dx.TypeError> {
   if let Type.Var(idx) = param {
     match bindings[idx] {
       Type.Var(-1) => {
@@ -421,12 +421,7 @@ fn match_types(
       existing => if existing.equals(arg) {
         Ok(())
       } else {
-        Err(errors.DoubleTypeArgBoundError.new(
-          span,
-          idx,
-          f"{existing}",
-          f"{arg}",
-        ))
+        Err(dx.DoubleTypeArgBoundError.new(span, idx, f"{existing}", f"{arg}"))
       },
     }
   } else {
@@ -436,7 +431,7 @@ fn match_types(
       }
       Ok(())
     } else {
-      Err(errors.TypeMismatchError.new(span, f"{param}", f"{arg}"))
+      Err(dx.TypeMismatchError.new(span, f"{param}", f"{arg}"))
     }
   }
 }
@@ -447,11 +442,11 @@ fn resolve_overload(
   type_args: Slice<Type>,
   args: Slice<Expression>,
   span: span.Span,
-) -> Result<Expr, errors.TypeError> {
+) -> Result<Expr, dx.TypeError> {
   let _ = type_args
   // TODO: if type_args present, use them!
   let candidates = match signatures.get(fname) {
-    None => return Err(errors.MissingNameError.new(fname, span)),
+    None => return Err(dx.MissingNameError.new(fname, span)),
     Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
   }
   let mut matches = []
@@ -464,7 +459,7 @@ fn resolve_overload(
   match maximal {
     [call] => Ok(Expr.Call(call)),
     _ => if matches.is_empty() {
-      Err(errors.NoMatchError.new(
+      Err(dx.NoMatchError.new(
         span,
         candidates.map(|fun| match fun {
           Err(def, e) => (def.signature(), e),
@@ -472,7 +467,7 @@ fn resolve_overload(
         }),
       ))
     } else {
-      Err(errors.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
+      Err(dx.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
     },
   }
 }

@@ -1,15 +1,17 @@
-import "errors"
+import dx "diagnostics"
 import "mode"
 import "span"
 
 /// a container for declarations collected from a module
+#[json]
 pub struct Declarations {
   pub imports: Slice<Import>,
   pub types: Slice<TypeDecl>,
   pub functions: Slice<FunctionDecl>,
-  pub errors: Slice<errors.SyntaxError>,
+  pub errors: Slice<dx.SyntaxError>,
 }
 
+#[json]
 pub struct Import {
   pub path: string,
   pub alias: Option<string>,
@@ -21,6 +23,7 @@ impl Import {
   }
 }
 
+#[json]
 pub struct TypeParameter {
   pub span: span.Span,
   pub name: string,
@@ -32,6 +35,7 @@ impl TypeParameter {
   }
 }
 
+#[json]
 pub struct TypeDecl {
   pub span: span.Span,
   pub name: string,
@@ -64,6 +68,7 @@ pub enum TypeBody {
   Enum(Slice<Variant>),
 }
 
+#[json]
 pub struct Field {
   pub span: span.Span,
   pub name: string,
@@ -76,6 +81,7 @@ impl Field {
   }
 }
 
+#[json]
 pub struct Variant {
   pub span: span.Span,
   pub name: string,
@@ -88,6 +94,7 @@ impl Variant {
   }
 }
 
+#[json]
 pub struct FunctionDecl {
   pub span: span.Span,
   pub signature: Signature,
@@ -104,6 +111,7 @@ impl FunctionDecl {
   }
 }
 
+#[json]
 pub struct Signature {
   pub span: span.Span,
   pub name: string,
@@ -124,6 +132,7 @@ impl Signature {
   }
 }
 
+#[json]
 pub struct Parameter {
   pub span: span.Span,
   pub mode: Option<mode.Mode>,
@@ -154,7 +163,7 @@ impl Declarations {
     self.functions = self.functions.append(f)
   }
 
-  pub fn add_error(self: Ref<Declarations>, s: errors.SyntaxError) {
+  pub fn add_error(self: Ref<Declarations>, s: dx.SyntaxError) {
     self.errors = self.errors.append(s)
   }
 }
