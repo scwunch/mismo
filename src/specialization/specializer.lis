@@ -110,6 +110,11 @@ impl Specializer {
         Expr.TupleLiteral(exprs.map(|e| self.substitute(e, type_args)))
       },
       Identifier(id) => Expr.Identifier(id), // HMM: do we need to change the type of `Variable` id?
+      Declare(mode, id, value) => Expr.Declare(
+        mode,
+        id,
+        &self.substitute(value.*, type_args),
+      ),
       Assign(id, expr) => Expr.Assign(id, &self.substitute(expr.*, type_args)),
       Binding(m, expr) => Expr.Binding(m, &self.substitute(expr.*, type_args)),
       SwitchIf(cases) => {

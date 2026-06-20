@@ -53,7 +53,8 @@ fn panic(str: String) -> Never:
    __zig_panic(str)
 
 fn main():
-   print("hello world")
+   let s = "hello world"
+   print(s)
 
 struct Point
    x Int

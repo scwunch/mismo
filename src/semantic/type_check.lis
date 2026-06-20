@@ -205,32 +205,9 @@ impl TypeCheck {
 
   fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.TypeError> {
     if binop.op == operator.Operator.Assign {
-      match binop.left.kind {
-        Identifier(path) if !path.namespace.is_empty() => {
-          Err(dx.InvalidAssignmentTargetError.new(binop.left.span, path))
-        },
-        Identifier(path) => match self.get(path.name) {
-          Some(varid) => {
-            let value = self.infer(binop.right)?
-            Ok(Expr.Assign(varid, &value))
-          },
-          None => {
-            self.env.env.error(dx.MissingNameError.new(
-              path.name,
-              binop.left.span,
-            ))
-            let _ = self.infer(binop.right)?
-            Ok(Expr.Nil)
-          },
-        },
-        _ => {
-          self.env.env.error(dx.InvalidAssignmentTargetError.new(
-            binop.left.span,
-            binop.left,
-          ))
-          Ok(Expr.Nil)
-        },
-      }
+      let value = self.infer(binop.right)?
+      let value = &value
+      self.assign(binop.left, value)
     } else {
       self.call(
         cst.Path.name_(binop.op.sigil()),
@@ -239,6 +216,32 @@ impl TypeCheck {
         span,
       )
     }
+  }
+
+  fn assign(self, lhs: cst.Expression, value: Ref<Expression>) -> Result<Expr, dx.TypeError> {
+    match lhs.kind {
+      Binding(mode, expr) => match expr.kind {
+        Identifier(path) if path.namespace.is_empty() => {
+          return Ok(Expr.Declare(
+            mode,
+            &Variable.new(mode, path.name, value.typ(), lhs.span.start),
+            value,
+          ))
+        },
+        _ => (),
+      },
+      Identifier(path) if path.namespace.is_empty() => {
+        return match self.get(path.name) {
+          Some(varid) => Ok(Expr.Assign(varid, value)),
+          None => Err(dx.MissingNameError.new(path.name, lhs.span)),
+        }
+      },
+      // TODO: destructuring assignment
+      // (x, y) = (a, b)
+      // Foo{x} = foo
+      _ => (),
+    }
+    Err(dx.InvalidAssignmentTargetError.new(lhs.span, lhs))
   }
 
   fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.TypeError> {
@@ -470,4 +473,12 @@ fn resolve_overload(
       Err(dx.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
     },
   }
+}
+
+pub fn ref<T>(self: T) -> Ref<T> {
+  &self
+}
+
+pub fn ngeh<T>(self: T) -> T {
+  self
 }

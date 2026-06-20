@@ -109,6 +109,7 @@ impl Emitter {
         )
       },
       Identifier(varid) => self.ident(varid.name),
+      Declare(mode, varid, value) => self.declare(mode, varid.name, value.kind),
       Assign(pattern, value) => panic(f"unhandled expression type: {expr}"),
       Binding(m, expr) => panic(f"unhandled expression type: {expr}"),
       Call(call) => panic(f"Uy, this should be concrete at this point!: {expr}"),
@@ -126,6 +127,22 @@ impl Emitter {
       Constructor(typ, args) => self.emit_constructor(typ, args),
       Extern => panic("Oops, we shouldn't be emitting external functions!"),
     }
+  }
+
+  fn declare(
+    self: Ref<Emitter>,
+    m: mode.Mode,
+    name: string,
+    value: semantic.Expr,
+  ) {
+    match m {
+      Var => self.emit("var "),
+      Let => self.emit("const "),
+      _ => self.emit("letvarconstsomething "),
+    }
+    self.emit(name)
+    self.emit(" = ")
+    self.emit_expr(value)
   }
 
   fn emit_string_literal(self: Ref<Emitter>, s: string) {

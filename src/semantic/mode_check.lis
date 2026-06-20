@@ -22,6 +22,9 @@ impl ModeCheck {
         Ok(mode.Mode.Var)
       },
       Expr.Identifier(varid) => self.use_ident(varid, node.span),
+      Expr.Declare(_, varid, value) => self
+        .consume(value.*)
+        .map(|_| mode.Mode.Var),
       Expr.Assign(varid, expr) => Ok(mode.Mode.Var),
       Expr.Binding(mode.Mode.Var, expr) => self
         .consume(expr.*)
@@ -157,7 +160,7 @@ impl Expression {
       ArrayLiteral(_, _) |
       TupleLiteral(_) => mode.Mode.Var,
       Identifier(varid) => varid.mode,
-      Assign(_, _) => mode.Mode.Var,
+      Declare(_, _, _) | Assign(_, _) => mode.Mode.Var,
       Binding(m, _) => m,
       FieldAccess(obj, _) => obj.mode(),
       Block([], _) => mode.Mode.Var,

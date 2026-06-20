@@ -19,6 +19,7 @@ pub enum Expr {
   ArrayLiteral(Slice<Expression>, Type),
   TupleLiteral(Slice<Expression>),
   Identifier(Ref<Variable>),
+  Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
   Assign(Ref<Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(FnCall),
@@ -105,7 +106,7 @@ impl Expression {
 impl Expr {
   fn typ(self) -> Type {
     match self {
-      Expr.Nil => Type.Tuple([]),
+      Expr.Nil => Type.nil(),
       Expr.BoolLiteral(bool) => Type.Bool,
       Expr.IntLiteral(int) => Type.Int,
       Expr.FloatLiteral(float64) => Type.Float,
@@ -113,6 +114,7 @@ impl Expr {
       Expr.ArrayLiteral(_, typ) => typ,
       Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
       Expr.Identifier(id) => id.typ,
+      Expr.Declare(_, _, _) => Type.nil(),
       Expr.Assign(id, _) => id.typ,
       Expr.Binding(_, expr) => expr.typ(),
       Expr.Call(call) => call.fun.return_type,
