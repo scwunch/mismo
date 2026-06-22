@@ -22,6 +22,7 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
+  Closure(Slice<Parameter>, Ref<Expression>),
   Identifier(Path),
   Binding(mode.Mode, Ref<Expression>),
   Binop(Ref<Binop>),
@@ -142,6 +143,10 @@ pub fn array_lit(span: span.Span, values: Slice<Expression>) -> Expression {
 
 pub fn tuple_lit(span: span.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.TupleLiteral(values) }
+}
+
+pub fn closure(span: span.Span, params: Slice<Parameter>, body: Ref<Expression>) -> Expression {
+  Expression { span, kind: Expr.Closure(params, body) }
 }
 
 pub fn identifier(span: span.Span, path: Path) -> Expression {

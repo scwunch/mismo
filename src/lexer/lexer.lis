@@ -15,13 +15,9 @@ impl Lexer {
     let pos = self.index
 
     let tok = match self.peek_char() {
+      '\n' => self.new_line(),
       ',' => Token.comma(pos),
       '.' => Token.dot(pos),
-      ':' => if self.peek_char_at(1) == ':' {
-        Token.namespace_separator(pos)
-      } else {
-        Token.colon(pos)
-      },
       ';' => Token.semicolon(pos),
       '(' => Token.left_paren(pos),
       ')' => Token.right_paren(pos),
@@ -30,12 +26,17 @@ impl Lexer {
       '[' => Token.left_bracket(pos),
       ']' => Token.right_bracket(pos),
       '"' | '\'' | '`' => self.read_string(),
-      '\n' => self.new_line(),
       '-' if self.peek_char_at(1) == '-' => self.new_line(),
       '-' if self.peek_char_at(1) == '>' => Token.arrow(pos),
+      '|' if self.peek_char_at(1) != '=' => Token.pipe(pos),
       ' ' | '\t' => {
         self.index += 1
         return self.next()
+      },
+      ':' => if self.peek_char_at(1) == ':' {
+        Token.namespace_separator(pos)
+      } else {
+        Token.colon(pos)
       },
       0 => Token.eof(pos),
       c if is_digit(c) => self.read_number(),

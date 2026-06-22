@@ -115,7 +115,10 @@ impl Parser {
     loop {
       match (self.peek().kind, end) {
         (EOF, _) => break,
-        (RightBracket, ']') | (RightParen, ')') | (RightBrace, '}') => break,
+        (RightBracket, ']') |
+        (RightParen, ')') |
+        (RightBrace, '}') |
+        (Pipe, '|') => break,
         (Newline(_, c), _) if c == end => {
           let _ = self.next()
           break

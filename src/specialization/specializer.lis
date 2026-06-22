@@ -109,6 +109,14 @@ impl Specializer {
       TupleLiteral(exprs) => {
         Expr.TupleLiteral(exprs.map(|e| self.substitute(e, type_args)))
       },
+      Closure(closure) => Expr.Closure(
+        semantic.Closure { 
+          env: closure.env,
+          params: closure.params.map(|p| p.substitute(type_args)),
+          ret_type: closure.ret_type.substitute(type_args),
+          body: &self.substitute(closure.body.*, type_args),
+        },
+      ),
       Identifier(id) => Expr.Identifier(id), // HMM: do we need to change the type of `Variable` id?
       Declare(mode, id, value) => Expr.Declare(
         mode,

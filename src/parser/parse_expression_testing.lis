@@ -14,6 +14,7 @@ pub fn test_expression() {
       test_parse_basic_literals,
       test_parse_array_literals,
       test_parse_tuple_literals,
+      test_parse_closure,
       test_parse_function_calls,
       test_parse_method_calls,
       test_parse_unary_neg,
@@ -259,6 +260,30 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
       )?
     },
     _ => return t.fail(f"Expected Call; got {expr.kind}"),
+  }
+  Ok(())
+}
+
+fn test_parse_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "closure"
+  let mut parser = Parser.new("|mut a Int|: a += 1")
+  let mut ep = ExpressionParser.new(&parser, 0)
+  let expr = ep.parse().map_err(|e| e.message())?
+
+  match expr.kind {
+    Closure(params, body) => {
+      t.should_eq(
+        params[0],
+        cst.Parameter.new(
+          span.new(1, 10),
+          Some(mode.Mode.Mut),
+          "a",
+          cst.typ(7, 10, "Int", []),
+        ),
+      )?
+      // t.should_be_true(body.is_none(), "Expected no body")?
+    },
+    _ => return t.fail(f"Expected Closure; got {expr.kind}"),
   }
   Ok(())
 }

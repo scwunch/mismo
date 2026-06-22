@@ -18,6 +18,7 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>, Type),
   TupleLiteral(Slice<Expression>),
+  Closure(Closure),
   Identifier(Ref<Variable>),
   Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
   Assign(Ref<Variable>, Ref<Expression>),
@@ -51,6 +52,35 @@ impl FnCall {
     args: Slice<Expression>,
   ) -> FnCall {
     FnCall { fun, type_args, args }
+  }
+}
+
+#[json]
+pub struct Closure {
+  pub env: Slice<Capture>,
+  pub params: Slice<Parameter>,
+  pub ret_type: Type,
+  pub body: Ref<Expression>,
+}
+
+#[json]
+pub struct Capture {
+  pub mode: mode.Mode,
+  pub variable: Ref<Variable>,
+}
+
+impl Closure {
+  pub fn typ(self) -> Type {
+    // let params = self.params.map(|p| ParamType{mode: p.mode, typ: p.typ})
+    Type.Fn(self.params.map(Parameter.param_type), &self.ret_type)
+  }
+
+  pub fn call_mode(self) -> mode.Mode {
+    self.env.fold(mode.Mode.Let, |acc, cap| acc.union(cap.mode))
+  }
+
+  pub fn is_movable(self) -> bool {
+    self.env.all(|c| c.mode == mode.Mode.Var)
   }
 }
 
@@ -98,13 +128,13 @@ impl Expression {
     Expression.new(span.new(0, 0), Expr.Nil)
   }
 
-  fn typ(self) -> Type {
+  pub fn typ(self) -> Type {
     self.kind.typ()
   }
 }
 
 impl Expr {
-  fn typ(self) -> Type {
+  pub fn typ(self) -> Type {
     match self {
       Expr.Nil => Type.nil(),
       Expr.BoolLiteral(bool) => Type.Bool,
@@ -113,6 +143,7 @@ impl Expr {
       Expr.StringLiteral(string) => Type.String,
       Expr.ArrayLiteral(_, typ) => typ,
       Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
+      Expr.Closure(closure) => closure.typ(),
       Expr.Identifier(id) => id.typ,
       Expr.Declare(_, _, _) => Type.nil(),
       Expr.Assign(id, _) => id.typ,

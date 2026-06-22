@@ -91,9 +91,9 @@ impl ExpressionParser {
   fn read_operand(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
     let tok = self.parser.next()
     let term = match tok.kind {
-      TokenKind.Operator(Sub) => return self.handle_prefix(Operator.Neg),
-      TokenKind.Operator(Not) => return self.handle_prefix(Operator.Not),
-      TokenKind.Operator(op) => {
+      Operator(Sub) => return self.handle_prefix(Operator.Neg),
+      Operator(Not) => return self.handle_prefix(Operator.Not),
+      Operator(op) => {
         if self.parser.peek().kind == TokenKind.LeftParen {
           self.function_call(tok.span, cst.Path.name_(op.sigil()), None)?
         } else {
@@ -103,26 +103,27 @@ impl ExpressionParser {
           ))
         }
       },
-      TokenKind.Let => return self.handle_prefix(Operator.Let),
-      TokenKind.Mut => return self.handle_prefix(Operator.Mut),
-      TokenKind.MutBang => return self.handle_prefix(Operator.MutBang),
-      TokenKind.Var => return self.handle_prefix(Operator.Var),
-      TokenKind.If => self.parser.parse_if_expression(tok.span)?,
-      TokenKind.While => self.parser.parse_while_expression(tok.span)?,
-      TokenKind.For => self.parser.parse_for_expression(tok.span)?,
-      TokenKind.Return => cst.return_(tok.span, self.optional_expression()?),
-      TokenKind.Break => cst.break_(tok.span, self.optional_expression()?),
-      TokenKind.Continue => cst.continue_(tok.span),
-      TokenKind.Identifier(name) => self.identifier(tok.span, name)?,
-      TokenKind.LeftParen => self.parse_paren_group(tok.span)?,
-      TokenKind.LeftBracket => self.parse_array_literal(tok.span)?,
-      TokenKind.Dot => self.handle_dot(cst.implicit_self(tok.span))?,
-      TokenKind.IntLiteral(n) => cst.int_lit(tok.span, n),
-      TokenKind.FloatLiteral(n) => cst.float_lit(tok.span, n),
-      TokenKind.StringLiteral(s) => cst.string_lit(tok.span, s),
-      TokenKind.Nil => cst.nil_lit(tok.span),
-      TokenKind.Bool(b) => cst.bool_lit(tok.span, b),
-      TokenKind.Error(msg) => return Err(ParseError.new(tok.span, msg)),
+      Let => return self.handle_prefix(Operator.Let),
+      Mut => return self.handle_prefix(Operator.Mut),
+      MutBang => return self.handle_prefix(Operator.MutBang),
+      Var => return self.handle_prefix(Operator.Var),
+      If => self.parser.parse_if_expression(tok.span)?,
+      While => self.parser.parse_while_expression(tok.span)?,
+      For => self.parser.parse_for_expression(tok.span)?,
+      Return => cst.return_(tok.span, self.optional_expression()?),
+      Break => cst.break_(tok.span, self.optional_expression()?),
+      Continue => cst.continue_(tok.span),
+      Identifier(name) => self.identifier(tok.span, name)?,
+      LeftParen => self.parse_paren_group(tok.span)?,
+      LeftBracket => self.parse_array_literal(tok.span)?,
+      Dot => self.handle_dot(cst.implicit_self(tok.span))?,
+      Pipe => self.parse_closure(tok.span)?,
+      IntLiteral(n) => cst.int_lit(tok.span, n),
+      FloatLiteral(n) => cst.float_lit(tok.span, n),
+      StringLiteral(s) => cst.string_lit(tok.span, s),
+      Nil => cst.nil_lit(tok.span),
+      Bool(b) => cst.bool_lit(tok.span, b),
+      Error(msg) => return Err(ParseError.new(tok.span, msg)),
       _ => return Err(ParseError.new(
         tok.span,
         f"Expected term or prefix operator. Got {tok.kind}",
@@ -184,18 +185,18 @@ impl ExpressionParser {
     let tok = self.parser.next()
     let tok_span = tok.span
     match tok.kind {
-      TokenKind.Newline(_, _) => self.read_operator(),
-      TokenKind.Operator(op) => {
+      Newline(_, _) => self.read_operator(),
+      Operator(op) => {
         self.push_operator(op)?
         self.expecting = Expecting.Term
         Ok(())
       },
-      TokenKind.Dot => {
+      Dot => {
         let receiver = self.pop_term()?
         self.terms = self.terms.append(self.handle_dot(receiver)?)
         Ok(())
       },
-      TokenKind.LeftParen => Err(ParseError.new(
+      LeftParen => Err(ParseError.new(
         tok_span,
         "only named functions are supported, cannot 'call' arbitrary expressions",
       )),
@@ -203,7 +204,7 @@ impl ExpressionParser {
         tok_span,
         "Use `.get(i)` to index into collections.",
       )),
-      TokenKind.Error(msg) => Err(ParseError.new(tok_span, msg)),
+      Error(msg) => Err(ParseError.new(tok_span, msg)),
       _ => Err(ParseError.new(
         tok_span,
         f"Expected binary operator; got {tok.kind}",
@@ -360,6 +361,14 @@ impl ExpressionParser {
     let types = self.parser.parse_list(']', self.parser.parse_type)?
     let _ = self.parser.consume(TokenKind.RightBracket)?
     Ok(Some(types))
+  }
+
+  fn parse_closure(self: Ref<ExpressionParser>, span: span.Span) -> Result<cst.Expression, ParseError> {
+    let parameters = self.parser.parse_list('|', self.parser.parse_parameter)?
+    let _ = self.parser.consume(TokenKind.Pipe)?
+    let body = self.parser.parse_colon_and_block()?
+    let span = span.merge(body.span)
+    Ok(cst.closure(span, parameters, &body))
   }
 
   fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {

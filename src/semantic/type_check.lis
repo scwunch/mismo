@@ -86,6 +86,10 @@ impl TypeCheck {
       TupleLiteral(elems) => Expr.TupleLiteral(
         slice.map_result(elems, self.infer)?,
       ),
+      Closure(params, body) => self.closure(
+        slice.map_result(params, self.env.eval_param)?,
+        self.infer(body.*)?,
+      )?,
       Identifier(path) => if path.namespace.is_empty() {
         match self.get(path.name) {
           Some(varid) => Expr.Identifier(varid),
@@ -201,6 +205,13 @@ impl TypeCheck {
     }
 
     Ok(Expr.ArrayLiteral(inferred, elem_type))
+  }
+
+  fn closure(self, params: Slice<Parameter>, body: Expression) -> Result<Expr, dx.TypeError> {
+    let ret_type = body.typ()
+    let env = collect_captures(body)
+    Ok(Expr.Closure(Closure { env, params, ret_type, body: &body }))
+    // Ok(Expression.new(span, Expr.Closure(closure)))
   }
 
   fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.TypeError> {
@@ -349,9 +360,9 @@ impl TypeCheck {
 pub struct Variable {
   pub mode: mode.Mode,
   pub name: string,
-  typ: Type,
-  init: uint32,
-  consumed: Option<uint32>,
+  pub typ: Type,
+  pub init: uint32,
+  pub consumed: Option<uint32>,
 }
 
 impl Variable {
@@ -475,10 +486,13 @@ fn resolve_overload(
   }
 }
 
-pub fn ref<T>(self: T) -> Ref<T> {
-  &self
-}
+fn collect_captures(body: Expression) -> Slice<Capture> {
+  let _ = body
+  panic("TODO: implement collect_captures")
+  // match body.kind {
 
-pub fn ngeh<T>(self: T) -> T {
-  self
+  // I might have to actually spawn another TypeCheck object with context to complete this
+  // also consider if it would be beneficial to insert a Desugar pass between the cst and ast
+  // with actual name resolution (function call names of course would still be handled with type checking)
+  // }
 }

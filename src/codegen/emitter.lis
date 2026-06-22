@@ -104,6 +104,7 @@ impl Emitter {
           },
         )
       },
+      Closure(closure) => self.emit_closure(closure),
       Identifier(varid) => self.ident(varid.name),
       Declare(mode, varid, value) => self.declare(mode, varid.name, value.kind),
       Assign(pattern, value) => panic(f"unhandled expression type: {expr}"),
@@ -148,6 +149,42 @@ impl Emitter {
     self.emit("string_from_literal(")
     self.emit(strconv.Quote(s))
     self.emit(")")
+  }
+
+  fn emit_closure(self: Ref<Emitter>, closure: semantic.Closure) {
+    self.emit("struct ")
+    self.start_block()
+    self.emit("state: ")
+    self.emit("self.emit_type(capture.typ())")
+    self.emit_list(
+      closure.env,
+      "struct {",
+      "}",
+      |cap| {
+        self.emit(cap.variable.name)
+        self.emit(": ")
+        self.emit_type(cap.variable.typ)
+      },
+    )
+    self.emit(",")
+    self.newline()
+    self.emit_list(
+      closure.params,
+      "fn call(self: @This(), ",
+      ") ",
+      self.emit_parameter,
+    )
+    self.emit_type(closure.body.typ())
+    self.start_block()
+    self.newline()
+    self.emit("return ")
+    self.emit_expr(closure.body.kind)
+    // TODO: replace captured variables with `state.var_name`
+    self.end_block()
+    self.end_block()
+    self.emit("{ .state = ")
+    self.emit("self.emit_captured_state(capture)")
+    self.emit(" }")
   }
 
   fn emit_call(self: Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {

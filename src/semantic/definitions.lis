@@ -100,6 +100,10 @@ impl Parameter {
     Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
   }
 
+  pub fn param_type(self) -> ParamType {
+    ParamType { mode: self.mode, typ: self.typ }
+  }
+
   pub fn substitute(self, type_args: Slice<Type>) -> Parameter {
     Parameter.new(
       self.span,
