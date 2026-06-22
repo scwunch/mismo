@@ -1,0 +1,142 @@
+import "ast"
+import "cst"
+import dx "diagnostics"
+import "ty"
+import "utils/slice"
+
+pub fn resolve(items: cst.Declarations) -> ast.Registry {
+  let env = &ast.Registry.new()
+  // populate @type_defs and @function_defs with names of types and type parameters
+  register_types(env, items.types)
+
+  // register signatures of all functions
+  // this must be done before generated functions (eg constructors)
+  // to maintain the same ordering as items.functions
+  register_functions(env, items.functions)
+
+  // evaluate fields, variants, and canonical constructors
+  fill_out_type_info(env, items.types)
+
+  // perform name resolution and desugaring
+  resolve_functions(env, items.functions)
+  env.*
+}
+
+pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
+  for t in type_defs {
+    match self.type_defs.get(t.name) {
+      Some(def) => self.error(dx.DuplicateNameError.new(
+        t.name,
+        t.span,
+        def.span,
+      )),
+      None => {
+        let kind = match t.body {
+          cst.TypeBody.Struct(_) => ty.TypeKind.Struct([]),
+          cst.TypeBody.Enum(_) => ty.TypeKind.Enum([]),
+        }
+        let type_params = t.type_parameters.map(|param| {
+          ty.TypeParameter { span: param.span, name: param.name }
+        })
+        self.type_defs[t.name] = &ty.TypeDef.new(
+          t.span,
+          t.name,
+          type_params,
+          kind,
+        )
+      },
+    }
+  }
+}
+
+pub fn fill_out_type_info(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
+  for decl in types {
+    let def = self.type_defs[decl.name]
+    let ctx = TypeContext.new(self, def.type_parameters)
+    match decl.body {
+      cst.TypeBody.Struct(fields) => {
+        let fields = fields.map(ctx.eval_field)
+        def.kind = ty.TypeKind.Struct(fields)
+
+        // constructor
+        let _self_type = Type.Adt(
+          def,
+          def.type_parameters.enumerate().map(|(i, _)| Type.Var(i)),
+        )
+        // self.add_function(
+        //   &ty.new_fn_def(
+        //     def.span,
+        //     -1,
+        //     def.name,
+        //     def.type_parameters,
+        //     fields.map(Field.to_param),
+        //     self_type,
+        //     Expression.new(
+        //       def.span,
+        //       Expr.Constructor(self_type, fields.map(|f| f.name)),
+        //     ),
+        //   ),
+        // )
+      },
+      cst.TypeBody.Enum(variants) => {
+        let variants = variants.map(ctx.eval_variant)
+        def.kind = ty.TypeKind.Enum(variants)
+      },
+    }
+  }
+}
+
+pub fn register_functions(
+  self: Ref<ast.Registry>,
+  functions: Slice<cst.FunctionDecl>,
+) {
+  self.function_defs = functions.map(|f| eval_function(self, f))
+}
+
+pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast.Function> {
+  match try_eval_function(self, func) {
+    Ok(func) => {
+      if let Some(def) = self.type_defs.get(func.name) {
+        self.error(dx.OverloadCanonicalConstructorError.new(def.span, def.name))
+      }
+      match self.signatures.get(func.name) {
+        Some(existing) => {
+          self.signatures[func.name] = existing.append(func)
+        },
+        None => self.signatures[func.name] = [func],
+      }
+      func
+    },
+    Err(e) => {
+      self.error(e)
+      &ast.mock_func(func.signature.name, [], [], Type.nil())
+    },
+  }
+}
+
+pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Result<Ref<ast.Function>, dx.ResolveError> {
+  let span = func.span
+  let name = func.signature.name
+  let type_params = func.signature.type_parameters.map(|param| {
+    ty.TypeParameter.new(param.span, param.name)
+  })
+
+  let ctx = TypeContext.new(self, type_params)
+  let params = slice.map_result(func.signature.parameters, ctx.eval_param)?
+  let return_type = ctx.eval_type(func.signature.return_type)?
+
+  let body = ast.Expression.blank()
+  Ok(&ty.new_fn_def(span, -1, name, type_params, params, return_type, body))
+}
+
+pub fn resolve_functions(
+  self: Ref<ast.Registry>,
+  functions: Slice<cst.FunctionDecl>,
+) {
+  for (def, func) in slice.zip(self.function_defs, functions) {
+    match Resolver.new(self, def).resolve(func.body) {
+      Ok(body) => def.body = body,
+      Err(e) => self.error(e),
+    }
+  }
+}

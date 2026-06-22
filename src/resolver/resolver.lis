@@ -1,0 +1,268 @@
+import "ast"
+import "cst"
+import dx "diagnostics"
+import "operator"
+import "span"
+import "ty"
+import "utils/slice"
+
+type Expr = ast.Expr
+
+pub struct Scope { bindings: Slice<Ref<ast.Variable>> }
+
+impl Scope {
+  fn from_params(params: Slice<ty.Parameter>) -> Ref<Scope> {
+    let scope = &Scope { bindings: [] }
+    for param in params {
+      scope.bindings = scope.bindings.append(&ast.Variable.from_param(param))
+    }
+    scope
+  }
+
+  fn get(self, name: string) -> Option<Ref<ast.Variable>> {
+    for v in self.bindings {
+      if name == v.name { return Some(v) }
+    }
+    None
+  }
+}
+
+pub struct Resolver {
+  pub ctx: TypeContext,
+  pub scope: Ref<Scope>,
+}
+
+impl Resolver {
+  fn new(env: Ref<ast.Registry>, func: Ref<ast.Function>) -> Resolver {
+    let scope = Scope.from_params(func.parameters)
+    let ctx = TypeContext.new(env, func.type_parameters)
+    Resolver { ctx, scope }
+  }
+
+  fn new_blank() -> Resolver {
+    Resolver.new(
+      &ast.Registry.new(),
+      &ast.mock_func("dummy", [], [], Type.nil()),
+    )
+  }
+
+  fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+    let expr: Expr = match node.kind {
+      Nil => Expr.TupleLiteral([]),
+      BoolLiteral(b) => Expr.BoolLiteral(b),
+      IntLiteral(i) => Expr.IntLiteral(i),
+      FloatLiteral(f) => Expr.FloatLiteral(f),
+      StringLiteral(s) => Expr.StringLiteral(s),
+      ArrayLiteral(elems) => Expr.ArrayLiteral(
+        slice.map_result(elems, self.resolve)?,
+      ),
+      TupleLiteral(elems) => Expr.TupleLiteral(
+        slice.map_result(elems, self.resolve)?,
+      ),
+      Closure(params, body) => self.closure(
+        slice.map_result(params, self.ctx.eval_param)?,
+        self.resolve(body.*)?,
+      )?,
+      Identifier(path) => if path.namespace.is_empty() {
+        match self.scope.get(path.name) {
+          Some(varid) => Expr.Identifier(varid),
+          None => return Err(dx.MissingNameError.new(path.name, node.span)),
+        }
+      } else {
+        panic("TODO: implement Resolver.resolve_path(Path)")
+      },
+      Binding(m, expr) => {
+        let e = self.resolve(expr.*)?
+        Expr.Binding(m, &e)
+      },
+      Binop(binop) => self.binop(binop.*, node.span)?,
+      Call(call) => self.call(
+        call.fn_name,
+        slice.map_result(call.type_args.unwrap_or([]), self.ctx.eval_type)?,
+        slice.map_result(call.args, self.resolve)?,
+        node.span,
+      )?,
+      If(cond) => self.if_expr(cond, node.span)?,
+      While(cond) => self.while_expr(cond, node.span)?,
+      For(for_loop) => self.for_expr(for_loop.*, node.span)?,
+      Block(exprs) => self.block(exprs, node.span)?,
+      Neg(expr) => self.call(
+        cst.Path.name_("neg"),
+        [],
+        [self.resolve(expr.*)?],
+        node.span,
+      )?,
+      Not(expr) => self.call(
+        cst.Path.name_("not"),
+        [],
+        [self.resolve(expr.*)?],
+        node.span,
+      )?,
+      Return(None) => Expr.Return(None),
+      Return(Some(expr)) => {
+        let e = self.resolve(expr.*)?
+        Expr.Return(Some(&e))
+      },
+      Break(None) => Expr.Break(None),
+      Break(Some(expr)) => {
+        let e = self.resolve(expr.*)?
+        Expr.Break(Some(&e))
+      },
+      Continue => Expr.Continue,
+      DotName(expr, name) => self.dot_name(
+        self.resolve(expr.*)?,
+        name,
+        node.span,
+      )?,
+      DotCall(expr, call) => self.call(
+        call.fn_name,
+        slice.map_result(call.type_args.unwrap_or([]), self.ctx.eval_type)?,
+        [self.resolve(expr.*)?].append(slice.map_result(call.args, self.resolve)?...),
+        node.span,
+      )?,
+      TypeDotCall(path, type_args, call) => self.type_dot_call(
+        path,
+        slice.map_result(type_args, self.ctx.eval_type)?,
+        call,
+        node.span,
+      )?,
+      Extern => Expr.Extern,
+    }
+    Ok(ast.Expression { span: node.span, kind: expr })
+  }
+
+  fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    panic((exprs, span))
+    // let mut self = self
+    // if exprs.is_empty() { return Ok(Expr.Nil) }
+    // let mut expressions = []
+    // let mut types = []
+    // for node in exprs {
+    //   let expr = self.resolve(node)?
+    //   expressions = expressions.append(expr)
+    //   match expr.kind {
+    //     Expr.Declare(_, varid, _) | Expr.Assign(varid, _) => self.bindings = &List.Cons(
+    //       varid,
+    //       self.bindings,
+    //     ),
+    //     Expr.Return(opt_expr) => {
+    //       let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
+    //       if !self.return_type.equals(actual) {
+    //         return Err(dx.TypeMismatchError.new(
+    //           span,
+    //           f"{self.return_type}",
+    //           f"{actual}",
+    //         ))
+    //       }
+    //     },
+    //     Expr.Break(opt_expr) => {
+    //       let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
+    //       types = types.append(ty)
+    //     },
+    //     _ => (),
+    //   }
+    // }
+    // types = types.append(expressions[expressions.length() - 1].typ())
+    // let expr = Expr.Block(expressions, types[0])
+    // Ok(expr)
+  }
+
+  fn closure(self, params: Slice<ty.Parameter>, body: ast.Expression) -> Result<Expr, dx.ResolveError> {
+    let ret_type = Type.Never
+    let env = collect_captures(body)
+    Ok(Expr.Closure(ast.Closure { env, params, ret_type, body: &body }))
+    // Ok(Expression.new(span, Expr.Closure(closure)))
+  }
+
+  fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    if binop.op == operator.Operator.Assign {
+      let value = self.resolve(binop.right)?
+      let value = &value
+      self.assign(binop.left, value)
+    } else {
+      self.call(
+        cst.Path.name_(binop.op.sigil()),
+        [],
+        [self.resolve(binop.left)?, self.resolve(binop.right)?],
+        span,
+      )
+    }
+  }
+
+  fn assign(self, lhs: cst.Expression, value: Ref<ast.Expression>) -> Result<Expr, dx.ResolveError> {
+    match lhs.kind {
+      Binding(mode, expr) => match expr.kind {
+        Identifier(path) if path.namespace.is_empty() => {
+          return Ok(Expr.Declare(
+            mode,
+            &ast.Variable.new(mode, path.name, lhs.span.start),
+            value,
+          ))
+        },
+        _ => (),
+      },
+      Identifier(path) if path.namespace.is_empty() => {
+        return match self.scope.get(path.name) {
+          Some(varid) => Ok(Expr.Assign(varid, value)),
+          None => Err(dx.MissingNameError.new(path.name, lhs.span)),
+        }
+      },
+      // TODO: destructuring assignment
+      // (x, y) = (a, b)
+      // Foo{x} = foo
+      _ => (),
+    }
+    Err(dx.InvalidAssignmentTargetError.new(lhs.span, lhs))
+  }
+
+  fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    let _ = cond
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    let _ = cond
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn for_expr(self, for_loop: cst.ForLoop, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    let _ = for_loop
+    let _ = span
+    panic("not implemented yet")
+  }
+
+  fn dot_name(self, expr: ast.Expression, name: string, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    panic((name, [], [expr], span))
+  }
+
+  fn type_dot_call(
+    self,
+    type_path: cst.Path,
+    type_args: Slice<Type>,
+    call: cst.Call,
+    span: span.Span,
+  ) -> Result<Expr, dx.ResolveError> {
+    panic((type_path, type_args, call, span))
+  }
+
+  fn call(
+    self,
+    fname: cst.Path,
+    type_args: Slice<Type>,
+    args: Slice<ast.Expression>,
+    span: span.Span,
+  ) -> Result<Expr, dx.ResolveError> {
+    panic((fname, type_args, args, span))
+  }
+
+  // fn get_local_functions(self, fname: string) -> Slice<Ref<ast.Variable>> {
+  //   panic(fname)
+  // }
+}
+
+fn collect_captures(node: ast.Expression) -> Slice<ast.Capture> {
+  let _ = node
+  []
+}

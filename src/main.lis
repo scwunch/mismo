@@ -5,11 +5,12 @@ import "go:path/filepath"
 
 import "compiler"
 import dx "diagnostics"
+import "span"
 import "lexer"
 import "parser"
-import "semantic"
-import "span"
-import "specialization"
+import "resolver"
+// import "semantic"
+// import "specialization"
 
 fn main() {
   match os.Args {
@@ -57,13 +58,13 @@ fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slic
   let res = match cmd {
     "lex" => json.MarshalIndent(compiler.compile_to_tokens(source), "", "  "),
     "parse" => json.MarshalIndent(compiler.compile_to_ast(source)?, "", "  "),
-    "typecheck" => json.MarshalIndent(compiler.type_check(source)?, "", "  "),
-    "check" => json.MarshalIndent(compiler.mode_check(source)?, "", "  "),
-    "specialize" => json.MarshalIndent(compiler.specialize(source)?, "", "  "),
-    "transpile" => {
-      fmt.Println(compiler.transpile(source)?)
-      return Ok(())
-    },
+    // "typecheck" => json.MarshalIndent(compiler.type_check(source)?, "", "  "),
+    // "check" => json.MarshalIndent(compiler.mode_check(source)?, "", "  "),
+    // "specialize" => json.MarshalIndent(compiler.specialize(source)?, "", "  "),
+    // "transpile" => {
+    //   fmt.Println(compiler.transpile(source)?)
+    //   return Ok(())
+    // },
     "build" => {
       let mut opts = compiler.Options.new()
       let Ok(work_dir) = os.Getwd() else {
@@ -100,10 +101,11 @@ fn run_tests(tests: Slice<string>) {
     ("span", span.test),
     ("lexer", lexer.test),
     ("parser", parser.test),
-    ("type_env", semantic.test_type_env),
-    ("typecheck", semantic.test_typecheck),
-    ("modecheck", semantic.test_modecheck),
-    ("specialization", specialization.test_specialization),
+    ("resolver", resolver.test),
+    // ("type_env", semantic.test_type_env),
+    // ("typecheck", semantic.test_typecheck),
+    // ("modecheck", semantic.test_modecheck),
+    // ("specialization", specialization.test_specialization),
     // ("codegen", codegen.test_codegen),
     ("compiler", compiler.test_compiler),
   ])

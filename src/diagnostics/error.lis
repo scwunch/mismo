@@ -99,6 +99,10 @@ impl ParseError {
   }
 }
 
+pub interface ResolveError {
+  embed Diagnostic
+}
+
 pub interface TypeError {
   embed Diagnostic
 }

@@ -1,0 +1,12 @@
+import "testing"
+
+pub fn test() {
+  let _ = testing.test_suite("Resolver", [test_dummy])
+}
+
+pub fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "Dummy"
+  let _res = Resolver.new_blank()
+
+  Ok(())
+}

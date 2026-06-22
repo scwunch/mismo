@@ -1,0 +1,288 @@
+import "mode"
+import "span"
+import "ty"
+
+pub type Type = ty.Type
+
+#[display]
+#[json]
+pub struct Expression {
+  pub span: span.Span,
+  pub kind: Expr,
+}
+
+#[display]
+#[json]
+pub enum Expr {
+  Nil,
+  BoolLiteral(bool),
+  IntLiteral(int),
+  FloatLiteral(float64),
+  StringLiteral(string),
+  ArrayLiteral(Slice<Expression>),
+  TupleLiteral(Slice<Expression>),
+  Closure(Closure),
+  Identifier(Ref<Variable>),
+  Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
+  Assign(Ref<Variable>, Ref<Expression>),
+  Binding(mode.Mode, Ref<Expression>),
+  Call(Call),
+  ConcreteCall(int, Slice<Expression>),
+  SwitchIf(SwitchIf),
+  Match(Match),
+  Loop(Slice<Expression>, Type),
+  Block(Slice<Expression>, Type),
+  Return(Option<Ref<Expression>>),
+  Break(Option<Ref<Expression>>),
+  Continue,
+  FieldAccess(Ref<Expression>, int),
+  Constructor(Type, Slice<string>),
+  Extern,
+}
+
+pub struct Variable {
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+  pub init: uint32,
+  pub consumed: Option<uint32>,
+}
+
+impl Variable {
+  pub fn from_param(param: ty.Parameter) -> Variable {
+    Variable { 
+      mode: param.mode,
+      name: param.name,
+      typ: param.typ,
+      init: param.span.start,
+      consumed: None,
+    }
+  }
+
+  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
+    Variable { mode, name, typ: Type.Never, init, consumed: None }
+  }
+}
+
+#[display]
+#[json]
+pub struct Call {
+  pub local_candidates: Slice<Ref<Variable>>,
+  pub global_candidates: Slice<Ref<Function>>,
+  pub type_args: Slice<Type>,
+  pub args: Slice<Expression>,
+}
+
+impl Call {
+  pub fn new(
+    local_candidates: Slice<Ref<Variable>>,
+    global_candidates: Slice<Ref<Function>>,
+    type_args: Slice<Type>,
+    args: Slice<Expression>,
+  ) -> Call {
+    Call { local_candidates, global_candidates, type_args, args }
+  }
+}
+
+#[json]
+pub struct Closure {
+  pub env: Slice<Capture>,
+  pub params: Slice<ty.Parameter>,
+  pub ret_type: Type,
+  pub body: Ref<Expression>,
+}
+
+#[json]
+pub struct Capture {
+  pub mode: mode.Mode,
+  pub variable: Ref<Variable>,
+}
+
+impl Closure {
+  pub fn typ(self) -> Type {
+    // let params = self.params.map(|p| ParamType{mode: p.mode, typ: p.typ})
+    Type.Fn(self.params.map(ty.Parameter.param_type), &self.ret_type)
+  }
+
+  pub fn call_mode(self) -> mode.Mode {
+    self.env.fold(mode.Mode.Let, |acc, cap| acc.union(cap.mode))
+  }
+
+  pub fn is_movable(self) -> bool {
+    self.env.all(|c| c.mode == mode.Mode.Var)
+  }
+}
+
+#[json]
+pub struct SwitchIf {
+  pub cases: Slice<(Expression, Expression)>,
+}
+
+impl SwitchIf {
+  pub fn new(cases: Slice<(Expression, Expression)>) -> SwitchIf {
+    SwitchIf { cases }
+  }
+}
+
+#[json]
+pub struct Match {
+  pub subject: Ref<Expression>,
+  pub cases: Slice<MatchCase>,
+}
+
+impl Match {
+  pub fn new(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Match {
+    Match { subject, cases }
+  }
+}
+
+#[json]
+pub struct MatchCase {
+  pub pattern: Expression,
+  pub expr: Expression,
+}
+
+impl MatchCase {
+  pub fn new(pattern: Expression, expr: Expression) -> MatchCase {
+    MatchCase { pattern, expr }
+  }
+}
+
+impl Expression {
+  pub fn new(span: span.Span, kind: Expr) -> Expression {
+    Expression { span, kind }
+  }
+
+  pub fn blank() -> Expression {
+    Expression.new(span.new(0, 0), Expr.Nil)
+  }
+
+  // pub fn typ(self) -> Type {
+  //   self.kind.typ()
+  // }
+}
+
+impl Expression {
+  pub fn equals(self, other: Expression) -> bool {
+    self.span == other.span && self.kind.equals(other.kind)
+  }
+}
+
+impl Expr {
+  #[allow(float_cmp)]
+  pub fn equals(self, other: Expr) -> bool {
+    match (self, other) {
+      (Nil, Nil) => true,
+      (BoolLiteral(a), BoolLiteral(b)) => a == b,
+      (IntLiteral(a), IntLiteral(b)) => a == b,
+      (FloatLiteral(a), FloatLiteral(b)) => a == b,
+      (StringLiteral(a), StringLiteral(b)) => a == b,
+      (ArrayLiteral(a1), ArrayLiteral(a2)) => a1.equals(a2),
+      (TupleLiteral(a), TupleLiteral(b)) => a.equals(b),
+      (Identifier(a), Identifier(b)) => a == b,
+      (Assign(a1, a2), Assign(b1, b2)) => a1 == b1 && a2.equals(b2.*),
+      (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
+      (Call(a), Call(b)) => a.equals(b),
+      (SwitchIf(a), SwitchIf(b)) => a.equals(b),
+      (Match(a), Match(b)) => a.equals(b),
+      (Loop(a1, t1), Loop(a2, t2)) => a1.equals(a2) && t1.equals(t2),
+      (Block(a1, t1), Block(a2, t2)) => a1.equals(a2) && t1.equals(t2),
+      (Return(None), Return(None)) => true,
+      (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
+      (Break(None), Break(None)) => true,
+      (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
+      (Continue, Continue) => true,
+      (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
+      _ => false,
+    }
+  }
+}
+
+impl Call {
+  pub fn equals(self, other: Call) -> bool {
+    self.local_candidates.equals(other.local_candidates) &&
+    self.global_candidates.equals(other.global_candidates) &&
+    self.type_args.equals(other.type_args) &&
+    self.args.equals(other.args)
+  }
+}
+
+impl SwitchIf {
+  pub fn equals(self, other: SwitchIf) -> bool {
+    if self.cases.length() != other.cases.length() { return false }
+    for i in 0..self.cases.length() {
+      let (a1, a2) = self.cases[i]
+      let (b1, b2) = other.cases[i]
+      if !a1.equals(b1) || !a2.equals(b2) { return false }
+    }
+    true
+  }
+}
+
+impl Match {
+  pub fn equals(self, other: Match) -> bool {
+    self.subject.equals(other.subject.*) && self.cases.equals(other.cases)
+  }
+}
+
+impl MatchCase {
+  pub fn equals(self, other: MatchCase) -> bool {
+    self.pattern.equals(other.pattern) && self.expr.equals(other.expr)
+  }
+}
+
+// impl Expr {
+//   pub fn typ(self) -> Type {
+//     match self {
+//       Expr.Nil => Type.nil(),
+//       Expr.BoolLiteral(bool) => Type.Bool,
+//       Expr.IntLiteral(int) => Type.Int,
+//       Expr.FloatLiteral(float64) => Type.Float,
+//       Expr.StringLiteral(string) => Type.String,
+//       Expr.ArrayLiteral(_, typ) => typ,
+//       Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
+//       Expr.Closure(closure) => closure.typ(),
+//       Expr.Identifier(id) => id.typ,
+//       Expr.Declare(_, _, _) => Type.nil(),
+//       Expr.Assign(id, _) => id.typ,
+//       Expr.Binding(_, expr) => expr.typ(),
+//       Expr.Call(call) => call.fun.return_type,
+//       Expr.SwitchIf(cases) => cases.cases[0].1.typ(),
+//       Expr.Match(cases) => cases.cases[0].expr.typ(),
+//       Expr.Loop(_, typ) => typ,
+//       Expr.Block(_, typ) => typ,
+//       Expr.Return(_) => Type.Never,
+//       Expr.Break(_) => Type.Never,
+//       Expr.Continue => Type.Never,
+//       Expr.FieldAccess(obj, i) => match obj.typ() {
+//         Type.Adt(def, args) => match def.kind {
+//           Struct(fields) => fields[i].typ.substitute(args),
+//           Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
+//         },
+//         _ => panic("compiler bug 73: FieldAccess on non-ADT"),
+//       },
+//       Expr.ConcreteCall(_, _) => panic(
+//         "compiler bug 75: concrete call should never have 'type' method called on it",
+//       ),
+//       Expr.Constructor(typ, _) => typ,
+//       Expr.Extern => Type.Never,
+//     }
+//   }
+// }
+
+pub fn mock_func(
+  name: string,
+  type_parameters: Slice<ty.TypeParameter>,
+  parameters: Slice<ty.Parameter>,
+  return_type: Type,
+) -> ty.FunctionDef<Expression> {
+  ty.FunctionDef { 
+    span: span.new(0, 0),
+    id: -1,
+    name,
+    type_parameters,
+    parameters,
+    return_type,
+    body: Expression.new(span.new(0, 0), Expr.Extern),
+  }
+}

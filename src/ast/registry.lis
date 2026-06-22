@@ -1,0 +1,73 @@
+import "cst"
+import dx "diagnostics"
+import "mode"
+import "span"
+import "ty"
+
+// pub type FunctionRef = Ref<ty.FunctionDef<Expression>>
+pub type Function = ty.FunctionDef<Expression> // pub struct FunctionRef(Ref<ty.FunctionDef<Expression>>)
+// pub struct FunctionRef {
+//   embed Ref<ty.FunctionDef<Expression>>,
+// }
+
+#[json]
+pub struct Registry {
+  pub imports: Map<string, Registry>,
+  pub type_defs: Map<string, Ref<ty.TypeDef>>,
+  pub function_defs: Slice<Ref<Function>>,
+  pub signatures: Map<string, Slice<Ref<Function>>>,
+  pub errors: Slice<dx.TypeError>,
+}
+
+impl Registry {
+  pub fn new() -> Registry {
+    Registry { .. }
+  }
+
+  pub fn add_function(self: Ref<Registry>, func: Ref<Function>) {
+    let i = self.function_defs.length()
+    self.function_defs = self.function_defs.append(func)
+    let def = self.function_defs[i]
+    match self.signatures.get(def.name) {
+      Some(existing) => {
+        self.signatures[def.name] = existing.append(def)
+      },
+      None => self.signatures[def.name] = [def],
+    }
+  }
+
+  pub fn error(self: Ref<Registry>, err: dx.TypeError) {
+    self.errors = self.errors.append(err)
+  }
+
+  pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<Registry, dx.ResolveError> {
+    self.imports
+      .get(path.namespace.join("::"))
+      .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))
+  }
+
+  pub fn eval_type(
+    self,
+    span: span.Span,
+    name: string,
+    type_args: Slice<ty.Type>,
+  ) -> Result<ty.Type, dx.ResolveError> {
+    match self.type_defs.get(name) {
+      None => {
+        Err(dx.MissingNameError.new(name, span))
+      },
+      Some(def) => {
+        if type_args.length() != def.type_parameters.length() {
+          Err(dx.TypeParameterArityError.new(
+            span,
+            name,
+            type_args.length(),
+            def.type_parameters.length(),
+          ))
+        } else {
+          Ok(ty.Type.Adt(def, type_args))
+        }
+      },
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import "go:hash/maphash"
 
-import "semantic"
+// import "semantic"
 import "span"
 
 struct Cache { map: Map<uint64, Slice<(MonoMorphKey, int)>>, hasher: Hasher }

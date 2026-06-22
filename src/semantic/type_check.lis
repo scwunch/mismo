@@ -20,7 +20,7 @@ impl TypeCheck {
       let v = &Variable.from_param(param)
       scope = &List.Cons(v, scope)
     }
-    TypeCheck { 
+    TypeCheck {
       env: env.type_context(func.type_parameters),
       next_var: &zero,
       return_type: func.return_type,
@@ -354,30 +354,6 @@ impl TypeCheck {
       scope = rest.*
     }
     funs
-  }
-}
-
-pub struct Variable {
-  pub mode: mode.Mode,
-  pub name: string,
-  pub typ: Type,
-  pub init: uint32,
-  pub consumed: Option<uint32>,
-}
-
-impl Variable {
-  fn from_param(param: Parameter) -> Variable {
-    Variable { 
-      mode: param.mode,
-      name: param.name,
-      typ: param.typ,
-      init: param.span.start,
-      consumed: None,
-    }
-  }
-
-  fn new(mode: mode.Mode, name: string, typ: Type, init: uint32) -> Variable {
-    Variable { mode, name, typ, init, consumed: None }
   }
 }
 

@@ -1,20 +1,10 @@
-import "cst"
+import "ast"
 import dx "diagnostics"
 
-pub fn analyze(items: cst.Declarations) -> TypeEnv {
-  let mut env = TypeEnv.new()
-  // populate @type_defs and @function_defs with names of types and type parameters
-  env.register_types(items.types)
-  // register signatures of all functions
-  env.register_functions(items.functions)
-  // evaluate fields, variants, and canonical constructors
-  env.fill_out_type_info(items.types)
-
-  // testing.dbg(env.signatures)
-  for i in 0..items.functions.length() {
+pub fn analyze(env: Ref<ast.Registry>) {
+  for i in 0..env.functions.length() {
     let func = env.function_defs[i]
-    let body = items.functions[i].body
-    match TypeCheck.new(&env, func.*).check(body, func.return_type) {
+    match TypeCheck.new(&env, func.*).check(func.body, func.return_type) {
       Ok(expr) => {
         func.body = expr
         if let Err(e) = ModeCheck.new().consume(expr) { env.error(e) }
@@ -22,27 +12,16 @@ pub fn analyze(items: cst.Declarations) -> TypeEnv {
       Err(e) => env.error(e),
     }
   }
-  env
 }
 
 pub fn analyze_type_check(items: cst.Declarations) -> TypeEnv {
-  let mut env = TypeEnv.new()
-  // populate @type_defs and @function_defs with names of types and type parameters
-  env.register_types(items.types)
-  // evaluate fields and variants for structs and enums
-  env.fill_out_type_info(items.types)
-  // register signatures of all functions
-  env.register_functions(items.functions)
-
-  for i in 0..env.function_defs.length() {
+  for i in 0..env.functions.length() {
     let func = env.function_defs[i]
-    let body = items.functions[i].body
-    match TypeCheck.new(&env, func.*).check(body, func.return_type) {
+    match TypeCheck.new(&env, func.*).check(func.body, func.return_type) {
       Ok(expr) => {
         func.body = expr
       },
       Err(e) => env.error(e),
     }
   }
-  env
 }

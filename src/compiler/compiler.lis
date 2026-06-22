@@ -2,13 +2,13 @@ import "go:fmt"
 import "go:io"
 import "go:os"
 
-import "codegen"
+// import "codegen"
 import "cst"
 import dx "diagnostics"
 import "lexer"
 import "parser"
-import "semantic"
-import "specialization"
+// import "semantic"
+// import "specialization"
 
 pub fn compile_to_tokens(source: string) -> Slice<lexer.Token> {
   let mut toks = []
@@ -30,58 +30,62 @@ pub fn compile_to_ast(source: string) -> Result<cst.Declarations, Slice<dx.Diagn
   }
 }
 
-pub fn type_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
-  let decs = compile_to_ast(source)?
-  let env = semantic.analyze_type_check(decs)
-  if env.errors.is_empty() {
-    Ok(env)
-  } else {
-    Err(env.errors.map(|e| e as dx.Diagnostic))
-  }
-}
+// pub fn type_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
+//   let decs = compile_to_ast(source)?
+//   let env = semantic.analyze_type_check(decs)
+//   if env.errors.is_empty() {
+//     Ok(env)
+//   } else {
+//     Err(env.errors.map(|e| e as dx.Diagnostic))
+//   }
+// }
 
-pub fn mode_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
-  let decs = compile_to_ast(source)?
-  let env = semantic.analyze(decs)
-  if env.errors.is_empty() {
-    Ok(env)
-  } else {
-    Err(env.errors.map(|e| e as dx.Diagnostic))
-  }
-}
+// pub fn mode_check(source: string) -> Result<semantic.TypeEnv, Slice<dx.Diagnostic>> {
+//   let decs = compile_to_ast(source)?
+//   let env = semantic.analyze(decs)
+//   if env.errors.is_empty() {
+//     Ok(env)
+//   } else {
+//     Err(env.errors.map(|e| e as dx.Diagnostic))
+//   }
+// }
 
-pub enum MonomorphizationOut {
-  Ok(specialization.ConcreteRegistry),
-  SpecError(dx.SpecializationError),
-  TypeErrors(Slice<dx.TypeError>),
-}
+// pub enum MonomorphizationOut {
+//   Ok(specialization.ConcreteRegistry),
+//   SpecError(dx.SpecializationError),
+//   TypeErrors(Slice<dx.TypeError>),
+// }
 
-pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Slice<dx.Diagnostic>> {
-  let reg = mode_check(source)?
-  if reg.errors.is_empty() {
-    match specialization.specialize(reg) {
-      Ok(reg) => Ok(reg),
-      Err(e) => Err([e as dx.Diagnostic]),
-    }
-  } else {
-    Err(reg.errors.map(|e| e as dx.Diagnostic))
-  }
-}
+// pub fn specialize(source: string) -> Result<specialization.ConcreteRegistry, Slice<dx.Diagnostic>> {
+//   let reg = mode_check(source)?
+//   if reg.errors.is_empty() {
+//     match specialization.specialize(reg) {
+//       Ok(reg) => Ok(reg),
+//       Err(e) => Err([e as dx.Diagnostic]),
+//     }
+//   } else {
+//     Err(reg.errors.map(|e| e as dx.Diagnostic))
+//   }
+// }
 
 pub fn transpile(source: string) -> Result<string, Slice<dx.Diagnostic>> {
-  specialize(source).map(codegen.generate)
+  let _ = source
+  panic("TODO: specialize(source).map(codegen.generate)")
 }
 
 pub fn build(source: string, opts: Options) -> BuildResult {
-  match transpile(source) {
-    Ok(zig_code) => {
-      match build_zig(zig_code, opts) {
-        Ok(res) => BuildResult.Bin(res),
-        Err(e) => BuildResult.OsErr(e),
-      }
-    },
-    Err(errs) => BuildResult.MismoErrs(errs),
-  }
+  let _ = source
+  let _ = opts
+  BuildResult.MismoErrs([])
+  // match transpile(source) {
+  //   Ok(zig_code) => {
+  //     match build_zig(zig_code, opts) {
+  //       Ok(res) => BuildResult.Bin(res),
+  //       Err(e) => BuildResult.OsErr(e),
+  //     }
+  //   },
+  //   Err(errs) => BuildResult.MismoErrs(errs),
+  // }
 }
 
 pub enum BuildResult {

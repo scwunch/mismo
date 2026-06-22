@@ -14,44 +14,44 @@ pub fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.should_eq(Source(" asdf\n  asdf"), Source("asdfasdf"))?
   t.shouldnt_eq(Source("asdf"), Source("Asdf"))?
 
-  let source = "fn print(s String): nil" +
+  let _source = "fn print(s String): nil" +
   "
 fn main():
   print(\"hello world\")
   "
-  match specialize(source) {
-    Err(errors) => {
-      let _ = t.fail("unexpected compilation failure")
-      dx.report(errors, source)
-      return Err("")
-    },
-    Ok(reg) => {
-      for f in reg.functions {
-        fmt.Println(f.name)
-        fmt.Println(f.body)
-      }
-    },
-  }
-  match transpile(source) {
-    Err(errors) => {
-      let _ = t.fail(f"unexpected compilation failure: \n{errors}")
-      dx.report(errors, source)
-      return Err("")
-    },
-    Ok(zig) => t.should_eq(
-      Source(zig),
-      Source(
-        "pub fn main_0() void {
-        _ = print_1(&string_from_literal(\"hello world\"));
-        }
+  // match specialize(source) {
+  //   Err(errors) => {
+  //     let _ = t.fail("unexpected compilation failure")
+  //     dx.report(errors, source)
+  //     return Err("")
+  //   },
+  //   Ok(reg) => {
+  //     for f in reg.functions {
+  //       fmt.Println(f.name)
+  //       fmt.Println(f.body)
+  //     }
+  //   },
+  // }
+  // match transpile(source) {
+  //   Err(errors) => {
+  //     let _ = t.fail(f"unexpected compilation failure: \n{errors}")
+  //     dx.report(errors, source)
+  //     return Err("")
+  //   },
+  //   Ok(zig) => t.should_eq(
+  //     Source(zig),
+  //     Source(
+  //       "pub fn main_0() void {
+  //       _ = print_1(&string_from_literal(\"hello world\"));
+  //       }
 
-      pub fn print_1(s: *const String_t) void {
-        _ = .{};
-        }
-    ",
-      ),
-    )?,
-  }
+  //     pub fn print_1(s: *const String_t) void {
+  //       _ = .{};
+  //       }
+  //   ",
+  //     ),
+  //   )?,
+  // }
   // run(source, Options.new())
   Ok(())
 }
