@@ -1,7 +1,6 @@
 import "ast"
 import "cst"
 import dx "diagnostics"
-import "ty"
 import "utils/slice"
 
 pub fn resolve(items: cst.Declarations) -> ast.Registry {
@@ -32,13 +31,13 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
       )),
       None => {
         let kind = match t.body {
-          cst.TypeBody.Struct(_) => ty.TypeKind.Struct([]),
-          cst.TypeBody.Enum(_) => ty.TypeKind.Enum([]),
+          cst.TypeBody.Struct(_) => ast.TypeKind.Struct([]),
+          cst.TypeBody.Enum(_) => ast.TypeKind.Enum([]),
         }
         let type_params = t.type_parameters.map(|param| {
-          ty.TypeParameter { span: param.span, name: param.name }
+          ast.TypeParameter { span: param.span, name: param.name }
         })
-        self.type_defs[t.name] = &ty.TypeDef.new(
+        self.type_defs[t.name] = &ast.TypeDef.new(
           t.span,
           t.name,
           type_params,
@@ -56,7 +55,7 @@ pub fn fill_out_type_info(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
     match decl.body {
       cst.TypeBody.Struct(fields) => {
         let fields = fields.map(ctx.eval_field)
-        def.kind = ty.TypeKind.Struct(fields)
+        def.kind = ast.TypeKind.Struct(fields)
 
         // constructor
         let _self_type = Type.Adt(
@@ -64,7 +63,7 @@ pub fn fill_out_type_info(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
           def.type_parameters.enumerate().map(|(i, _)| Type.Var(i)),
         )
         // self.add_function(
-        //   &ty.new_fn_def(
+        //   &ast.new_fn_def(
         //     def.span,
         //     -1,
         //     def.name,
@@ -80,7 +79,7 @@ pub fn fill_out_type_info(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
       },
       cst.TypeBody.Enum(variants) => {
         let variants = variants.map(ctx.eval_variant)
-        def.kind = ty.TypeKind.Enum(variants)
+        def.kind = ast.TypeKind.Enum(variants)
       },
     }
   }
@@ -109,7 +108,7 @@ pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast
     },
     Err(e) => {
       self.error(e)
-      &ast.mock_func(func.signature.name, [], [], Type.nil())
+      &ast.FunctionDef.mock(func.signature.name, [], [], Type.nil())
     },
   }
 }
@@ -118,7 +117,7 @@ pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Res
   let span = func.span
   let name = func.signature.name
   let type_params = func.signature.type_parameters.map(|param| {
-    ty.TypeParameter.new(param.span, param.name)
+    ast.TypeParameter.new(param.span, param.name)
   })
 
   let ctx = TypeContext.new(self, type_params)
@@ -126,7 +125,9 @@ pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Res
   let return_type = ctx.eval_type(func.signature.return_type)?
 
   let body = ast.Expression.blank()
-  Ok(&ty.new_fn_def(span, -1, name, type_params, params, return_type, body))
+  Ok(
+    &ast.FunctionDef.new(span, -1, name, type_params, params, return_type, body),
+  )
 }
 
 pub fn resolve_functions(

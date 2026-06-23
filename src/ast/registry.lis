@@ -2,18 +2,13 @@ import "cst"
 import dx "diagnostics"
 import "mode"
 import "span"
-import "ty"
 
-// pub type FunctionRef = Ref<ty.FunctionDef<Expression>>
-pub type Function = ty.FunctionDef<Expression> // pub struct FunctionRef(Ref<ty.FunctionDef<Expression>>)
-// pub struct FunctionRef {
-//   embed Ref<ty.FunctionDef<Expression>>,
-// }
+pub type Function = FunctionDef
 
 #[json]
 pub struct Registry {
   pub imports: Map<string, Registry>,
-  pub type_defs: Map<string, Ref<ty.TypeDef>>,
+  pub type_defs: Map<string, Ref<TypeDef>>,
   pub function_defs: Slice<Ref<Function>>,
   pub signatures: Map<string, Slice<Ref<Function>>>,
   pub errors: Slice<dx.TypeError>,
@@ -46,12 +41,7 @@ impl Registry {
       .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))
   }
 
-  pub fn eval_type(
-    self,
-    span: span.Span,
-    name: string,
-    type_args: Slice<ty.Type>,
-  ) -> Result<ty.Type, dx.ResolveError> {
+  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Result<Type, dx.ResolveError> {
     match self.type_defs.get(name) {
       None => {
         Err(dx.MissingNameError.new(name, span))
@@ -65,7 +55,7 @@ impl Registry {
             def.type_parameters.length(),
           ))
         } else {
-          Ok(ty.Type.Adt(def, type_args))
+          Ok(Type.Adt(def, type_args))
         }
       },
     }

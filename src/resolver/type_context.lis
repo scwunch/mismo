@@ -3,25 +3,24 @@ import "cst"
 import dx "diagnostics"
 import "mode"
 import "span"
-import "ty"
 import "utils/slice"
 
-type Type = ty.Type
+type Type = ast.Type
 
 /// Generic context that bundles a Registry with type parameters
 /// for evaluating types
 struct TypeContext {
   env: Ref<ast.Registry>,
-  type_params: Slice<ty.TypeParameter>,
+  type_params: Slice<ast.TypeParameter>,
 }
 
 impl TypeContext {
-  fn new(env: Ref<ast.Registry>, type_params: Slice<ty.TypeParameter>) -> TypeContext {
+  fn new(env: Ref<ast.Registry>, type_params: Slice<ast.TypeParameter>) -> TypeContext {
     TypeContext { env, type_params }
   }
 
-  fn eval_field(self, field: cst.Field) -> ty.Field {
-    ty.Field { 
+  fn eval_field(self, field: cst.Field) -> ast.Field {
+    ast.Field {
       span: field.span,
       name: field.name,
       typ: self
@@ -33,8 +32,8 @@ impl TypeContext {
     }
   }
 
-  fn eval_variant(self, variant: cst.Variant) -> ty.Variant {
-    ty.Variant { 
+  fn eval_variant(self, variant: cst.Variant) -> ast.Variant {
+    ast.Variant {
       span: variant.span,
       name: variant.name,
       fields: variant.payload.map(|typ| {
@@ -144,10 +143,10 @@ impl TypeContext {
     Some(check_arity(span, name, type_args.length(), 0).map(|_| primitive))
   }
 
-  fn eval_param(self, param: cst.Parameter) -> Result<ty.Parameter, dx.ResolveError> {
+  fn eval_param(self, param: cst.Parameter) -> Result<ast.Parameter, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
     Ok(
-      ty.Parameter { 
+      ast.Parameter {
         span: param.span,
         mode: param.mode.unwrap_or(mode.Mode.Let),
         name: param.name,
@@ -156,9 +155,9 @@ impl TypeContext {
     )
   }
 
-  fn eval_param_type(self, param: cst.ParamType) -> Result<ty.ParamType, dx.ResolveError> {
+  fn eval_param_type(self, param: cst.ParamType) -> Result<ast.ParamType, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
-    Ok(ty.ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
+    Ok(ast.ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
   }
 }
 

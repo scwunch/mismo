@@ -1,8 +1,5 @@
 import "mode"
 import "span"
-import "ty"
-
-pub type Type = ty.Type
 
 #[display]
 #[json]
@@ -49,7 +46,7 @@ pub struct Variable {
 }
 
 impl Variable {
-  pub fn from_param(param: ty.Parameter) -> Variable {
+  pub fn from_param(param: Parameter) -> Variable {
     Variable { 
       mode: param.mode,
       name: param.name,
@@ -87,7 +84,7 @@ impl Call {
 #[json]
 pub struct Closure {
   pub env: Slice<Capture>,
-  pub params: Slice<ty.Parameter>,
+  pub params: Slice<Parameter>,
   pub ret_type: Type,
   pub body: Ref<Expression>,
 }
@@ -101,7 +98,7 @@ pub struct Capture {
 impl Closure {
   pub fn typ(self) -> Type {
     // let params = self.params.map(|p| ParamType{mode: p.mode, typ: p.typ})
-    Type.Fn(self.params.map(ty.Parameter.param_type), &self.ret_type)
+    Type.Fn(self.params.map(Parameter.param_type), &self.ret_type)
   }
 
   pub fn call_mode(self) -> mode.Mode {
@@ -162,72 +159,9 @@ impl Expression {
   // }
 }
 
-impl Expression {
-  pub fn equals(self, other: Expression) -> bool {
-    self.span == other.span && self.kind.equals(other.kind)
-  }
-}
-
 impl Expr {
-  #[allow(float_cmp)]
-  pub fn equals(self, other: Expr) -> bool {
-    match (self, other) {
-      (Nil, Nil) => true,
-      (BoolLiteral(a), BoolLiteral(b)) => a == b,
-      (IntLiteral(a), IntLiteral(b)) => a == b,
-      (FloatLiteral(a), FloatLiteral(b)) => a == b,
-      (StringLiteral(a), StringLiteral(b)) => a == b,
-      (ArrayLiteral(a1), ArrayLiteral(a2)) => a1.equals(a2),
-      (TupleLiteral(a), TupleLiteral(b)) => a.equals(b),
-      (Identifier(a), Identifier(b)) => a == b,
-      (Assign(a1, a2), Assign(b1, b2)) => a1 == b1 && a2.equals(b2.*),
-      (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
-      (Call(a), Call(b)) => a.equals(b),
-      (SwitchIf(a), SwitchIf(b)) => a.equals(b),
-      (Match(a), Match(b)) => a.equals(b),
-      (Loop(a1, t1), Loop(a2, t2)) => a1.equals(a2) && t1.equals(t2),
-      (Block(a1, t1), Block(a2, t2)) => a1.equals(a2) && t1.equals(t2),
-      (Return(None), Return(None)) => true,
-      (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
-      (Break(None), Break(None)) => true,
-      (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
-      (Continue, Continue) => true,
-      (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
-      _ => false,
-    }
-  }
-}
-
-impl Call {
-  pub fn equals(self, other: Call) -> bool {
-    self.local_candidates.equals(other.local_candidates) &&
-    self.global_candidates.equals(other.global_candidates) &&
-    self.type_args.equals(other.type_args) &&
-    self.args.equals(other.args)
-  }
-}
-
-impl SwitchIf {
-  pub fn equals(self, other: SwitchIf) -> bool {
-    if self.cases.length() != other.cases.length() { return false }
-    for i in 0..self.cases.length() {
-      let (a1, a2) = self.cases[i]
-      let (b1, b2) = other.cases[i]
-      if !a1.equals(b1) || !a2.equals(b2) { return false }
-    }
-    true
-  }
-}
-
-impl Match {
-  pub fn equals(self, other: Match) -> bool {
-    self.subject.equals(other.subject.*) && self.cases.equals(other.cases)
-  }
-}
-
-impl MatchCase {
-  pub fn equals(self, other: MatchCase) -> bool {
-    self.pattern.equals(other.pattern) && self.expr.equals(other.expr)
+  pub fn is_extern(self) -> bool {
+    self.equals(Expr.Extern)
   }
 }
 
@@ -269,20 +203,3 @@ impl MatchCase {
 //     }
 //   }
 // }
-
-pub fn mock_func(
-  name: string,
-  type_parameters: Slice<ty.TypeParameter>,
-  parameters: Slice<ty.Parameter>,
-  return_type: Type,
-) -> ty.FunctionDef<Expression> {
-  ty.FunctionDef { 
-    span: span.new(0, 0),
-    id: -1,
-    name,
-    type_parameters,
-    parameters,
-    return_type,
-    body: Expression.new(span.new(0, 0), Expr.Extern),
-  }
-}

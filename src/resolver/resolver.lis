@@ -3,7 +3,6 @@ import "cst"
 import dx "diagnostics"
 import "operator"
 import "span"
-import "ty"
 import "utils/slice"
 
 type Expr = ast.Expr
@@ -11,8 +10,8 @@ type Expr = ast.Expr
 pub struct Scope { bindings: Slice<Ref<ast.Variable>> }
 
 impl Scope {
-  fn from_params(params: Slice<ty.Parameter>) -> Ref<Scope> {
-    let scope = &Scope { bindings: [] }
+  fn from_params(params: Slice<ast.Parameter>) -> Scope {
+    let mut scope = Scope { bindings: [] }
     for param in params {
       scope.bindings = scope.bindings.append(&ast.Variable.from_param(param))
     }
@@ -29,7 +28,7 @@ impl Scope {
 
 pub struct Resolver {
   pub ctx: TypeContext,
-  pub scope: Ref<Scope>,
+  pub scope: Scope,
 }
 
 impl Resolver {
@@ -42,13 +41,13 @@ impl Resolver {
   fn new_blank() -> Resolver {
     Resolver.new(
       &ast.Registry.new(),
-      &ast.mock_func("dummy", [], [], Type.nil()),
+      &ast.FunctionDef.mock("dummy", [], [], Type.nil()),
     )
   }
 
   fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
-      Nil => Expr.TupleLiteral([]),
+      Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
       IntLiteral(i) => Expr.IntLiteral(i),
       FloatLiteral(f) => Expr.FloatLiteral(f),
@@ -63,14 +62,7 @@ impl Resolver {
         slice.map_result(params, self.ctx.eval_param)?,
         self.resolve(body.*)?,
       )?,
-      Identifier(path) => if path.namespace.is_empty() {
-        match self.scope.get(path.name) {
-          Some(varid) => Expr.Identifier(varid),
-          None => return Err(dx.MissingNameError.new(path.name, node.span)),
-        }
-      } else {
-        panic("TODO: implement Resolver.resolve_path(Path)")
-      },
+      Identifier(path) => self.resolve_path(path, node.span)?,
       Binding(m, expr) => {
         let e = self.resolve(expr.*)?
         Expr.Binding(m, &e)
@@ -131,43 +123,35 @@ impl Resolver {
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  fn block(self, exprs: Slice<cst.Expression>, span: span.Span) -> Result<Expr, dx.ResolveError> {
-    panic((exprs, span))
-    // let mut self = self
-    // if exprs.is_empty() { return Ok(Expr.Nil) }
-    // let mut expressions = []
-    // let mut types = []
-    // for node in exprs {
-    //   let expr = self.resolve(node)?
-    //   expressions = expressions.append(expr)
-    //   match expr.kind {
-    //     Expr.Declare(_, varid, _) | Expr.Assign(varid, _) => self.bindings = &List.Cons(
-    //       varid,
-    //       self.bindings,
-    //     ),
-    //     Expr.Return(opt_expr) => {
-    //       let actual = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
-    //       if !self.return_type.equals(actual) {
-    //         return Err(dx.TypeMismatchError.new(
-    //           span,
-    //           f"{self.return_type}",
-    //           f"{actual}",
-    //         ))
-    //       }
-    //     },
-    //     Expr.Break(opt_expr) => {
-    //       let ty = opt_expr.map(|e| e.typ()).unwrap_or(Type.nil())
-    //       types = types.append(ty)
-    //     },
-    //     _ => (),
-    //   }
-    // }
-    // types = types.append(expressions[expressions.length() - 1].typ())
-    // let expr = Expr.Block(expressions, types[0])
-    // Ok(expr)
+  fn resolve_path(self, path: cst.Path, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    if path.namespace.is_empty() {
+      match self.scope.get(path.name) {
+        Some(varid) => Ok(Expr.Identifier(varid)),
+        None => Err(dx.MissingNameError.new(path.name, span)),
+      }
+    } else {
+      Err(dx.MissingNameError.new(
+        f"{path.namespace.join("::")}::{path.name}",
+        span,
+      ))
+    }
   }
 
-  fn closure(self, params: Slice<ty.Parameter>, body: ast.Expression) -> Result<Expr, dx.ResolveError> {
+  fn block(self, exprs: Slice<cst.Expression>, _span: span.Span) -> Result<Expr, dx.ResolveError> {
+    let mut self = self
+    if exprs.is_empty() { return Ok(Expr.Nil) }
+    let mut expressions = []
+    for node in exprs {
+      let expr = self.resolve(node)?
+      expressions = expressions.append(expr)
+      if let Expr.Declare(_, varid, _) = expr.kind {
+        self.scope.bindings = self.scope.bindings.append(varid)
+      }
+    }
+    Ok(Expr.Block(expressions, Type.nil()))
+  }
+
+  fn closure(self, params: Slice<ast.Parameter>, body: ast.Expression) -> Result<Expr, dx.ResolveError> {
     let ret_type = Type.Never
     let env = collect_captures(body)
     Ok(Expr.Closure(ast.Closure { env, params, ret_type, body: &body }))

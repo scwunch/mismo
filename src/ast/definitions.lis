@@ -61,14 +61,14 @@ pub struct Signature {
 }
 
 #[json]
-pub struct FunctionDef<Expr> {
+pub struct FunctionDef {
   pub span: span.Span,
   pub id: int,
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
   pub return_type: Type,
-  pub body: Expr,
+  pub body: Expression,
 }
 
 #[json]
@@ -125,49 +125,44 @@ impl TypeDef {
   }
 }
 
-pub fn new_fn_def<Expr: Equals<Expr>>(
-  span: span.Span,
-  id: int,
-  name: string,
-  type_parameters: Slice<TypeParameter>,
-  parameters: Slice<Parameter>,
-  return_type: Type,
-  body: Expr,
-) -> FunctionDef<Expr> {
-  FunctionDef { span, id, name, type_parameters, parameters, return_type, body }
-}
-
-pub fn mock_func(
-  name: string,
-  type_parameters: Slice<TypeParameter>,
-  parameters: Slice<Parameter>,
-  return_type: Type,
-) -> FunctionDef<Slice<()>> {
-  FunctionDef { 
-    span: span.new(0, 0),
-    id: -1,
-    name,
-    type_parameters,
-    parameters,
-    return_type,
-    body: [],
+impl FunctionDef {
+  pub fn new(
+    span: span.Span,
+    id: int,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    parameters: Slice<Parameter>,
+    return_type: Type,
+    body: Expression,
+  ) -> FunctionDef {
+    FunctionDef { 
+      span,
+      id,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body,
+    }
   }
-}
 
-// impl<Body: Equals<Body>> FunctionDef<Body> {
-//   pub fn new(
-//     span: span.Span,
-//     id: int,
-//     name: string,
-//     type_parameters: Slice<TypeParameter>,
-//     parameters: Slice<Parameter>,
-//     return_type: Type,
-//     body: Body,
-//   ) -> FunctionDef<Body> {
-//     FunctionDef { span, id, name, type_parameters, parameters, return_type, body }
-// }
+  pub fn mock(
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    parameters: Slice<Parameter>,
+    return_type: Type,
+  ) -> FunctionDef {
+    FunctionDef { 
+      span: span.new(0, 0),
+      id: -1,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body: Expression.blank(),
+    }
+  }
 
-impl<Expr> FunctionDef<Expr> {
   pub fn signature(self) -> string {
     let type_params = type_params_to_string(self.type_parameters)
     let params = self.parameters
@@ -176,16 +171,14 @@ impl<Expr> FunctionDef<Expr> {
     f"fn {self.name}{type_params}({params}) {self.return_type}"
   }
 
-  pub fn better_than(self, other: FunctionDef<Expr>) -> bool {
+  pub fn better_than(self, other: FunctionDef) -> bool {
     let pairs = slice.zip(self.parameters, other.parameters)
     pairs.all(|p| p.0.typ.specificity_ge(p.1.typ)) &&
     pairs.any(|p| p.0.typ.specificity_gt(p.1.typ))
   }
-}
 
-impl FunctionDef<()> {
   pub fn is_extern(self) -> bool {
-    true
+    self.body.kind.is_extern()
   }
 }
 
