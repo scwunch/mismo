@@ -47,7 +47,7 @@ pub struct Specializer {
 
 impl Specializer {
   fn new() -> Specializer {
-    Specializer { 
+    Specializer {
       queue: [],
       functions: [],
       function_map: Cache.new(),
@@ -56,8 +56,9 @@ impl Specializer {
   }
 
   fn run(self: Ref<Specializer>) {
-    while !self.queue.is_empty() {
-      let func = self.queue[0]
+    while let Some(func) = self.queue.get(0) {
+    // while self.queue.length() > 0 {
+      // let func = self.queue[0]
       self.queue = self.queue[1..]
       self.specialize(func)
     }
@@ -79,7 +80,7 @@ impl Specializer {
     let parameters = call.fun.parameters.map(|p| p.substitute(call.type_args))
     let return_type = call.fun.return_type.substitute(call.type_args)
     self.functions = self.functions.append(
-      Function { 
+      Function {
         span: call.fun.span,
         name: call.fun.name,
         parameters,
@@ -110,7 +111,7 @@ impl Specializer {
         Expr.TupleLiteral(exprs.map(|e| self.substitute(e, type_args)))
       },
       Closure(closure) => Expr.Closure(
-        semantic.Closure { 
+        semantic.Closure {
           env: closure.env,
           params: closure.params.map(|p| p.substitute(type_args)),
           ret_type: closure.ret_type.substitute(type_args),
@@ -134,7 +135,7 @@ impl Specializer {
       Match(cases) => Expr.Match(semantic.Match.new(
         &self.substitute(cases.subject.*, type_args),
         cases.cases.map(|case| {
-          semantic.MatchCase.new(
+          semantic.MatchArm.new(
             self.substitute(case.pattern, type_args),
             self.substitute(case.expr, type_args),
           )

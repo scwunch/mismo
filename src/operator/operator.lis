@@ -113,6 +113,7 @@ impl Operator {
     }
   }
 
+  #[allow(match_same_arms)]
   pub fn relative_precedence(self, other: Operator) -> Bind {
     match (self.precedence_class(), other.precedence_class()) {
       (Prec.Call, _) => Bind.Tighter, // Prec.Call is highest, and left-associative

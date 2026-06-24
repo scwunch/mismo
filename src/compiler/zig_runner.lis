@@ -28,7 +28,7 @@ impl IoStreams {
 
 impl Options {
   pub fn new() -> Options {
-    Options { 
+    Options {
       zig_bin: "zig",
       zig_prelude_path: "",
       out_bin: "out",
@@ -69,7 +69,7 @@ pub fn build_zig(zig_source: string, opts: Options) -> Result<Path, error> {
     Err(e) | Both(_, e) => return Err(e),
     _ => (),
   }
-  if !opts.zig_prelude_path.is_empty() {
+  if opts.zig_prelude_path != "" {
     let prelude = os.ReadFile(opts.zig_prelude_path)?
     match src.Write(prelude) {
       Err(e) | Both(_, e) => return Err(e),

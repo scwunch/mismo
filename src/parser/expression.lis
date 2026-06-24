@@ -59,7 +59,7 @@ impl ExpressionParser {
       ))
     }
 
-    while !self.operators.is_empty() {
+    while self.operators.length() > 0 {
       self.compress()?
     }
 
@@ -367,8 +367,8 @@ impl ExpressionParser {
     let parameters = self.parser.parse_list('|', self.parser.parse_parameter)?
     let _ = self.parser.consume(TokenKind.Pipe)?
     let body = self.parser.parse_colon_and_block()?
-    let span = span.merge(body.span)
-    Ok(cst.closure(span, parameters, &body))
+    let span = span.merge(body.last().span)
+    Ok(cst.closure(span, parameters, body))
   }
 
   fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {
@@ -377,30 +377,35 @@ impl ExpressionParser {
 }
 
 impl Parser {
-  fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
+  pub fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
     let mut expr_parser = ExpressionParser.new(self, self.current_line_indent)
     expr_parser.parse()
   }
 
-  fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
+  pub fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Block, ParseError> {
     let colon = self.consume(TokenKind.Colon)?
     let statements = self.parse_list('\n', self.parse_expression)?
-    match statements {
-      [] => Err(ParseError.new(colon, "Empty block")),
-      [stmt] => Ok(stmt),
-      _ => {
-        let last_span = statements[statements.length() - 1].span
-        let span = colon.merge(last_span)
-        Ok(cst.block(span, statements))
-      },
+    if statements.is_empty() {
+      Err(ParseError.new(colon, "Empty block"))
+    } else {
+      Ok(cst.Block { statements })
     }
+    // match statements {
+    //   [] => Err(ParseError.new(colon, "Empty block")),
+    //   [stmt] => Ok(stmt),
+    //   _ => {
+    //     let last_span = statements[statements.length() - 1].span
+    //     let span = colon.merge(last_span)
+    //     Ok(cst.block(span, statements))
+    //   },
+    // }
   }
 
   fn parse_while_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
     let condition = self.parse_expression()?
     let body = self.parse_colon_and_block()?
-    let span = span.merge(body.span)
-    let cond = cst.Conditional.Unary { expr: &condition, consequent: &body }
+    let span = span.merge(body.last().span)
+    let cond = cst.Conditional.Unary { expr: &condition, consequent: body }
     Ok(cst.while_(span, cond))
   }
 
@@ -420,7 +425,7 @@ impl Parser {
       )),
     }
     let body = self.parse_colon_and_block()?
-    let span = span.merge(body.span)
+    let span = span.merge(body.last().span)
     Ok(cst.for_(span, patt, iter, body))
   }
 

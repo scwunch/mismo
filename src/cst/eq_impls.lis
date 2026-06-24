@@ -75,7 +75,7 @@ impl Expression {
 }
 
 impl Expr {
-  #[allow(float_cmp)]
+  #[allow(float_cmp, match_same_arms)]
   pub fn equals(self, other: Expr) -> bool {
     match (self, other) {
       (Nil, Nil) => true,
@@ -134,17 +134,16 @@ impl Call {
 impl Conditional {
   pub fn equals(self, other: Conditional) -> bool {
     match (self, other) {
-      (
-        Conditional.Binary { subject: s1, ops: o1 },
-        Conditional.Binary { subject: s2, ops: o2 },
-      ) => s1 == s2 && o1.equals(o2),
-      (
-        Conditional.Unary { expr: e1, consequent: c1 },
-        Conditional.Unary { expr: e2, consequent: c2 },
-      ) => e1 == e2 && c1 == c2,
-      (Conditional.Multi(c1), Conditional.Multi(c2)) => c1.equals(c2),
-      (Conditional.Else { consequent: c1 }, Conditional.Else { consequent: c2 }) => c1 ==
-      c2,
+      (Binary { subject: s1, ops: o1 }, Binary { subject: s2, ops: o2 }) => {
+        s1.equals(s2.*) && o1.equals(o2)
+      },
+      (Unary { expr: e1, consequent: c1 }, Unary { expr: e2, consequent: c2 }) => {
+        e1.equals(e2.*) && c1.equals(c2)
+      },
+      (Multi(c1), Multi(c2)) => c1.equals(c2),
+      (Else { consequent: c1 }, Else { consequent: c2 }) => {
+        c1.equals(c2)
+      },
       _ => false,
     }
   }
@@ -181,12 +180,8 @@ impl Parameter {
   }
 }
 
-pub fn param(
-  start: uint32,
-  end: uint32,
-  mode: Option<mode.Mode>,
-  name: string,
-  typ: Type,
-) -> Parameter {
-  Parameter.new(span.new(start, end), mode, name, typ)
+impl Block {
+  pub fn equals(self, other: Block) -> bool {
+    self.statements.equals(other.statements)
+  }
 }

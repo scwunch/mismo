@@ -1,0 +1,129 @@
+import "mode"
+import "span"
+
+pub fn nil_expr() -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Nil }
+}
+
+pub fn bool_expr(val: bool) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.BoolLiteral(val) }
+}
+
+pub fn int_expr(val: int) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.IntLiteral(val) }
+}
+
+pub fn float_expr(val: float64) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.FloatLiteral(val) }
+}
+
+pub fn string_expr(val: string) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.StringLiteral(val) }
+}
+
+pub fn array_expr(elems: Slice<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.ArrayLiteral(elems) }
+}
+
+pub fn tuple_expr(elems: Slice<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.TupleLiteral(elems) }
+}
+
+pub fn declare_expr(mode: mode.Mode, name: string, init: Ref<Expression>) -> Expression {
+  let varid = _var(mode, name)
+  Expression { span: span.new(0, 0), kind: Expr.Declare(mode, varid, init) }
+}
+
+pub fn ident_expr(var_: Ref<Variable>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Identifier(var_) }
+}
+
+pub fn assign_expr(var_: Ref<Variable>, expr: Ref<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Assign(var_, expr) }
+}
+
+pub fn binding_expr(mode: mode.Mode, expr: Ref<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Binding(mode, expr) }
+}
+
+// fn call_expr(
+//   fun: Ref<FunctionDef>,
+//   type_args: Slice<Type>,
+//   args: Slice<Expression>,
+// ) -> Expression {
+//   Expression {
+//     span: span.new(0, 0),
+//     kind: Expr.Call(FnCall.new(fun, type_args, args)),
+//   }
+// }
+
+pub fn concrete_call_expr(id: int, args: Slice<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.ConcreteCall(id, args) }
+}
+
+pub fn switch_if_expr(cases: Slice<Case>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.SwitchIf(cases) }
+}
+
+// fn match_expr(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Expression {
+//   Expression {
+//     span: span.new(0, 0),
+//     kind: Expr.Match(Match.new(subject, cases)),
+//   }
+// }
+
+pub fn while_expr(cond: Ref<Expression>, body: Block) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.While(cond, body) }
+}
+
+pub fn block_expr(body: Slice<Expression>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Block(Block.new(body)) }
+}
+
+pub fn return_expr(val: Option<Ref<Expression>>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Return(val) }
+}
+
+pub fn break_expr(val: Option<Ref<Expression>>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Break(val) }
+}
+
+pub fn continue_expr() -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Continue }
+}
+
+pub fn field_access_expr(obj: Ref<Expression>, idx: int) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.FieldAccess(obj, idx) }
+}
+
+pub fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Constructor(typ, fields) }
+}
+
+pub fn extern_expr() -> Expression {
+  Expression { span: span.new(0, 0), kind: Expr.Extern }
+}
+
+// fn match_case(pattern: Expression, expr: Expression) -> MatchArm {
+//   MatchArm.new(pattern, expr)
+// }
+
+pub fn _var(mode: mode.Mode, name: string) -> Ref<Variable> {
+  &Variable.new(mode, name, 0)
+}
+
+pub fn let_var(name: string) -> Ref<Variable> {
+  &Variable.new(mode.Mode.Let, name, 0)
+}
+
+pub fn mut_var(name: string) -> Ref<Variable> {
+  &Variable.new(mode.Mode.Mut, name, 0)
+}
+
+pub fn mut_bang_var(name: string) -> Ref<Variable> {
+  &Variable.new(mode.Mode.MutBang, name, 0)
+}
+
+pub fn var_var(name: string) -> Ref<Variable> {
+  &Variable.new(mode.Mode.Var, name, 0)
+}

@@ -98,16 +98,19 @@ impl Variant {
 pub struct FunctionDecl {
   pub span: span.Span,
   pub signature: Signature,
-  pub body: Expression,
+  pub body: Block,
 }
 
 impl FunctionDecl {
-  pub fn new(span: span.Span, signature: Signature, body: Expression) -> FunctionDecl {
+  pub fn new(span: span.Span, signature: Signature, body: Block) -> FunctionDecl {
     FunctionDecl { span, signature, body }
   }
 
   pub fn extern(self) -> bool {
-    self.body.kind.is_extern()
+    match self.body.statements {
+      [Expression { kind: Extern, .. }] => true,
+      _ => false,
+    }
   }
 }
 
@@ -144,6 +147,16 @@ impl Parameter {
   pub fn new(span: span.Span, mode: Option<mode.Mode>, name: string, typ: Type) -> Parameter {
     Parameter { span, mode, name, typ }
   }
+}
+
+pub fn param(
+  start: uint32,
+  end: uint32,
+  mode: Option<mode.Mode>,
+  name: string,
+  typ: Type,
+) -> Parameter {
+  Parameter.new(span.new(start, end), mode, name, typ)
 }
 
 impl Declarations {

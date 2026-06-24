@@ -124,7 +124,7 @@ pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Res
   let params = slice.map_result(func.signature.parameters, ctx.eval_param)?
   let return_type = ctx.eval_type(func.signature.return_type)?
 
-  let body = ast.Expression.blank()
+  let body = ast.Block.empty()
   Ok(
     &ast.FunctionDef.new(span, -1, name, type_params, params, return_type, body),
   )
@@ -135,7 +135,7 @@ pub fn resolve_functions(
   functions: Slice<cst.FunctionDecl>,
 ) {
   for (def, func) in slice.zip(self.function_defs, functions) {
-    match Resolver.new(self, def).resolve(func.body) {
+    match Resolver.new(self, def).block(func.body) {
       Ok(body) => def.body = body,
       Err(e) => self.error(e),
     }

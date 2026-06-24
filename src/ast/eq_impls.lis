@@ -11,7 +11,7 @@ impl Closure {
   pub fn equals(self, other: Closure) -> bool {
     self.env.equals(other.env) && self.params.equals(other.params) &&
     self.ret_type.equals(other.ret_type) &&
-    self.body.equals(other.body.*)
+    self.body.equals(other.body)
   }
 }
 
@@ -22,7 +22,7 @@ impl Expression {
 }
 
 impl Expr {
-  #[allow(float_cmp)]
+  #[allow(float_cmp, match_same_arms)]
   pub fn equals(self, other: Expr) -> bool {
     match (self, other) {
       (Nil, Nil) => true,
@@ -33,18 +33,23 @@ impl Expr {
       (ArrayLiteral(a1), ArrayLiteral(a2)) => a1.equals(a2),
       (TupleLiteral(a), TupleLiteral(b)) => a.equals(b),
       (Closure(c1), Closure(c2)) => c1.equals(c2),
-      (Identifier(a), Identifier(b)) => a == b,
       (Declare(m1, var1, val1), Declare(m2, var2, val2)) => {
         m1 == m2 && var1 == var2 && val1.equals(val2.*)
       },
-      (Assign(a1, a2), Assign(b1, b2)) => a1 == b1 && a2.equals(b2.*),
+      (Identifier(a), Identifier(b)) | (CapturedIdent(a), CapturedIdent(b)) => {
+        a == b
+      },
+      (Assign(a1, a2), Assign(b1, b2)) |
+      (AssignCapture(a1, a2), AssignCapture(b1, b2)) => {
+        a1 == b1 && a2.equals(b2.*)
+      },
       (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
       (Call(a), Call(b)) => a.equals(b),
       (ConcreteCall(i1, a1), ConcreteCall(i2, a2)) => i1 == i2 && a1.equals(a2),
       (SwitchIf(a), SwitchIf(b)) => a.equals(b),
       (Match(a), Match(b)) => a.equals(b),
-      (Loop(a1, t1), Loop(a2, t2)) => a1.equals(a2) && t1.equals(t2),
-      (Block(a1, t1), Block(a2, t2)) => a1.equals(a2) && t1.equals(t2),
+      (While(c1, a1), While(c2, a2)) => c1.equals(c2.*) && a1.equals(a2),
+      (Block(b1), Block(b2)) => b1.equals(b2),
       (Return(None), Return(None)) => true,
       (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
       (Break(None), Break(None)) => true,
@@ -62,16 +67,18 @@ impl Expr {
       (ArrayLiteral(_), _) |
       (TupleLiteral(_), _) |
       (Closure(_), _) |
-      (Identifier(_), _) |
-      (Assign(_, _), _) |
       (Declare(_, _, _), _) |
+      (Identifier(_), _) |
+      (CapturedIdent(_), _) |
+      (Assign(_, _), _) |
+      (AssignCapture(_, _), _) |
       (Binding(_, _), _) |
       (Call(_), _) |
       (ConcreteCall(_, _), _) |
       (SwitchIf(_), _) |
       (Match(_), _) |
-      (Loop(_, _), _) |
-      (Block(_, _), _) |
+      (While(_, _), _) |
+      (Block(_), _) |
       (Return(_), _) |
       (Break(_), _) |
       (Continue, _) |
@@ -82,15 +89,10 @@ impl Expr {
   }
 }
 
-impl SwitchIf {
-  pub fn equals(self, other: SwitchIf) -> bool {
-    if self.cases.length() != other.cases.length() { return false }
-    for i in 0..self.cases.length() {
-      let (a1, a2) = self.cases[i]
-      let (b1, b2) = other.cases[i]
-      if !a1.equals(b1) || !a2.equals(b2) { return false }
-    }
-    true
+impl Case {
+  pub fn equals(self, other: Case) -> bool {
+    self.predicate.equals(other.predicate) &&
+    self.consequent.equals(other.consequent)
   }
 }
 
@@ -100,9 +102,9 @@ impl Match {
   }
 }
 
-impl MatchCase {
-  pub fn equals(self, other: MatchCase) -> bool {
-    self.pattern.equals(other.pattern) && self.expr.equals(other.expr)
+impl MatchArm {
+  pub fn equals(self, other: MatchArm) -> bool {
+    self.pattern.equals(other.pattern) && self.body.equals(other.body)
   }
 }
 
@@ -147,12 +149,12 @@ impl Variant {
 impl Type {
   pub fn equals(self, other: Type) -> bool {
     match (self, other) {
-      (Any, Any) => true,
-      (Never, Never) => true,
-      (Bool, Bool) => true,
-      (Nat, Nat) => true,
-      (Int, Int) => true,
-      (Float, Float) => true,
+      (Any, Any) |
+      (Never, Never) |
+      (Bool, Bool) |
+      (Nat, Nat) |
+      (Int, Int) |
+      (Float, Float) |
       (String, String) => true,
       (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
       (Slice(a), Slice(b)) => a.equals(b.*),
@@ -202,6 +204,8 @@ impl FunctionDef {
   }
 }
 
-pub interface Equals<T> {
-  fn equals(self, other: T) -> bool
+impl Block {
+  pub fn equals(self, other: Block) -> bool {
+    self.statements.equals(other.statements) && self.typ.equals(other.typ)
+  }
 }

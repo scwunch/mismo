@@ -388,8 +388,7 @@ impl Lexer {
         '^' => Operator.Pow,
         '&' => Operator.And,
         '|' => Operator.Or,
-        '!' => Operator.Not,
-        '~' => Operator.Not,
+        '!' | '~' => Operator.Not,
         '=' => Operator.Assign,
         c => return Token.error(
           start,

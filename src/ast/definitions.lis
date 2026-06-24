@@ -68,7 +68,7 @@ pub struct FunctionDef {
   pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
   pub return_type: Type,
-  pub body: Expression,
+  pub body: Block,
 }
 
 #[json]
@@ -133,7 +133,7 @@ impl FunctionDef {
     type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
     return_type: Type,
-    body: Expression,
+    body: Block,
   ) -> FunctionDef {
     FunctionDef { 
       span,
@@ -159,7 +159,7 @@ impl FunctionDef {
       type_parameters,
       parameters,
       return_type,
-      body: Expression.blank(),
+      body: Block { statements: [], typ: Type.Never },
     }
   }
 
@@ -178,7 +178,7 @@ impl FunctionDef {
   }
 
   pub fn is_extern(self) -> bool {
-    self.body.kind.is_extern()
+    self.body.is_extern()
   }
 }
 

@@ -15,6 +15,10 @@ impl Mode {
     }
   }
 
+  pub fn equals(self, other: Mode) -> bool {
+    self == other
+  }
+
   pub fn ordinal(self) -> int {
     match self {
       Mode.Let => 0,

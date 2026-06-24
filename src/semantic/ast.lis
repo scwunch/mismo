@@ -98,24 +98,24 @@ impl SwitchIf {
 #[json]
 pub struct Match {
   pub subject: Ref<Expression>,
-  pub cases: Slice<MatchCase>,
+  pub cases: Slice<MatchArm>,
 }
 
 impl Match {
-  pub fn new(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Match {
+  pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
     Match { subject, cases }
   }
 }
 
 #[json]
-pub struct MatchCase {
+pub struct MatchArm {
   pub pattern: Expression,
   pub expr: Expression,
 }
 
-impl MatchCase {
-  pub fn new(pattern: Expression, expr: Expression) -> MatchCase {
-    MatchCase { pattern, expr }
+impl MatchArm {
+  pub fn new(pattern: Expression, expr: Expression) -> MatchArm {
+    MatchArm { pattern, expr }
   }
 }
 

@@ -62,8 +62,8 @@ impl Match {
   }
 }
 
-impl MatchCase {
-  pub fn equals(self, other: MatchCase) -> bool {
+impl MatchArm {
+  pub fn equals(self, other: MatchArm) -> bool {
     self.pattern.equals(other.pattern) && self.expr.equals(other.expr)
   }
 }

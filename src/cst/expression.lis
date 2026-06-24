@@ -22,7 +22,7 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
-  Closure(Slice<Parameter>, Ref<Expression>),
+  Closure(Slice<Parameter>, Block),
   Identifier(Path),
   Binding(mode.Mode, Ref<Expression>),
   Binop(Ref<Binop>),
@@ -30,7 +30,7 @@ pub enum Expr {
   If(Conditional),
   While(Conditional),
   For(Ref<ForLoop>),
-  Block(Slice<Expression>),
+  Block(Block),
   Neg(Ref<Expression>),
   Not(Ref<Expression>),
   Return(Option<Ref<Expression>>),
@@ -44,6 +44,7 @@ pub enum Expr {
 }
 
 #[json]
+#[display]
 pub struct Path {
   pub namespace: Slice<string>,
   pub name: string,
@@ -52,6 +53,14 @@ pub struct Path {
 impl Path {
   pub fn name_(name: string) -> Path {
     Path { name, .. }
+  }
+
+  pub fn string(self) -> string {
+    if self.namespace.is_empty() {
+      self.name
+    } else {
+      self.namespace.join("::") + "::" + self.name
+    }
   }
 }
 
@@ -80,7 +89,7 @@ pub struct Call {
 pub struct ForLoop {
   pub binding: Expression,
   pub iter: Expression,
-  pub body: Expression,
+  pub body: Block,
 }
 
 impl ForLoop {
@@ -91,11 +100,12 @@ impl ForLoop {
 }
 
 #[json]
+#[display]
 pub enum Conditional {
   Binary { subject: Ref<Expression>, ops: Slice<Comparison> },
-  Unary { expr: Ref<Expression>, consequent: Ref<Expression> },
+  Unary { expr: Ref<Expression>, consequent: Block },
   Multi(Slice<Conditional>),
-  Else { consequent: Ref<Expression> },
+  Else { consequent: Block },
 }
 
 #[json]
@@ -115,6 +125,21 @@ pub enum Consequent {
   And(Conditional),
   Or(Conditional),
   Do(Ref<Expression>),
+}
+
+#[equality]
+pub struct Block {
+  pub statements: Slice<Expression>,
+}
+
+impl Block {
+  pub fn span(self) -> span.Span {
+    span.new(self.statements[0].span.start, self.last().span.end)
+  }
+
+  pub fn last(self) -> Expression {
+    self.statements[self.statements.length() - 1]
+  }
 }
 
 pub fn nil_lit(span: span.Span) -> Expression {
@@ -145,7 +170,7 @@ pub fn tuple_lit(span: span.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.TupleLiteral(values) }
 }
 
-pub fn closure(span: span.Span, params: Slice<Parameter>, body: Ref<Expression>) -> Expression {
+pub fn closure(span: span.Span, params: Slice<Parameter>, body: Block) -> Expression {
   Expression { span, kind: Expr.Closure(params, body) }
 }
 
@@ -182,16 +207,11 @@ pub fn while_(span: span.Span, cond: Conditional) -> Expression {
   Expression { span, kind: Expr.While(cond) }
 }
 
-pub fn for_(
-  span: span.Span,
-  binding: Expression,
-  iter: Expression,
-  body: Expression,
-) -> Expression {
+pub fn for_(span: span.Span, binding: Expression, iter: Expression, body: Block) -> Expression {
   Expression { span, kind: Expr.For(&ForLoop { binding, iter, body }) }
 }
 
-pub fn block(span: span.Span, exprs: Slice<Expression>) -> Expression {
+pub fn block_expr(span: span.Span, exprs: Block) -> Expression {
   Expression { span, kind: Expr.Block(exprs) }
 }
 

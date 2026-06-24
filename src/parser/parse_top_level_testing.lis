@@ -463,9 +463,9 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     main.signature.parameters.is_empty(),
     f"unexpected parameters: {main.signature.parameters}",
   )?
-  match main.body.kind {
+  match main.body.last().kind {
     Call(call) => {
-      t.should_eq(main.body.span, span.new(11, 31))?
+      t.should_eq(main.body.span(), span.new(11, 31))?
       t.should_eq(
         call,
         cst.Call { 
@@ -476,11 +476,11 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
       )?
     },
     _ => return t.fail(
-      f"expected 'main's body to be a function call; got {main.body.kind}",
+      f"expected 'main's body to be a function call; got {main.body.last().kind}",
     ),
   }
   t.should_eq(
-    main.body,
+    main.body.last(),
     cst.call_expr(
       span.new(11, 31),
       cst.Call { 

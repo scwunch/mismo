@@ -19,22 +19,47 @@ pub enum Expr {
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
   Closure(Closure),
-  Identifier(Ref<Variable>),
   Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
+  Identifier(Ref<Variable>),
+  CapturedIdent(Ref<Variable>),
   Assign(Ref<Variable>, Ref<Expression>),
+  AssignCapture(Ref<Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(Call),
   ConcreteCall(int, Slice<Expression>),
-  SwitchIf(SwitchIf),
+  SwitchIf(Slice<Case>),
   Match(Match),
-  Loop(Slice<Expression>, Type),
-  Block(Slice<Expression>, Type),
+  While(Ref<Expression>, Block),
+  Block(Block),
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
   FieldAccess(Ref<Expression>, int),
   Constructor(Type, Slice<string>),
   Extern,
+}
+
+pub struct Block {
+  pub statements: Slice<Expression>,
+  pub typ: Type,
+}
+
+impl Block {
+  pub fn new(statements: Slice<Expression>) -> Block {
+    if statements.is_empty() { panic("Block must have at least one statement") }
+    Block { statements, typ: Type.Never }
+  }
+
+  pub fn empty() -> Block {
+    Block { statements: [], typ: Type.Never }
+  }
+
+  pub fn is_extern(self) -> bool {
+    match self.statements {
+      [Expression { kind: Extern, .. }] => true,
+      _ => false,
+    }
+  }
 }
 
 pub struct Variable {
@@ -86,13 +111,19 @@ pub struct Closure {
   pub env: Slice<Capture>,
   pub params: Slice<Parameter>,
   pub ret_type: Type,
-  pub body: Ref<Expression>,
+  pub body: Block,
 }
 
 #[json]
 pub struct Capture {
   pub mode: mode.Mode,
   pub variable: Ref<Variable>,
+}
+
+impl Capture {
+  pub fn new(varid: Ref<Variable>) -> Capture {
+    Capture { mode: mode.Mode.Let, variable: varid }
+  }
 }
 
 impl Closure {
@@ -111,37 +142,38 @@ impl Closure {
 }
 
 #[json]
-pub struct SwitchIf {
-  pub cases: Slice<(Expression, Expression)>,
+pub struct Case {
+  pub predicate: Expression,
+  pub consequent: Block,
 }
 
-impl SwitchIf {
-  pub fn new(cases: Slice<(Expression, Expression)>) -> SwitchIf {
-    SwitchIf { cases }
+impl Case {
+  pub fn new(predicate: Expression, consequent: Block) -> Case {
+    Case { predicate, consequent }
   }
 }
 
 #[json]
 pub struct Match {
   pub subject: Ref<Expression>,
-  pub cases: Slice<MatchCase>,
+  pub cases: Slice<MatchArm>,
 }
 
 impl Match {
-  pub fn new(subject: Ref<Expression>, cases: Slice<MatchCase>) -> Match {
+  pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
     Match { subject, cases }
   }
 }
 
 #[json]
-pub struct MatchCase {
+pub struct MatchArm {
   pub pattern: Expression,
-  pub expr: Expression,
+  pub body: Block,
 }
 
-impl MatchCase {
-  pub fn new(pattern: Expression, expr: Expression) -> MatchCase {
-    MatchCase { pattern, expr }
+impl MatchArm {
+  pub fn new(pattern: Expression, body: Block) -> MatchArm {
+    MatchArm { pattern, body }
   }
 }
 

@@ -12,7 +12,7 @@ pub type Token = lexer.Token
 
 pub type TokenKind = lexer.TokenKind
 
-type ParseError = dx.ParseError
+pub type ParseError = dx.ParseError
 
 pub struct Parser {
   lexer: Lexer,

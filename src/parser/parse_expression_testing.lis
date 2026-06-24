@@ -21,6 +21,7 @@ pub fn test_expression() {
       test_parse_unary_not,
       test_parse_let_var,
       test_parse_return_break_continue,
+      test_parse_while,
     ],
   )
 }
@@ -447,5 +448,51 @@ fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.Continue)?
+  Ok(())
+}
+
+fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
+  t.test_name = "while"
+
+  let mut parser = Parser.new("while true: 1+1")
+  let mut ep = ExpressionParser.new(&parser, 0)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    While(Unary { expr: cond, consequent: body }) => {
+      match (cond.kind, body.statements.map(|s| s.kind)) {
+        (BoolLiteral(true), [Binop(_)]) => (),
+        (_, k) => t.fail(
+          "expected condition to be `true` and body to be `1+1`; " +
+          f"got `while {cond.kind}: {k}`",
+        )?,
+      }
+    },
+    While(c) => t.fail(f"expected unary condtion; got {c}")?,
+    _ => t.fail(f"expected While node; got {expr.kind}")?,
+  }
+
+  parser = Parser.new(
+    "while true is false:\n  let x = bogus\n  print(\"NOO!\")\n",
+  )
+  ep = ExpressionParser.new(&parser, 0)
+  let expr = ep.parse().map_err(|e| e.message())?
+  match expr.kind {
+    While(Unary { expr: cond, consequent: body }) => {
+      match (cond.kind, body.statements) {
+        (Binop(binop), stmts) => match (binop.op, stmts.map(|s| s.kind)) {
+          (Is, [Binop(dec), Call(call)]) => (),
+          (_, stmts) => t.fail(
+            "expected condition to be `true is false` and body to two statements; " +
+            f"got `while {binop}: {stmts}`",
+          )?,
+        },
+        _ => t.fail(
+          "expected condition to be a binop; " + f"got `while {cond.kind}: ...`",
+        )?,
+      }
+    },
+    While(c) => t.fail(f"expected unary condtion; got {c}")?,
+    _ => t.fail(f"expected While node; got {expr.kind}")?,
+  }
   Ok(())
 }

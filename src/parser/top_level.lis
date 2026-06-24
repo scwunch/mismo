@@ -72,7 +72,11 @@ impl Parser {
     let _ = self.consume(TokenKind.Identifier("fn"))?
     let sig = self.parse_signature()?
     span = span.merge(sig.span)
-    self.defs.add_function(cst.FunctionDecl.new(span, sig, cst.extern(span)))
+    self.defs.add_function(cst.FunctionDecl.new(
+      span,
+      sig,
+      cst.Block { statements: [cst.extern(span)] },
+    ))
     Ok(())
   }
 
@@ -80,7 +84,7 @@ impl Parser {
     let mut span = self.next().span
     let sig = self.parse_signature()?
     let body = self.parse_colon_and_block()?
-    span = span.merge(body.span)
+    span = span.merge(body.last().span)
     self.defs.add_function(cst.FunctionDecl.new(span, sig, body))
     Ok(())
   }
