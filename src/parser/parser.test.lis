@@ -1,0 +1,41 @@
+import myt "testing"
+
+#[test("parser")]
+fn test_parser() {
+  assert myt.test_suite(
+    "Parser: Top-level",
+    [
+      test_consume,
+      test_parse_type_params,
+      test_parse_type,
+      test_parse_tuple_type,
+      test_parse_fn_type,
+      test_parse_field,
+      test_parse_fields,
+      test_parse_struct,
+      test_parse_variant,
+      test_parse_enum,
+      test_parse_signature,
+      test_parse_function,
+    ],
+  )
+  assert myt.test_suite(
+    "ExpressionParser",
+    [
+      test_parse_simple_binary,
+      test_parse_arithmetic_precedence,
+      test_parse_parens,
+      test_parse_basic_literals,
+      test_parse_array_literals,
+      test_parse_tuple_literals,
+      test_parse_closure,
+      test_parse_function_calls,
+      test_parse_method_calls,
+      test_parse_unary_neg,
+      test_parse_unary_not,
+      test_parse_let_var,
+      test_parse_return_break_continue,
+      test_parse_while,
+    ],
+  )
+}

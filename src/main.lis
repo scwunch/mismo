@@ -5,10 +5,9 @@ import "go:path/filepath"
 
 import "compiler"
 import dx "diagnostics"
-import "span"
 import "lexer"
 import "parser"
-import "resolver"
+
 // import "semantic"
 // import "specialization"
 
@@ -96,12 +95,13 @@ fn sub_cmd(cmd: string, source: string, _args: Slice<string>) -> Result<(), Slic
   Ok(())
 }
 
+#[allow(manual_map_or)]
 fn run_tests(tests: Slice<string>) {
   let test_dict = Map.from([
-    ("span", span.test),
+    // ("span", span.test),
     ("lexer", lexer.test),
     ("parser", parser.test),
-    ("resolver", resolver.test),
+    // ("resolver", resolver.test),
     // ("type_env", semantic.test_type_env),
     // ("typecheck", semantic.test_typecheck),
     // ("modecheck", semantic.test_modecheck),

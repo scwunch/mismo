@@ -15,6 +15,12 @@ impl Closure {
   }
 }
 
+impl Capture {
+  pub fn equals(self, other: Capture) -> bool {
+    self.mode == other.mode && self.variable == other.variable
+  }
+}
+
 impl Expression {
   pub fn equals(self, other: Expression) -> bool {
     self.span == other.span && self.kind.equals(other.kind)

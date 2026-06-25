@@ -29,7 +29,7 @@ fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut parser = Parser.new("[[[[[")
   match parser.consume(lexer.TokenKind.LeftBracket) {
     Ok(s) => t.should_eq(s, span.new(0, 1))?,
-    Err(e) => t.fail(f"{e}")?,
+    Err(e) => t.fail(e.message())?,
   }
   match parser.consume(lexer.TokenKind.RightBracket) {
     Ok(s) => t.fail("Did not expect `]`")?,
@@ -38,7 +38,7 @@ fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
   parser = Parser.new("foobar")
   match parser.consume_identifier() {
     Ok(str) => t.should_eq_repr(str, "foobar")?,
-    Err(e) => t.fail(f"{e}")?,
+    Err(e) => t.fail(e.message())?,
   }
   Ok(())
 }

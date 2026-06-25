@@ -86,16 +86,15 @@ impl TestRunner {
     }
   }
 
-  pub fn should_contain<A: Contains<B>, B>(
+  pub fn should_contain<A: Equatable<A, B>, B>(
     self: Ref<TestRunner>,
-    val: A,
+    collection: Slice<A>,
     expected: B,
   ) -> Result<(), string> {
-    if val.contains(expected) {
-      Ok(())
-    } else {
-      self.fail(f"Expected \"{expected}\" to be in \"{val}\"")
+    for a in collection {
+      if a.equals(expected) { return Ok(()) }
     }
+    self.fail(f"Expected \"{expected}\" to be in \"{collection}\"")
   }
 
   pub fn shouldnt_eq<A: Equatable<A, B>, B: Equatable<B, A>>(

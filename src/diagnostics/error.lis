@@ -15,7 +15,6 @@ pub interface Diagnostic {
   // fn help() -> Option<string>    // Hints (e.g., "Consider upgrading the mode to mut!")
 }
 
-// impl Diagnostic {
 pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
   let mut line: uint32 = 0
   let mut col: uint32 = 0
@@ -63,15 +62,10 @@ pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
   f"E{self.code()}: {self.message()}\n{line}\n{highlight as string}"
 }
 
-// }
-
 pub interface SyntaxError {
   embed Diagnostic
-
-  // fn location(self, source: Slice<rune>) -> span.Location
 }
 
-#[display]
 pub struct ParseError {
   _s_: Span,
   pub msg: string,
@@ -92,10 +86,6 @@ impl ParseError {
 
   pub fn span(self) -> Span {
     self._s_
-  }
-
-  pub fn Diagnostic(self) -> string {
-    f"{self.span}: {self.msg}"
   }
 }
 

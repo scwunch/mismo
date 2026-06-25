@@ -1,0 +1,258 @@
+import "go:fmt"
+
+import "ast"
+import "cst"
+import dx "diagnostics"
+import "mode"
+import "operator"
+import "parser"
+import "span"
+
+#[test("resolver: Dummy")]
+pub fn dummy(t) -> Result<(), error> {
+  assert true
+  Ok(())
+}
+
+#[test("resolver: Scoping Rules")]
+fn test_scope(t) -> Result<(), error> {
+  let res = Resolver.new_blank()
+  let cst_node = parse([
+    "let foo = 0",
+    "let bar = 0",
+    "while true:",
+    "  var foo = -1",
+    "  bar",
+    "  foo",
+  ])?
+  let mut foo1 = ast.var_var("undefined")
+  let mut foo2 = ast.var_var("undefined")
+  let mut bar1 = ast.var_var("undefined")
+  let mut bar2 = ast.var_var("undefined")
+  let block = res.block(cst_node).map_err(dx2err)?
+  match block.statements {
+    [stmt1, stmt2, stmt3] => {
+      match (stmt1.kind, stmt2.kind) {
+        (Declare(mode.Mode.Let, foo, _), Declare(mode.Mode.Let, bar, _)) => {
+          foo1 = foo
+          bar1 = bar
+          assert foo.mode == mode.Mode.Let
+          assert bar.mode == mode.Mode.Let
+          assert foo.name == "foo"
+          assert bar.name == "bar"
+        },
+        _ => t.skip(
+          f"expected first two statements to be `let` declarations; got {stmt1.kind}, {stmt2.kind}",
+        ),
+      }
+      match stmt3.kind {
+        While(_cond, body) => {
+          match body.statements {
+            [_, ident_bar, ident_foo] => {
+              match (ident_bar.kind, ident_foo.kind) {
+                (Identifier(bar_var), Identifier(foo_var)) => {
+                  bar2 = bar_var
+                  foo2 = foo_var
+                  assert bar1 == bar2
+                  assert foo1 != foo2
+                },
+                r => fail(
+                  t,
+                  f"expected last two statements in while loop to be identifiers; got {r}",
+                )?,
+              }
+            },
+            _ => t.skip(
+              f"expected 3 statements in while loop body; got {body.statements.length()}",
+            ),
+          }
+        },
+        k => t.skip(f"expected while loop; got {k}"),
+      }
+    },
+    _ => t.skip(f"expected 3 statements; got {block.statements.length()}"),
+  }
+  Ok(())
+}
+
+#[test("resolver: Closure captures")]
+fn test_closure(t) -> Result<(), error> {
+  let res = Resolver.new_blank()
+  let cst_node = parse([
+    "let foo = 0",
+    "let bar = 0",
+    "|arg Int|: ",
+    "  var foo = -1",
+    "  foo",
+    "  bar",
+  ])?
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [stmt1, stmt2, stmt3] = block.statements
+  let assert ast.Expr.Declare(_, foo1, _) = stmt1.kind
+  let assert ast.Expr.Declare(_, bar1, _) = stmt2.kind
+  assert foo1.name == "foo"
+  assert bar1.name == "bar"
+  let assert ast.Expr.Closure(closure) = stmt3.kind
+  let assert [cap] = closure.env
+  assert cap == ast.Capture.new(bar1)
+  let assert [param] = closure.params
+  assert param.equals(ast.Parameter.new(
+    span.new(34, 41),
+    mode.Mode.Let,
+    "arg",
+    Type.Int,
+  ))
+  let assert [_, stmt2, stmt3] = closure.body.statements
+  let assert ast.Expr.Identifier(foo2) = stmt2.kind
+  let assert ast.Expr.CapturedIdent(bar2) = stmt3.kind
+  assert foo1 != foo2
+  assert bar1 == bar2
+
+  Ok(())
+}
+
+#[test("resolver: Nested Closure Scope Capturing")]
+fn test_nested_closure(t) -> Result<(), error> {
+  let res = Resolver.new_blank()
+  let cst_node = parse([
+    "let foo = 0",
+    "let bar = 0",
+    "let baz = 0",
+    "let glob = 0",
+    "|mut foo Int|: ",
+    "   bar",
+    "   var bar = -1",
+    "   |mut baz Int|: ",
+    "      foo",
+    "      bar",
+    "      baz",
+    "      glob",
+  ])?
+
+  let block = res.block(cst_node).map_err(dx2err)?
+
+  let assert [
+    ast.Expr.Declare(_, foo1, _),
+    ast.Expr.Declare(_, bar1, _),
+    ast.Expr.Declare(_, baz1, _),
+    ast.Expr.Declare(_, glob1, _),
+    ast.Expr.Closure(closure),
+  ] = block.statements.map(|s| s.kind)
+  assert foo1.name == "foo"
+  assert bar1.name == "bar"
+  assert baz1.name == "baz"
+  assert glob1.name == "glob"
+  let assert [cap_bar, cap_glob] = closure.env
+  assert cap_bar.variable == bar1
+  assert cap_glob.variable == glob1
+  Ok(())
+}
+
+// fn test_nested_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
+//   t.test_name = "Nested Closures"
+//   let res = Resolver.new_blank()
+//   let cst_node = parse([
+//     "let foo = 0",
+//     "let bar = 0",
+//     "let baz = 0",
+//     "let glob = 0",
+//     "|mut foo Int|: ",
+//     "   bar",
+//     "   var bar = -1",
+//     "   |mut baz Int|: ",
+//     "      foo",
+//     "      bar",
+//     "      baz",
+//     "      glob",
+//   ])?
+//   let mut foo1 = ast.var_var("undefined")
+//   let mut foo2 = ast.var_var("undefined")
+//   let mut bar1 = ast.var_var("undefined")
+//   let mut bar2 = ast.var_var("undefined")
+//   let mut baz1 = ast.var_var("undefined")
+//   let mut baz2 = ast.var_var("undefined")
+//   let mut glob1 = ast.var_var("undefined")
+//   let mut glob2 = ast.var_var("undefined")
+
+//   let block = res.block(cst_node).map_err(|e| e.message())?
+//   match block.statements.map(|s| s.kind) {
+//     [
+//       Declare(_, foo, _),
+//       Declare(_, bar, _),
+//       Declare(_, baz, _),
+//       Declare(_, glob, _),
+//       Closure(closure),
+//     ] => {
+//       foo1 = foo
+//       bar1 = bar
+//       baz1 = baz
+//       glob1 = glob
+//       t.should_eq_repr(foo.name, "foo")?
+//       t.should_eq_repr(bar.name, "bar")?
+//       t.should_eq_repr(baz.name, "baz")?
+//       t.should_eq_repr(glob.name, "glob")?
+//       let caps = closure.env.map(|c| c.variable)
+//       t.should_be_true(
+//         caps.find(|v| v == glob).is_some(),
+//         "expected closure to capture `glob`",
+//       )?
+//       t.should_be_true(
+//         caps.find(|v| v == bar).is_some(),
+//         "expected closure to capture `bar`",
+//       )?
+//       t.should_be_true(
+//         caps.length() == 1,
+//         f"closure captured too many variables: {caps}",
+//       )?
+//       match closure.params {
+//         [param] => t.should_eq(
+//           param,
+//           ast.Parameter.new(span.new(34, 41), mode.Mode.Mut, "foo", Type.Int),
+//         )?,
+//         _ => t.fail(f"expected `arg Int`; got {closure.params}")?,
+//       }
+//       match closure.body.statements.map(|s| s.kind) {
+//         [CapturedIdent(use_bar), Declare(_, new_bar, _), Closure(closure)] => {
+//           bar2 = new_bar
+//           t.should_be_true(use_bar == bar1, "expected bar to be bar1")?
+//           t.should_be_false(
+//             bar2 == bar1,
+//             "expected new_bar to be different from bar1",
+//           )?
+//           let caps = closure.env.map(|c| c.variable)
+//           t.should_be_true(
+//             caps.find(|v| v == glob1).is_some(),
+//             "expected closure to capture `glob`",
+//           )?
+//           t.should_be_true(
+//             caps.find(|v| v == bar1).is_some(),
+//             "expected closure to capture `bar`",
+//           )?
+//         },
+//         stmts => t.fail(
+//           f"expected `bar; var bar; <closure>`; got {stmts.length()}: {stmts}",
+//         )?,
+//       }
+//     },
+//     _ => t.fail(
+//       f"expected 3 declarations followed by closure; got {block.statements}",
+//     )?,
+//   }
+//   Ok(())
+// }
+
+fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
+  parser.Parser
+    .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))
+    .parse_colon_and_block()
+    .map_err(dx2err)
+}
+
+fn dx2err<E: dx.Diagnostic>(e: E) -> error {
+  fmt.Errorf("%v", e.message())
+}
+
+fn fail(t: TestContext, message: string) -> Result<(), error> {
+  t.log(message)
+  Err(fmt.Errorf("%s", message))
+}
