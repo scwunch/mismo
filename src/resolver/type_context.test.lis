@@ -1,0 +1,226 @@
+import "ast"
+import "cst"
+import "mode"
+import "span"
+
+#[test("resolver/type_context: eval type primitives")]
+fn test_eval_type_primitives(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 5, "Never", []))
+  assert ty.equals(Type.Never)
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 3, "Nil", []))
+  assert ty.equals(Type.nil())
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 4, "Bool", []))
+  assert ty.equals(Type.Bool)
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 3, "Nat", []))
+  assert ty.equals(Type.Nat)
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 3, "Int", []))
+  assert ty.equals(Type.Int)
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 5, "Float", []))
+  assert ty.equals(Type.Float)
+  let assert Ok(ty) = ctx.eval_type(cst.typ(0, 6, "String", []))
+  assert ty.equals(Type.String)
+  Ok(())
+}
+
+#[test("resolver/type_context: eval type compound types")]
+fn test_eval_type_compound(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // Tuple type: (Int, Bool)
+  let assert Ok(ty) = ctx.eval_type(cst.Type.tuple(
+    span.new(0, 11),
+    [cst.typ(1, 4, "Int", []), cst.typ(6, 10, "Bool", [])],
+  ))
+  assert ty.equals(Type.Tuple([Type.Int, Type.Bool]))
+
+  // Empty tuple type: ()
+  let assert Ok(ty) = ctx.eval_type(cst.Type.tuple(span.new(0, 2), []))
+  assert ty.equals(Type.Tuple([]))
+
+  // Function type: (Int) -> String
+  let assert Ok(ty) = ctx.eval_type(cst.Type.fn_(
+    span.new(0, 14),
+    [cst.ParamType.none(cst.typ(1, 4, "Int", []))],
+    &cst.typ(10, 16, "String", []),
+  ))
+  assert ty.equals(Type.Fn(
+    [ast.ParamType { mode: mode.Mode.Let, typ: Type.Int }],
+    &Type.String,
+  ))
+
+  // Function type with let and mut! params
+  let assert Ok(ty) = ctx.eval_type(cst.Type.fn_(
+    span.new(0, 26),
+    [
+      cst.ParamType.let_(cst.typ(5, 11, "String", [])),
+      cst.ParamType.mut_bang(cst.typ(18, 21, "Int", [])),
+    ],
+    &cst.typ(24, 28, "Bool", []),
+  ))
+  assert ty.equals(Type.Fn(
+    [
+      ast.ParamType { mode: mode.Mode.Let, typ: Type.String },
+      ast.ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
+    ],
+    &Type.Bool,
+  ))
+
+  Ok(())
+}
+
+#[test("resolver/type_context: eval type nominal types")]
+fn test_eval_type_nominal(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+  register_types(
+    ctx.env,
+    [
+      cst.TypeDecl.new_enum(
+        span.new(0, 18),
+        "Option",
+        [cst.TypeParameter.new(span.new(7, 8), "T")],
+        [
+          cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
+          cst.Variant.new(span.new(17, 21), "None", []),
+        ],
+      ),
+    ],
+  )
+
+  // Option[Int]
+  let option_ref = ctx.env.type_defs["Option"]
+  let assert Ok(ty) = ctx.eval_type(cst.typ(
+    0,
+    11,
+    "Option",
+    [cst.typ(7, 10, "Int", [])],
+  ))
+  assert ty.equals(Type.Adt(option_ref, [Type.Int]))
+
+  // Option[Option[Int]]
+  let assert Ok(ty) = ctx.eval_type(cst.typ(
+    0,
+    18,
+    "Option",
+    [cst.typ(7, 17, "Option", [cst.typ(14, 17, "Int", [])])],
+  ))
+  assert ty.equals(Type.Adt(option_ref, [Type.Adt(option_ref, [Type.Int])]))
+
+  Ok(())
+}
+
+#[test("resolver/type_context: eval type errors")]
+fn test_eval_type_errors(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // Missing name
+  let assert Err(e) = ctx.eval_type(cst.typ(0, 6, "Wobble", []))
+  assert e.code() == 2002
+
+  // Arity mismatch on primitive: Int[String]
+  let assert Err(e) = ctx.eval_type(cst.typ(
+    0,
+    3,
+    "Int",
+    [cst.typ(0, 6, "String", [])],
+  ))
+  assert e.code() == 2003
+
+  // Register Option[T] for ADT arity test
+  register_types(
+    ctx.env,
+    [
+      cst.TypeDecl.new_enum(
+        span.new(0, 18),
+        "Option",
+        [cst.TypeParameter.new(span.new(7, 8), "T")],
+        [
+          cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
+          cst.Variant.new(span.new(17, 21), "None", []),
+        ],
+      ),
+    ],
+  )
+
+  // Arity mismatch on ADT: Option[Int, String] (2 args, 1 expected)
+  let assert Err(e) = ctx.eval_type(cst.typ(
+    0,
+    20,
+    "Option",
+    [cst.typ(7, 10, "Int", []), cst.typ(12, 18, "String", [])],
+  ))
+  assert e.code() == 2003
+
+  Ok(())
+}
+
+#[test("resolver/type_context: eval param type")]
+fn test_eval_param_type(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // none mode → defaults to Let
+  let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.none(cst.typ(
+    0,
+    3,
+    "Int",
+    [],
+  )))
+  assert pt.equals(ast.ParamType { mode: mode.Mode.Let, typ: Type.Int })
+
+  // let mode
+  let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.let_(cst.typ(
+    0,
+    4,
+    "Bool",
+    [],
+  )))
+  assert pt.equals(ast.ParamType { mode: mode.Mode.Let, typ: Type.Bool })
+
+  // mut! mode
+  let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.mut_bang(cst.typ(
+    0,
+    3,
+    "Int",
+    [],
+  )))
+  assert pt.equals(ast.ParamType { mode: mode.Mode.MutBang, typ: Type.Int })
+
+  Ok(())
+}
+
+#[test("resolver/type_context: eval param")]
+fn test_eval_param(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // No mode → defaults to Let
+  let assert Ok(param) = ctx.eval_param(cst.param(
+    0,
+    0,
+    None,
+    "x",
+    cst.typ(6, 9, "Int", []),
+  ))
+  assert param.equals(ast.Parameter.let_("x", Type.Int))
+
+  // let mode
+  let assert Ok(param) = ctx.eval_param(cst.param(
+    0,
+    0,
+    Some(mode.Mode.Let),
+    "s",
+    cst.typ(10, 14, "String", []),
+  ))
+  assert param.equals(ast.Parameter.let_("s", Type.String))
+
+  // var mode
+  let assert Ok(param) = ctx.eval_param(cst.param(
+    0,
+    0,
+    Some(mode.Mode.Var),
+    "y",
+    cst.typ(8, 11, "Int", []),
+  ))
+  assert param.equals(ast.Parameter.var_("y", Type.Int))
+
+  Ok(())
+}

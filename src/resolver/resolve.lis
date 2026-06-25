@@ -5,20 +5,21 @@ import "utils/slice"
 
 pub fn resolve(items: cst.Declarations) -> ast.Registry {
   let env = &ast.Registry.new()
-  // populate @type_defs and @function_defs with names of types and type parameters
-  register_types(env, items.types)
 
-  // register signatures of all functions
-  // this must be done before generated functions (eg constructors)
-  // to maintain the same ordering as items.functions
-  register_functions(env, items.functions)
+  // populate type_defs and function_defs
+  register_items(env, items)
 
   // evaluate fields, variants, and canonical constructors
-  fill_out_type_info(env, items.types)
+  elaborate_types(env, items.types)
 
   // perform name resolution and desugaring
   resolve_functions(env, items.functions)
   env.*
+}
+
+pub fn register_items(self: Ref<ast.Registry>, items: cst.Declarations) {
+  register_types(self, items.types)
+  self.function_defs = items.functions.map(|f| eval_function(self, f))
 }
 
 pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
@@ -35,7 +36,7 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
           cst.TypeBody.Enum(_) => ast.TypeKind.Enum([]),
         }
         let type_params = t.type_parameters.map(|param| {
-          ast.TypeParameter { span: param.span, name: param.name }
+          ast.TypeParameter.new(param.span, param.name)
         })
         self.type_defs[t.name] = &ast.TypeDef.new(
           t.span,
@@ -48,7 +49,7 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
   }
 }
 
-pub fn fill_out_type_info(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
+pub fn elaborate_types(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
   for decl in types {
     let def = self.type_defs[decl.name]
     let ctx = TypeContext.new(self, def.type_parameters)

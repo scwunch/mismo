@@ -1,0 +1,8 @@
+// import "ast"
+
+// test
+// - register_types
+// - elaborate_types
+// - register_functions (wrapper for eval_function)
+// - eval_function
+// - try_eval_function

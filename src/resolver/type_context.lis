@@ -19,8 +19,12 @@ impl TypeContext {
     TypeContext { env, type_params }
   }
 
+  fn new_blank() -> TypeContext {
+    TypeContext.new(&ast.Registry.new(), [])
+  }
+
   fn eval_field(self, field: cst.Field) -> ast.Field {
-    ast.Field {
+    ast.Field { 
       span: field.span,
       name: field.name,
       typ: self
@@ -33,7 +37,7 @@ impl TypeContext {
   }
 
   fn eval_variant(self, variant: cst.Variant) -> ast.Variant {
-    ast.Variant {
+    ast.Variant { 
       span: variant.span,
       name: variant.name,
       fields: variant.payload.map(|typ| {
@@ -146,7 +150,7 @@ impl TypeContext {
   fn eval_param(self, param: cst.Parameter) -> Result<ast.Parameter, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
     Ok(
-      ast.Parameter {
+      ast.Parameter { 
         span: param.span,
         mode: param.mode.unwrap_or(mode.Mode.Let),
         name: param.name,
