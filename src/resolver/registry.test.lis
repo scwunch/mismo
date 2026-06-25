@@ -1,8 +1,225 @@
-// import "ast"
+import "go:fmt"
 
-// test
-// - register_types
-// - elaborate_types
-// - register_functions (wrapper for eval_function)
-// - eval_function
-// - try_eval_function
+import "ast"
+import "cst"
+import dx "diagnostics"
+import "mode"
+import "span"
+
+#[test("resolver/registry: register and fill struct")]
+fn test_register_and_fill_struct(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  let decl = cst.TypeDecl.new_struct(
+    span.new(0, 22),
+    "Point",
+    [],
+    [
+      cst.Field.new(8, 14, "x", cst.typ(11, 14, "Int", [])),
+      cst.Field.new(15, 21, "y", cst.typ(18, 21, "Int", [])),
+    ],
+  )
+  register_types(ctx.env, [decl])
+  elaborate_types(ctx.env, [decl])
+
+  let def = ctx.env.type_defs["Point"]
+  assert def.name == "Point"
+  assert def.type_parameters.is_empty()
+  let assert ast.TypeKind.Struct(fields) = def.kind
+  assert fields.length() == 2
+  assert fields[0].name == "x"
+  assert fields[0].typ.equals(Type.Int)
+  assert fields[1].name == "y"
+  assert fields[1].typ.equals(Type.Int)
+  Ok(())
+}
+
+#[test("resolver/registry: register and fill enum")]
+fn test_register_and_fill_enum(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  let decl = cst.TypeDecl.new_enum(
+    span.new(0, 30),
+    "Color",
+    [],
+    [
+      cst.Variant.new(span.new(13, 16), "Red", []),
+      cst.Variant.new(span.new(19, 25), "Green", [cst.typ(25, 28, "Int", [])]),
+    ],
+  )
+  register_types(ctx.env, [decl])
+  elaborate_types(ctx.env, [decl])
+
+  let def = ctx.env.type_defs["Color"]
+  assert def.name == "Color"
+  assert def.type_parameters.is_empty()
+  let assert ast.TypeKind.Enum(variants) = def.kind
+  assert variants.length() == 2
+  assert variants[0].name == "Red"
+  assert variants[0].fields.is_empty()
+  assert variants[1].name == "Green"
+  assert variants[1].fields.length() == 1
+  assert variants[1].fields[0].equals(Type.Int)
+  Ok(())
+}
+
+#[test("resolver/registry: duplicate name error")]
+fn test_duplicate_name_error(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  register_types(
+    ctx.env,
+    [
+      cst.TypeDecl.new_struct(span.new(0, 10), "Point", [], []),
+      cst.TypeDecl.new_struct(span.new(10, 20), "Point", [], []),
+    ],
+  )
+
+  assert ctx.env.errors.length() == 1
+  assert ctx.env.errors[0].code() == 2001
+
+  Ok(())
+}
+
+#[test("resolver/registry: eval function")]
+fn test_eval_function(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // fn foo() Int
+  let sig = cst.Signature.new(
+    span.new(0, 18),
+    "foo",
+    [],
+    [],
+    cst.typ(14, 17, "Int", []),
+  )
+  let decl = cst.FunctionDecl.new(
+    span.new(0, 0),
+    sig,
+    cst.Block { statements: [cst.int_lit(span.new(20, 22), 42)] },
+  )
+
+  // let assert Ok(func) = try_eval_function(ctx.env, decl)
+  // let func = try_eval_function(ctx.env, decl).map_err(dx2err)?
+  let func = match try_eval_function(ctx.env, decl) {
+    Ok(f) => f,
+    Err(e) => fail(t, e.message())?,
+  }
+  assert func.name == "foo"
+  assert func.parameters.is_empty()
+  assert func.return_type.equals(Type.Int)
+
+  // fn add(a Int, b Int) Int
+  let params = [
+    cst.param(0, 0, None, "a", cst.typ(9, 12, "Int", [])),
+    cst.param(0, 0, None, "b", cst.typ(17, 20, "Int", [])),
+  ]
+  let add_sig = cst.Signature.new(
+    span.new(0, 29),
+    "add",
+    [],
+    params,
+    cst.typ(26, 29, "Int", []),
+  )
+  let add_decl = cst.FunctionDecl.new(
+    span.new(0, 29),
+    add_sig,
+    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+  )
+
+  // let assert Ok(func) = try_eval_function(ctx.env, add_decl)
+  let func = match try_eval_function(ctx.env, add_decl) {
+    Ok(f) => f,
+    Err(e) => fail(t, e.message())?,
+  }
+  assert func.name == "add"
+  assert func.parameters.length() == 2
+  assert func.parameters[0].equals(ast.Parameter.let_("a", Type.Int))
+  assert func.parameters[1].equals(ast.Parameter.let_("b", Type.Int))
+  assert func.return_type.equals(Type.Int)
+
+  // fn bad() Wobble => Error: unknown return type Wobble
+  let bad_sig = cst.Signature.new(
+    span.new(0, 20),
+    "bad",
+    [],
+    [],
+    cst.typ(14, 19, "Wobble", []),
+  )
+  let bad_decl = cst.FunctionDecl.new(
+    span.new(0, 20),
+    bad_sig,
+    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+  )
+
+  match try_eval_function(ctx.env, bad_decl) {
+    Ok(_) => fail(t, "expected error for unknown return type"),
+    Err(e) => {
+      assert e.code() == 2002
+      Ok(())
+    },
+  }
+}
+
+#[test("resolver/registry: register functions")]
+fn test_register_functions(t) -> Result<(), error> {
+  let ctx = TypeContext.new_blank()
+
+  // Register fn foo() Int: 42
+  let foo_sig = cst.Signature.new(
+    span.new(0, 18),
+    "foo",
+    [],
+    [],
+    cst.typ(14, 17, "Int", []),
+  )
+  let foo_decl = cst.FunctionDecl.new(
+    span.new(0, 22),
+    foo_sig,
+    cst.Block { statements: [cst.int_lit(span.new(20, 22), 42)] },
+  )
+  register_functions(ctx.env, [foo_decl])
+
+  let foo_funcs = ctx.env.signatures["foo"]
+  assert foo_funcs.length() == 1
+  assert foo_funcs[0].name == "foo"
+  assert foo_funcs[0].return_type.equals(Type.Int)
+
+  // Overload: register another fn foo(x Int) Int
+  let foo2_sig = cst.Signature.new(
+    span.new(0, 22),
+    "foo",
+    [],
+    [cst.param(7, 13, None, "x", cst.typ(10, 13, "Int", []))],
+    cst.typ(18, 21, "Int", []),
+  )
+  let foo2_decl = cst.FunctionDecl.new(
+    span.new(0, 22),
+    foo2_sig,
+    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+  )
+  register_functions(ctx.env, [foo2_decl])
+
+  let foo_funcs = ctx.env.signatures["foo"]
+  assert foo_funcs.length() == 2
+
+  // Register a function with error (unknown return type)
+  let bad_sig = cst.Signature.new(
+    span.new(0, 16),
+    "bad",
+    [],
+    [],
+    cst.typ(12, 16, "Wobble", []),
+  )
+  let bad_decl = cst.FunctionDecl.new(
+    span.new(0, 16),
+    bad_sig,
+    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+  )
+  register_functions(ctx.env, [bad_decl])
+
+  assert ctx.env.errors.length() == 1
+  assert ctx.env.errors[0].code() == 2002
+
+  Ok(())
+}

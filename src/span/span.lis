@@ -19,10 +19,6 @@ impl Span {
     Span { start, end }
   }
 
-  fn index(start: uint32) -> Span {
-    Span { start, end: start }
-  }
-
   pub fn string(self) -> string {
     f"{self.start}..{self.end}"
   }

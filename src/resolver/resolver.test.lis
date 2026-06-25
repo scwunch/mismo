@@ -254,7 +254,7 @@ fn dx2err<E: dx.Diagnostic>(e: E) -> error {
   fmt.Errorf("%v", e.message())
 }
 
-fn fail(t: TestContext, message: string) -> Result<(), error> {
+fn fail(t: TestContext, message: string) -> Result<Never, error> {
   t.log(message)
   Err(fmt.Errorf("%s", message))
 }

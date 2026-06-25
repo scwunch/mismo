@@ -1,21 +1,32 @@
+import "go:fmt"
+
 import myt "testing"
 
 #[test("lexer")]
-fn test_lexer() {
-  assert myt.test_suite(
-    "Lexer",
-    [
-      test_token_equality,
-      test_peek_next_char,
-      test_read_word,
-      test_read_number,
-      test_read_single_line_string,
-      test_read_multiline_string,
-      test_operators,
-      test_keywords_and_operators,
-      test_comments,
-      test_newlines,
-      test_full_program,
-    ],
-  )
+fn test_lexer(t) {
+  let suite = [
+    test_token_equality,
+    test_peek_next_char,
+    test_read_word,
+    test_read_number,
+    test_read_single_line_string,
+    test_read_multiline_string,
+    test_operators,
+    test_keywords_and_operators,
+    test_comments,
+    test_newlines,
+    test_full_program,
+  ]
+  for test in suite {
+    t.run("Lexer", wrap_test(test))
+  }
+}
+
+fn wrap_test(test_func: fn(Ref<myt.TestRunner>) -> Result<(), string>) -> fn(TestContext) -> () {
+  |t| {
+    if let Err(s) = test_func(&myt.TestRunner.new("")) {
+      t.log(s)
+      assert false
+    }
+  }
 }
