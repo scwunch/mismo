@@ -1,4 +1,5 @@
 import "go:fmt"
+import "go:os"
 
 pub fn test(
   test_name: string,
@@ -128,4 +129,22 @@ pub interface Testable<Self> {
 
 pub interface Contains<T> {
   fn contains(self, needle: T) -> bool
+}
+
+pub fn debug(msg: string) {
+  // Append message to a local file
+  if let Ok(f) = os.OpenFile(
+    "../../output.log",
+    os.O_APPEND | os.O_CREATE | os.O_WRONLY,
+    0o644,
+  ) {
+    match f.WriteString(msg + "\n") {
+      Ok(_) => (),
+      Err(e) => panic(e),
+      Both(_, e) => panic(e),
+    }
+    f.Close()
+  } else {
+    panic("could not open `output.log` file")
+  }
 }
