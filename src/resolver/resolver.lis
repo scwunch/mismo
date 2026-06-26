@@ -185,14 +185,12 @@ impl Resolver {
     let body = self.block(body)?
     let env = self.pop_closure_env()
     Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
-    // Ok(Expression.new(span, Expr.Closure(closure)))
   }
 
   fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.ResolveError> {
     if binop.op == operator.Operator.Assign {
       let value = self.resolve(binop.right)?
-      let value = &value
-      self.assign(binop.left, value)
+      self.assign(binop.left, &value)
     } else {
       self.call(
         cst.Path.name_(binop.op.sigil()),

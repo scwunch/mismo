@@ -136,105 +136,56 @@ fn test_nested_closure(t) -> Result<(), error> {
   assert bar1.name == "bar"
   assert baz1.name == "baz"
   assert glob1.name == "glob"
-  // if true { t.skip("I still need to bug-hunt this one.") }
   let assert [cap_bar, cap_glob] = closure1.env
   assert cap_bar.variable == bar1
   assert cap_glob.variable == glob1
+
+  // nested closures one after the other
+  let res = Resolver.new_blank()
+  let cst_node = parse([
+    "let foo = 0",
+    "let bar = 1",
+    "let baz = 2",
+    "let glob = 3",
+    "|mut foo Int|: ",
+    "   bar  --1",
+    "   var bar = 5",
+    "|mut baz Int|: ",
+    "   let middle = ||: ",
+    "      let inner = ||: ",
+    "         foo",
+    "         bar",
+    "         baz",
+    "         glob",
+  ])?
+
+  let block = res.block(cst_node).map_err(dx2err)?
+
+  let assert [
+    ast.Expr.Declare(_, foo1, _),
+    ast.Expr.Declare(_, bar1, _),
+    ast.Expr.Declare(_, baz1, _),
+    ast.Expr.Declare(_, glob1, _),
+    ast.Expr.Closure(closure1),
+    ast.Expr.Closure(closure2),
+  ] = block.statements.map(|s| s.kind)
+  assert foo1.name == "foo"
+  assert bar1.name == "bar"
+  assert baz1.name == "baz"
+  assert glob1.name == "glob"
+
+  let assert [cap_bar] = closure1.env
+  assert cap_bar.variable == bar1
+  let stmts = closure1.body.statements.map(|s| s.kind)
+  let assert [_, ast.Expr.Declare(_, new_bar, _)] = stmts
+  assert bar1 != new_bar
+
+  let assert [foo, bar, glob] = closure2.env
+  assert foo.variable == foo1
+  assert bar.variable == bar1
+  assert glob.variable == glob1
   Ok(())
 }
-
-// fn test_nested_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
-//   t.test_name = "Nested Closures"
-//   let res = Resolver.new_blank()
-//   let cst_node = parse([
-//     "let foo = 0",
-//     "let bar = 0",
-//     "let baz = 0",
-//     "let glob = 0",
-//     "|mut foo Int|: ",
-//     "   bar",
-//     "   var bar = -1",
-//     "   |mut baz Int|: ",
-//     "      foo",
-//     "      bar",
-//     "      baz",
-//     "      glob",
-//   ])?
-//   let mut foo1 = ast.var_var("undefined")
-//   let mut foo2 = ast.var_var("undefined")
-//   let mut bar1 = ast.var_var("undefined")
-//   let mut bar2 = ast.var_var("undefined")
-//   let mut baz1 = ast.var_var("undefined")
-//   let mut baz2 = ast.var_var("undefined")
-//   let mut glob1 = ast.var_var("undefined")
-//   let mut glob2 = ast.var_var("undefined")
-
-//   let block = res.block(cst_node).map_err(|e| e.message())?
-//   match block.statements.map(|s| s.kind) {
-//     [
-//       Declare(_, foo, _),
-//       Declare(_, bar, _),
-//       Declare(_, baz, _),
-//       Declare(_, glob, _),
-//       Closure(closure),
-//     ] => {
-//       foo1 = foo
-//       bar1 = bar
-//       baz1 = baz
-//       glob1 = glob
-//       t.should_eq_repr(foo.name, "foo")?
-//       t.should_eq_repr(bar.name, "bar")?
-//       t.should_eq_repr(baz.name, "baz")?
-//       t.should_eq_repr(glob.name, "glob")?
-//       let caps = closure.env.map(|c| c.variable)
-//       t.should_be_true(
-//         caps.find(|v| v == glob).is_some(),
-//         "expected closure to capture `glob`",
-//       )?
-//       t.should_be_true(
-//         caps.find(|v| v == bar).is_some(),
-//         "expected closure to capture `bar`",
-//       )?
-//       t.should_be_true(
-//         caps.length() == 1,
-//         f"closure captured too many variables: {caps}",
-//       )?
-//       match closure.params {
-//         [param] => t.should_eq(
-//           param,
-//           ast.Parameter.new(span.new(34, 41), mode.Mode.Mut, "foo", Type.Int),
-//         )?,
-//         _ => t.fail(f"expected `arg Int`; got {closure.params}")?,
-//       }
-//       match closure.body.statements.map(|s| s.kind) {
-//         [CapturedIdent(use_bar), Declare(_, new_bar, _), Closure(closure)] => {
-//           bar2 = new_bar
-//           t.should_be_true(use_bar == bar1, "expected bar to be bar1")?
-//           t.should_be_false(
-//             bar2 == bar1,
-//             "expected new_bar to be different from bar1",
-//           )?
-//           let caps = closure.env.map(|c| c.variable)
-//           t.should_be_true(
-//             caps.find(|v| v == glob1).is_some(),
-//             "expected closure to capture `glob`",
-//           )?
-//           t.should_be_true(
-//             caps.find(|v| v == bar1).is_some(),
-//             "expected closure to capture `bar`",
-//           )?
-//         },
-//         stmts => t.fail(
-//           f"expected `bar; var bar; <closure>`; got {stmts.length()}: {stmts}",
-//         )?,
-//       }
-//     },
-//     _ => t.fail(
-//       f"expected 3 declarations followed by closure; got {block.statements}",
-//     )?,
-//   }
-//   Ok(())
-// }
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   parser.Parser
