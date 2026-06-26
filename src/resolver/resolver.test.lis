@@ -8,12 +8,6 @@ import "operator"
 import "parser"
 import "span"
 
-#[test("resolver: Dummy")]
-pub fn dummy(t) -> Result<(), error> {
-  assert true
-  Ok(())
-}
-
 #[test("resolver: Scoping Rules")]
 fn test_scope(t) -> Result<(), error> {
   let res = Resolver.new_blank()
@@ -116,12 +110,12 @@ fn test_nested_closure(t) -> Result<(), error> {
   let res = Resolver.new_blank()
   let cst_node = parse([
     "let foo = 0",
-    "let bar = 0",
-    "let baz = 0",
-    "let glob = 0",
+    "let bar = 1",
+    "let baz = 2",
+    "let glob = 3",
     "|mut foo Int|: ",
-    "   bar",
-    "   var bar = -1",
+    "   bar  --1",
+    "   var bar = 5",
     "   |mut baz Int|: ",
     "      foo",
     "      bar",
@@ -136,17 +130,16 @@ fn test_nested_closure(t) -> Result<(), error> {
     ast.Expr.Declare(_, bar1, _),
     ast.Expr.Declare(_, baz1, _),
     ast.Expr.Declare(_, glob1, _),
-    ast.Expr.Closure(closure),
+    ast.Expr.Closure(closure1),
   ] = block.statements.map(|s| s.kind)
   assert foo1.name == "foo"
   assert bar1.name == "bar"
   assert baz1.name == "baz"
   assert glob1.name == "glob"
-  let _ = closure
-  if true { t.skip("I still need to bug-hunt this one.") }
-  // let assert [cap_bar, cap_glob] = closure.env
-  // assert cap_bar.variable == bar1
-  // assert cap_glob.variable == glob1
+  // if true { t.skip("I still need to bug-hunt this one.") }
+  let assert [cap_bar, cap_glob] = closure1.env
+  assert cap_bar.variable == bar1
+  assert cap_glob.variable == glob1
   Ok(())
 }
 

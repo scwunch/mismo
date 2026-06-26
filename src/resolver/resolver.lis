@@ -1,3 +1,6 @@
+import "go:fmt"
+import "go:os"
+
 import "ast"
 import "cst"
 import dx "diagnostics"
@@ -5,20 +8,39 @@ import "operator"
 import "span"
 import "utils/slice"
 
+fn debug(msg: string) {
+  // Append message to a local file
+  if let Ok(f) = os.OpenFile(
+    "../../output.log",
+    os.O_APPEND | os.O_CREATE | os.O_WRONLY,
+    0o644,
+  ) {
+    match f.WriteString(msg + "\n") {
+      Ok(_) => (),
+      Err(e) => panic(e),
+      Both(_, e) => panic(e),
+    }
+    f.Close()
+  } else {
+    panic("could not open `output.log` file")
+  }
+}
+
 type Expr = ast.Expr
 
 #[display]
 pub struct Resolver {
   pub ctx: TypeContext,
   pub scope: Scope,
-  pub capture_set_stack: Slice<CaptureSet>,
+  pub capture_set_stack: Ref<Slice<CaptureSet>>,
 }
 
 impl Resolver {
   fn new(env: Ref<ast.Registry>, func: Ref<ast.Function>) -> Resolver {
     let scope = Scope.from_params(func.parameters)
     let ctx = TypeContext.new(env, func.type_parameters)
-    Resolver { ctx, scope, .. }
+    let capture_set_stack = &Slice.new()
+    Resolver { ctx, scope, capture_set_stack }
   }
 
   fn new_blank() -> Resolver {
@@ -108,8 +130,10 @@ impl Resolver {
 
   fn resolve_path(self, path: cst.Path, span: span.Span) -> Result<Expr, dx.ResolveError> {
     if path.namespace.is_empty() {
+      debug(f"  find {path.name} in {self.scope.bindings.map(|v| v.name)}")
       match self.scope.get(path.name) {
         Some((idx, varid)) => {
+          debug(f"    found var {varid.name} at index {idx}")
           if self.capture(varid, idx) {
             Ok(Expr.CapturedIdent(varid))
           } else {
@@ -129,19 +153,30 @@ impl Resolver {
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
   fn capture(self, varid: Ref<ast.Variable>, index: int) -> bool {
+    debug(f"    capture({varid.name}, index={index})")
     let mut self = self
     let mut is_capture = false
     for i in 0..self.capture_set_stack.length() {
-      let capset = &self.capture_set_stack[i]
+      let capset = &self.capture_set_stack.*[i]
+      debug(
+        f"      capset(index={capset.index}, caps={capset.captures.map(|v| v.name)})",
+      )
       if index < capset.index {
         is_capture = true
         capset.captures = capset.captures.append(varid)
+        debug(f"      -> add {varid.name} => {capset.captures.map(|v| v.name)}")
+      } else {
+        debug(f"      -> no capture => {capset.captures.map(|v| v.name)}")
       }
     }
     is_capture
   }
 
   fn block(self, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
+    debug("\nwe are here in Resolver.block")
+    debug(
+      f"capset stack: {self.capture_set_stack.map(|capset| (capset.index, capset.captures.map(|c| c.name)))}",
+    )
     let mut self = self
     let expressions = slice.map_result(
       block.statements,
@@ -156,16 +191,35 @@ impl Resolver {
     Ok(ast.Block.new(expressions))
   }
 
+  fn append_params(self, params: Slice<ast.Parameter>) -> Slice<Ref<ast.Variable>> {
+    params.fold(
+      self.scope.bindings,
+      |vars, param| vars.append(&ast.Variable.from_param(param)),
+    )
+  }
+
+  fn push_closure_env(self) {
+    self.capture_set_stack.* = self.capture_set_stack.*.append(
+      CaptureSet { index: self.scope.bindings.length(), .. },
+    )
+  }
+
+  fn pop_closure_env(self) -> Slice<ast.Capture> {
+    let last = self.capture_set_stack.length() - 1
+    let env = self.capture_set_stack.*[last].captures.map(ast.Capture.new)
+    self.capture_set_stack.* = self.capture_set_stack.*[..last]
+    env
+  }
+
   fn closure(self, params: Slice<ast.Parameter>, body: cst.Block) -> Result<Expr, dx.ResolveError> {
     let mut self = self
     let ret_type = Type.Never
-    self.capture_set_stack = self.capture_set_stack.append(
-      CaptureSet { index: self.scope.bindings.length(), .. },
-    )
+    self.push_closure_env()
+    self.scope.bindings = self.append_params(params)
+    debug(f"\nResolver.closure w/ capset stack: {self.capture_set_stack}")
     let body = self.block(body)?
-    let env = self.capture_set_stack[self.capture_set_stack.length() - 1].captures.map(
-      ast.Capture.new,
-    )
+    let env = self.pop_closure_env()
+    debug(f"\nend Resolver.closure w/ capset stack: {self.capture_set_stack}")
     Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
     // Ok(Expression.new(span, Expr.Closure(closure)))
   }
@@ -284,6 +338,12 @@ impl Resolver {
 /// index: the boundary in the stack of variables at which the closure scope opens
 /// captures: the set of variables outside the scope of the closure
 struct CaptureSet { index: int, captures: Slice<Ref<ast.Variable>> }
+
+impl CaptureSet {
+  pub fn string(self) -> string {
+    f"CaptureSet(index={self.index}, captures={self.captures.map(|v| v.name)})"
+  }
+}
 
 /// an immutable stack of bindings
 /// scope is *shallow-copied* on every function call, so the length only ever increases with Go's call stack depth

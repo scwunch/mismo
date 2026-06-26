@@ -1,5 +1,3 @@
-import "go:fmt"
-
 import myt "testing"
 
 #[test("lexer")]
