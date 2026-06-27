@@ -8,7 +8,7 @@ pub struct TypeDef {
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
   pub kind: TypeKind,
-  pub signatures: Map<string, Slice<int>>,
+  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
 }
 
 #[json]

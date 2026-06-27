@@ -187,6 +187,138 @@ fn test_nested_closure(t) -> Result<(), error> {
   Ok(())
 }
 
+#[test("resolver/call: classic syntax (`foo(args)`)")]
+fn test_classic_call(t) -> Result<(), error> {
+  let cst_node = parse(["foo(1, 2, 3)"])?
+  let res = Resolver.new_blank()
+  let assert Err(e) = res.block(cst_node)
+  // MissingNameError
+  assert e.code() == 2002
+
+  let foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  res.ctx.env.add_function(foo)
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [ast.Expr.Call(call)] = block.statements.map(|s| s.kind)
+  let assert [] = call.local_candidates
+  assert call.global_candidates.equals([foo])
+  assert !call.is_dotname
+  let assert None = call.type_args
+  let assert [
+    ast.Expr.IntLiteral(1),
+    ast.Expr.IntLiteral(2),
+    ast.Expr.IntLiteral(3),
+  ] = call.args.map(|a| a.kind)
+
+  // add more overloads and resolve again
+  let foo2 = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let foo3 = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  res.ctx.env.add_function(foo2)
+  res.ctx.env.add_function(foo3)
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [ast.Expr.Call(call)] = block.statements.map(|s| s.kind)
+  let assert [] = call.local_candidates
+  let assert [c1, c2, c3] = call.global_candidates
+  assert c1 == foo
+  assert c2 == foo2
+  assert c3 == foo3
+
+  // assert call.global_candidates.equals([foo, foo2, foo3])
+  // try local overloads
+  let cst_node = parse(["let foo = ||: 1", "let foo = ||: 1", "foo(1, 2, 3)"])?
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [
+    ast.Expr.Declare(_, foo1, _),
+    ast.Expr.Declare(_, foo2, _),
+    ast.Expr.Call(call),
+  ] = block.statements.map(|s| s.kind)
+  let assert [lc1, lc2] = call.local_candidates
+  assert lc1 == foo1
+  assert lc2 == foo2
+  Ok(())
+}
+
+#[test("resolver/call: classic syntax with namespace (`mod::foo(args)`)")]
+fn test_namespaced_call(t) -> Result<(), error> {
+  let cst_node = parse([
+    "let foo = ||: 1",
+    "mod::foo(1, 2, 3)",
+    "\"first argument\".mod::foo( 2, 3)",
+  ])?
+  let mut res = Resolver.new_blank()
+  let assert Err(e) = res.block(cst_node)
+  // MissingNameError
+  assert e.code() == 2002
+
+  let mod_foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let this_foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let mut mod = ast.Registry.new()
+  mod.add_function(mod_foo)
+  res.ctx.env.add_function(this_foo)
+  res.ctx.env.imports["mod"] = mod
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [
+    ast.Expr.Declare(_, _local_foo, _),
+    ast.Expr.Call(call1),
+    ast.Expr.Call(call2),
+  ] = block.statements.map(|s| s.kind)
+  let assert [] = call1.local_candidates
+  assert call1.global_candidates.equals([mod_foo])
+  assert !call1.is_dotname
+  let assert None = call1.type_args
+  let assert [
+    ast.Expr.IntLiteral(1),
+    ast.Expr.IntLiteral(2),
+    ast.Expr.IntLiteral(3),
+  ] = call1.args.map(|a| a.kind)
+
+  let assert [] = call2.local_candidates
+  assert call2.global_candidates.equals([mod_foo])
+  assert !call2.is_dotname
+  let assert None = call1.type_args
+  let assert [
+    ast.Expr.StringLiteral("first argument"),
+    ast.Expr.IntLiteral(2),
+    ast.Expr.IntLiteral(3),
+  ] = call2.args.map(|a| a.kind)
+  Ok(())
+}
+
+#[test("resolver/call: dot-name syntax (`foo.bar`)")]
+fn test_dotname_call(t) -> Result<(), error> {
+  let cst_node = parse([
+    "let foo = 9999   ",
+    "let bar = ||: 100",
+    "foo.bar          ",
+    "bar(foo)         ",
+  ])?
+  let res = Resolver.new_blank()
+  let assert Err(e) = res.block(cst_node)
+  // MissingNameError
+  assert e.code() == 2002
+
+  let global_bar = &ast.FunctionDef.mock("bar", [], [], Type.nil())
+  res.ctx.env.add_function(global_bar)
+  let block = res.block(cst_node).map_err(dx2err)?
+  let assert [
+    ast.Expr.Declare(_, _foo, _),
+    ast.Expr.Declare(_, local_bar, _),
+    ast.Expr.Call(call),
+    ast.Expr.Call(call2),
+  ] = block.statements.map(|s| s.kind)
+  assert call.local_candidates.equals([local_bar])
+  assert call.global_candidates.equals([global_bar])
+  assert call.is_dotname
+  assert !call2.is_dotname
+  assert call2.local_candidates.equals(call.local_candidates)
+  assert call2.global_candidates.equals(call.global_candidates)
+  Ok(())
+}
+
+#[test("resolver/call: dot-call syntax (`foo.bar(args)`)")]
+fn test_dot_call(t) -> Result<(), error> {
+  Ok(())
+}
+
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   parser.Parser
     .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))

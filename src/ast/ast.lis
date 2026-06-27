@@ -34,7 +34,7 @@ pub enum Expr {
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
-  FieldAccess(Ref<Expression>, int),
+  // FieldAccess(Ref<Expression>, int),
   Constructor(Type, Slice<string>),
   Extern,
 }
@@ -86,23 +86,26 @@ impl Variable {
   }
 }
 
+/// all the info required to resolve function overload in type checking phase
 #[display]
 #[json]
 pub struct Call {
   pub local_candidates: Slice<Ref<Variable>>,
-  pub global_candidates: Slice<Ref<Function>>,
-  pub type_args: Slice<Type>,
+  pub global_candidates: Slice<Ref<FunctionDef>>,
+  pub type_args: Option<Slice<Type>>,
   pub args: Slice<Expression>,
+  pub is_dotname: bool,
 }
 
 impl Call {
   pub fn new(
     local_candidates: Slice<Ref<Variable>>,
-    global_candidates: Slice<Ref<Function>>,
-    type_args: Slice<Type>,
+    global_candidates: Slice<Ref<FunctionDef>>,
+    type_args: Option<Slice<Type>>,
     args: Slice<Expression>,
+    is_dotname: bool,
   ) -> Call {
-    Call { local_candidates, global_candidates, type_args, args }
+    Call { local_candidates, global_candidates, type_args, args, is_dotname }
   }
 }
 

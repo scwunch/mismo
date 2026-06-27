@@ -3,14 +3,12 @@ import dx "diagnostics"
 import "mode"
 import "span"
 
-pub type Function = FunctionDef
-
 #[json]
 pub struct Registry {
   pub imports: Map<string, Registry>,
   pub type_defs: Map<string, Ref<TypeDef>>,
-  pub function_defs: Slice<Ref<Function>>,
-  pub signatures: Map<string, Slice<Ref<Function>>>,
+  pub function_defs: Slice<Ref<FunctionDef>>,
+  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
   pub errors: Slice<dx.TypeError>,
 }
 
@@ -19,7 +17,7 @@ impl Registry {
     Registry { .. }
   }
 
-  pub fn add_function(self: Ref<Registry>, func: Ref<Function>) {
+  pub fn add_function(self: Ref<Registry>, func: Ref<FunctionDef>) {
     let i = self.function_defs.length()
     self.function_defs = self.function_defs.append(func)
     let def = self.function_defs[i]

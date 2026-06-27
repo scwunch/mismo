@@ -15,7 +15,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
-  fn new(env: Ref<ast.Registry>, func: Ref<ast.Function>) -> Resolver {
+  fn new(env: Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
     let scope = Scope.from_params(func.parameters)
     let ctx = TypeContext.new(env, func.type_parameters)
     let capture_set_stack = &Slice.new()
@@ -52,28 +52,22 @@ impl Resolver {
         Expr.Binding(m, &e)
       },
       Binop(binop) => self.binop(binop.*, node.span)?,
-      Call(call) => self.call(
-        call.fn_name,
-        slice.map_result(call.type_args.unwrap_or([]), self.ctx.eval_type)?,
-        slice.map_result(call.args, self.resolve)?,
-        node.span,
-      )?,
+      Call(call) => {
+        let args = slice.map_result(call.args, self.resolve)?
+        self.call(call.fn_name, call.type_args, args, node.span)?
+      },
       If(cond) => self.if_expr(cond, node.span)?,
       While(cond) => self.while_expr(cond, node.span)?,
       For(for_loop) => self.for_expr(for_loop.*, node.span)?,
       Block(exprs) => Expr.Block(self.block(exprs)?),
-      Neg(expr) => self.call(
-        cst.Path.name_("neg"),
-        [],
-        [self.resolve(expr.*)?],
-        node.span,
-      )?,
-      Not(expr) => self.call(
-        cst.Path.name_("not"),
-        [],
-        [self.resolve(expr.*)?],
-        node.span,
-      )?,
+      Neg(expr) => {
+        let arg = [self.resolve(expr.*)?]
+        self.bare_call("-", arg, false, node.span)?
+      },
+      Not(expr) => {
+        let arg = [self.resolve(expr.*)?]
+        self.bare_call("not", arg, false, node.span)?
+      },
       Return(None) => Expr.Return(None),
       Return(Some(expr)) => {
         let e = self.resolve(expr.*)?
@@ -85,14 +79,13 @@ impl Resolver {
         Expr.Break(Some(&e))
       },
       Continue => Expr.Continue,
-      DotName(expr, name) => self.dot_name(
-        self.resolve(expr.*)?,
-        name,
-        node.span,
-      )?,
+      DotName(expr, name) => {
+        let arg = [self.resolve(expr.*)?]
+        self.bare_call(name, arg, true, node.span)?
+      },
       DotCall(expr, call) => self.call(
         call.fn_name,
-        slice.map_result(call.type_args.unwrap_or([]), self.ctx.eval_type)?,
+        call.type_args,
         [self.resolve(expr.*)?].append(slice.map_result(call.args, self.resolve)?...),
         node.span,
       )?,
@@ -194,7 +187,7 @@ impl Resolver {
     } else {
       self.call(
         cst.Path.name_(binop.op.sigil()),
-        [],
+        None,
         [self.resolve(binop.left)?, self.resolve(binop.right)?],
         span,
       )
@@ -263,10 +256,6 @@ impl Resolver {
     panic("not implemented yet")
   }
 
-  fn dot_name(self, expr: ast.Expression, name: string, span: span.Span) -> Result<Expr, dx.ResolveError> {
-    panic((name, [], [expr], span))
-  }
-
   fn type_dot_call(
     self,
     type_path: cst.Path,
@@ -274,22 +263,104 @@ impl Resolver {
     call: cst.Call,
     span: span.Span,
   ) -> Result<Expr, dx.ResolveError> {
-    panic((type_path, type_args, call, span))
+    let module = match type_path.namespace {
+      [] => self.ctx.env.*,
+      path => self.ctx.env.get_module(span, type_path)?,
+    }
+    let global_candidates = module.type_defs
+      .get(type_path.name)
+      .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)?.signatures
+      .get(call.fn_name.name)
+      .ok_or_else(|| dx.MissingNameError.new(call.fn_name.name, span) as dx.ResolveError)?
+    if global_candidates.is_empty() {
+      return Err(
+        dx.MissingNameError.new(call.fn_name.name, span) as dx.ResolveError,
+      )
+    }
+    // combine the type args from the type with the type args with the type args from the call
+    let type_args = match call.type_args {
+      None => Some(type_args),
+      Some(ta) => Some(type_args.append(slice.map_result(ta, self.ctx.eval_type)?...)),
+    }
+    let args = slice.map_result(call.args, self.resolve)?
+    Ok(ast.Expr.Call(
+      ast.Call { 
+        local_candidates: [],
+        global_candidates,
+        type_args,
+        args,
+        is_dotname: false,
+      },
+    ))
   }
 
   fn call(
     self,
     fname: cst.Path,
-    type_args: Slice<Type>,
+    type_args: Option<Slice<cst.Type>>,
     args: Slice<ast.Expression>,
     span: span.Span,
   ) -> Result<Expr, dx.ResolveError> {
-    panic((fname, type_args, args, span))
+    if let ([], None) = (fname.namespace, type_args) {
+      return self.bare_call(fname.name, args, false, span)
+    }
+    let type_args = match type_args {
+      None => None,
+      Some(ta) => Some(slice.map_result(ta, self.ctx.eval_type)?),
+    }
+    let module = if fname.namespace.is_empty() {
+      self.ctx.env.*
+    } else {
+      self.ctx.env.get_module(span, fname)?
+    }
+    let global_candidates = module.signatures
+      .get(fname.name)
+      .ok_or_else(|| dx.MissingNameError.new(fname.name, span) as dx.ResolveError)?
+    if global_candidates.is_empty() {
+      return Err(dx.MissingNameError.new(fname.name, span) as dx.ResolveError)
+    }
+    Ok(ast.Expr.Call(
+      ast.Call { 
+        local_candidates: [],
+        global_candidates,
+        type_args,
+        args,
+        is_dotname: false,
+      },
+    ))
   }
 
-  // fn get_local_functions(self, fname: string) -> Slice<Ref<ast.Variable>> {
-  //   panic(fname)
-  // }
+  /// handle the syntax `foo(args)`, `foo.bar(args)` and `foo.bar`
+  fn bare_call(
+    self,
+    fname: string,
+    args: Slice<ast.Expression>,
+    is_dotname: bool,
+    span: span.Span,
+  ) -> Result<ast.Expr, dx.ResolveError> {
+    let local_candidates = self.scope.bindings.filter(|v| v.name == fname)
+    for v in local_candidates {
+      // capture ALL local names that match, just in case they might be used
+      // TODO: during typechecking, just add the resolved local closure variable to all the containing closure capture sets
+      //       I guess that means we have to track the stack of closure capture sets during typechecking too
+      let _ = self.capture(v, -1)
+    }
+    let global_candidates = self.ctx.env.signatures
+      .get(fname)
+      .ok_or_else(|| dx.MissingNameError.new(fname, span) as dx.ResolveError)?
+    if let (false, [], []) = (is_dotname, global_candidates, local_candidates) {
+      return Err(dx.MissingNameError.new(fname, span) as dx.ResolveError)
+    }
+    Ok(ast.Expr.Call(
+      ast.Call { 
+        local_candidates,
+        global_candidates,
+        type_args: None,
+        args,
+        is_dotname,
+      },
+    ))
+  }
 
   fn last_capset(self) -> CaptureSet {
     let size = self.capture_set_stack.length()

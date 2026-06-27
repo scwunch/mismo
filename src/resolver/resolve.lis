@@ -93,7 +93,7 @@ pub fn register_functions(
   self.function_defs = functions.map(|f| eval_function(self, f))
 }
 
-pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast.Function> {
+pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast.FunctionDef> {
   match try_eval_function(self, func) {
     Ok(func) => {
       if let Some(def) = self.type_defs.get(func.name) {
@@ -114,7 +114,7 @@ pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast
   }
 }
 
-pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Result<Ref<ast.Function>, dx.ResolveError> {
+pub fn try_eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Result<Ref<ast.FunctionDef>, dx.ResolveError> {
   let span = func.span
   let name = func.signature.name
   let type_params = func.signature.type_parameters.map(|param| {

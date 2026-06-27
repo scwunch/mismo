@@ -1,8 +1,12 @@
 impl Call {
   pub fn equals(self, other: Call) -> bool {
+    match (self.type_args, other.type_args) {
+      (None, None) => (),
+      (Some(ta1), Some(ta2)) if ta1.equals(ta2) => (),
+      _ => return false,
+    }
     self.local_candidates.equals(other.local_candidates) &&
     self.global_candidates.equals(other.global_candidates) &&
-    self.type_args.equals(other.type_args) &&
     self.args.equals(other.args)
   }
 }
@@ -61,7 +65,7 @@ impl Expr {
       (Break(None), Break(None)) => true,
       (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
       (Continue, Continue) => true,
-      (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
+      // (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
       (Constructor(t1, a1), Constructor(t2, a2)) => t1.equals(t2) &&
       a1.equals(a2),
       (Extern, Extern) => true,
@@ -88,7 +92,7 @@ impl Expr {
       (Return(_), _) |
       (Break(_), _) |
       (Continue, _) |
-      (FieldAccess(_, _), _) |
+      // (FieldAccess(_, _), _) |
       (Constructor(_, _), _) |
       (Extern, _) => false,
     }

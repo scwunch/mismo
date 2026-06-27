@@ -92,10 +92,6 @@ pub fn continue_expr() -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Continue }
 }
 
-pub fn field_access_expr(obj: Ref<Expression>, idx: int) -> Expression {
-  Expression { span: span.new(0, 0), kind: Expr.FieldAccess(obj, idx) }
-}
-
 pub fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Constructor(typ, fields) }
 }
