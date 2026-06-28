@@ -429,8 +429,76 @@ impl Parser {
     Ok(cst.for_(span, patt, iter, body))
   }
 
-  fn parse_if_expression(self: Ref<Parser>, _span: Span) -> Result<cst.Expression, ParseError> {
-    panic("TODO")
+  fn parse_if_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
+    let cond = self.parse_conditional()?
+    Ok(cst.if_(span.merge(cond.span()), cond))
+  }
+
+  fn parse_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
+    if let TokenKind.Newline(indent, _) = self.peek().kind {
+      let conditionals = self.parse_list('\n', self.parse_conditional)?
+      return if conditionals.is_empty() {
+        Err(ParseError.new(span.new(0, 0), "expected expression after `if`"))
+      } else {
+        Ok(cst.Conditional.Multi(conditionals))
+      }
+    }
+    let subject_indent = self.current_line_indent
+    let expr = self.parse_expression()?
+    match expr.kind {
+      Binop(binop) if binop.op == Operator.Is => panic(
+        "if..is match not yet supported",
+      ),
+      Binop(binop) if binop.op.is_comparer() => {
+        // we first go ahead and eagerly parse the first arm, just to get the `subject`
+        // then we parse the rest of the arms, and reconstruct the whole list after
+        // the alternative strategy would be to put a flag in the parser to stop at a comparison operator
+        let mut current_op = binop.op
+        let subject = &binop.left
+        let first_object = &binop.right
+        let first_consequent = self.parse_consequent()?
+        let branch = cst.Branch { object: first_object, then: first_consequent }
+        let first_arm = cst.Comparison { op: current_op, objects: [branch] }
+
+        // this is a bit of a hack to make the parser think its indent is the same
+        // as before parsing this expression, so we can parse the rest as indented underneath
+        self.current_line_indent = subject_indent
+        let arms = self.parse_list(
+          '\n',
+          || {
+            if let TokenKind.Operator(op) = self.peek().kind {
+              if op.is_comparer() {
+                let _ = self.next()
+                current_op = op
+              }
+            }
+            let object = self.parse_expression()?
+            let object = &object
+            let then = self.parse_consequent()?
+            let branch = cst.Branch { object, then }
+            Ok(cst.Comparison { op: current_op, objects: [branch] })
+          },
+        )?
+        let ops = [first_arm].append(arms...)
+        Ok(cst.Conditional.Binary { subject, ops })
+      },
+      _ => {
+        let block = self.parse_colon_and_block()?
+        Ok(cst.Conditional.Unary { expr: &expr, consequent: block })
+      },
+    }
+  }
+
+  fn parse_consequent(self: Ref<Parser>) -> Result<cst.Consequent, ParseError> {
+    match self.peek().kind {
+      Operator(And) => panic("`and` not yet supported here"),
+      Operator(Or) => panic("`or` not yet supported"),
+      Colon => Ok(cst.Consequent.Do(self.parse_colon_and_block()?)),
+      _ => Err(ParseError.new(
+        self.peek().span,
+        "expected `and`, `or`, or colon and block",
+      )),
+    }
   }
 
   //   let condition_span = self.parser.peek().span
