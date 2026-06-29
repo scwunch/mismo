@@ -133,7 +133,8 @@ fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
   }
 
   // failure to indent item
-  parser = Parser.new("\nT\nU\n]")
+  parser = Parser.new("[\nT\nU\n]")
+  let _ = parser.next()
   match parser.parse_type_params() {
     Ok(type_params) => t.fail("expected error")?,
     Err(err) => t.should_eq_repr(

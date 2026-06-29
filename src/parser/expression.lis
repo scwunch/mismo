@@ -42,16 +42,7 @@ impl ExpressionParser {
   }
 
   fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
-    t.debug(
-      f"parse expression, indent={self.expression_indent}, next={self.parser.peeked.kind}",
-    )
-    if self.expression_done() {
-      return Err(ParseError.new(self.parser.peek().span, "Empty expression"))
-    }
     loop {
-      t.debug(
-        f"  main loop: expecting={self.expecting}, next={self.parser.peeked.kind}",
-      )
       match self.expecting {
         Expecting.Term => self.read_operand()?,
         Expecting.Operator => {
@@ -86,18 +77,10 @@ impl ExpressionParser {
   }
 
   fn expression_done(self: Ref<ExpressionParser>) -> bool {
-    t.debug(
-      f"  expression done?  expr_indent={self.expression_indent}, next={self.parser.peeked.kind}",
-    )
     match self.parser.peek().kind {
       RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
-      Newline(i, _) if i > self.expression_indent => {
-        let _ = self.parser.next()
-        self.expression_done()
-      },
-      Newline(_, _) => true,
       Operator(op) if self.should_stop_at_comparison_operator => op.is_comparer(),
-      _ => false,
+      _ => self.parser.peek_newline(self.expression_indent),
     }
   }
 
@@ -362,7 +345,7 @@ impl ExpressionParser {
 
 impl Parser {
   pub fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
-    let mut expr_parser = ExpressionParser.new(self, self.current_line_indent)
+    let mut expr_parser = ExpressionParser.new(self, self.peek_indent())
     expr_parser.parse()
   }
 
@@ -410,9 +393,7 @@ impl Parser {
   }
 
   fn parse_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
-    t.debug("parse_conditional")
-    if let TokenKind.Newline(indent, _) = self.peek().kind {
-      t.debug(f"next={self.peek().kind} => multi-conditional")
+    if self.peek_indent() > self.current_line_indent {
       let conditionals = self.parse_list('\n', self.parse_conditional)?
       return if conditionals.is_empty() {
         Err(ParseError.new(span.new(0, 0), "expected expression after `if`"))
@@ -425,13 +406,11 @@ impl Parser {
     let subject = self.parse_subject()?
     match self.peek().kind {
       Operator(op) if op.is_comparer() => {
-        t.debug(f"next={self.peek().kind} => comparison")
         self.current_line_indent = subject_indent
         let arms = self.parse_arms(op)?
         Ok(cst.Conditional.Compares(subject, arms))
       },
       _ => {
-        t.debug(f"next={self.peek().kind} => predicate")
         let block = self.parse_consequent()?
         Ok(cst.Conditional.Predicate(subject, block))
       },
@@ -439,32 +418,26 @@ impl Parser {
   }
 
   fn parse_subject(self: Ref<Parser>) -> Result<Ref<cst.Expression>, ParseError> {
-    t.debug("parse_subject")
     let mut ep = ExpressionParser.new(self, self.current_line_indent)
     ep.should_stop_at_comparison_operator = true
     ep.parse().map(|expr| &expr)
   }
 
   fn parse_arms(self: Ref<Parser>, mut current_op: Operator) -> Result<Slice<cst.Arm>, ParseError> {
-    t.debug("parse arms")
     let mut op_indent = self.current_line_indent
     self.parse_list(
       '\n',
       || {
-        t.debug("start arm")
         if let TokenKind.Operator(op) = self.peek().kind {
           if op.is_comparer() {
             let _ = self.next()
             current_op = op
             op_indent = self.current_line_indent
-            if let TokenKind.Newline(i, _) = self.peek().kind {
-              t.debug(f"detected newline (indent={i}) after op(`{op}`)")
-              if i > op_indent {
-                let _ = self.next()
-                ()
-              } else {
-                panic("let the parser raise its own error?")
-              }
+            if self.peek_newline(op_indent) {
+              return Err(ParseError.new(
+                self.peek().span,
+                "expected expression after operator",
+              ))
             }
           }
         } else if self.current_line_indent <= op_indent {
@@ -480,7 +453,6 @@ impl Parser {
   }
 
   fn parse_consequent(self: Ref<Parser>) -> Result<cst.Consequent, ParseError> {
-    t.debug("parse_consequent")
     match self.peek().kind {
       Operator(And) => panic("`and` not yet supported here"),
       Operator(Or) => panic("`or` not yet supported"),
@@ -491,75 +463,7 @@ impl Parser {
       )),
     }
   }
-
-  //   let condition_span = self.parser.peek().span
-  //   let mut cond_parser = ExpressionParser.new(
-  //     self.parser,
-  //     self.expression_indent,
-  //     StopAt.UcsBranch,
-  //   )
-  //   let condition_expr = cond_parser.parse()?
-  //   let consequent = match self.parser.peek().kind {
-  //     TokenKind.Colon => self.parser.parse_colon_and_block(
-  //       self.expression_indent,
-  //     )?,
-  //     TokenKind.Operator(Operator.And) => {
-  //       let _ = self.parser.next()
-  //       let body = self.parser.parse_colon_and_block(self.expression_indent)?
-  //       let body_span = body.span
-  //       cst.Expression {
-  //         span: condition_span.merge(body_span),
-  //         kind: cst.Expr.If(cst.Conditional.Multi([
-  //           cst.Conditional.Predicate { expr: &condition_expr, consequent: &body },
-  //         ])),
-  //       }
-  //     },
-  //     _ => return Err(ParseError.new(
-  //       self.parser.peek().span,
-  //       "Expected ':' after if condition",
-  //     )),
-  //   }
-
-  //   let cons_span = consequent.span
-  //   let cond = cst.Conditional.Predicate {
-  //     expr: &condition_expr,
-  //     consequent: &consequent,
-  //   }
-  //   Ok(cst.if_(span.merge(cons_span), cond))
-  // }
 }
-
-// fn is_boolean_op(op: Operator) -> bool {
-//   match op {
-//     Operator.Eq |
-//     Operator.Neq |
-//     Operator.Lt |
-//     Operator.Gt |
-//     Operator.Lte |
-//     Operator.Gte |
-//     Operator.Is |
-//     Operator.In |
-//     Operator.IsNot |
-//     Operator.NotIn |
-//     Operator.And |
-//     Operator.Or => true,
-//     _ => false,
-//   }
-// }
-
-// fn is_boolean_token_kind(kind: TokenKind) -> bool {
-//   match kind {
-//     TokenKind.Operator(op) => is_boolean_op(op),
-//     _ => false,
-//   }
-// }
-
-// fn is_indented_newline(kind: TokenKind, indent: uint32) -> bool {
-//   match kind {
-//     TokenKind.Newline(n, _) => n > indent,
-//     _ => false,
-//   }
-// }
 
 fn unary_op(op: Operator, term: cst.Expression) -> cst.Expression {
   match op {

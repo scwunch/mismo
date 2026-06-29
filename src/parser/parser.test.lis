@@ -5,8 +5,8 @@ import dx "diagnostics"
 import myt "testing"
 import "operator"
 
-#[test("parser")]
-fn test_parser(t) {
+#[test("parser/top-level")]
+fn test_parser_top_level(t) {
   for test in [
     test_consume,
     test_parse_type_params,
@@ -23,7 +23,10 @@ fn test_parser(t) {
   ] {
     t.run("Parser: Top-level", wrap_test(test))
   }
+}
 
+#[test("parser/expression-parser")]
+fn test_expression_parser(t) {
   for test in [
     test_parse_simple_binary,
     test_parse_arithmetic_precedence,
@@ -55,7 +58,7 @@ fn wrap_test(test_func: fn(Ref<myt.TestRunner>) -> Result<(), string>) -> fn(Tes
 
 #[test("parser/conditional/arms/single")]
 fn test_conditional_single_arm(t) -> Result<(), error> {
-  let block = parse(["if yes is no: what"])?
+  let assert Ok(block) = parse(["if yes is no: what"])
   let assert cst.Expr.If(cst.Conditional.Compares(subj, arms)) = block.last().kind
   let assert cst.Expr.Identifier(cst.Path { name: "yes", .. }) = subj.kind
   let assert [cst.Arm { op, object, then }] = arms
@@ -64,7 +67,7 @@ fn test_conditional_single_arm(t) -> Result<(), error> {
   let assert cst.Consequent.Do(block) = then
   let assert cst.Expr.Identifier(cst.Path { name: "what", .. }) = block.last().kind
 
-  let block = parse(["if yes is no:", "  what"])?
+  let assert Ok(block) = parse(["if yes is no:", "  what"])
   let assert cst.Expr.If(cst.Conditional.Compares(subj, arms)) = block.last().kind
   let assert cst.Expr.Identifier(cst.Path { name: "yes", .. }) = subj.kind
   let assert [cst.Arm { op, object, then }] = arms
@@ -105,27 +108,27 @@ fn test_conditional_single_arm(t) -> Result<(), error> {
 
 #[test("parser/conditional/arms/multiple")]
 fn test_conditional_multiple_arms(t) -> Result<(), error> {
-  // let assert Ok(block) = parse([
-  //   "if x ==             ",
-  //   "  1: one            ",
-  //   "  2: two            ",
-  //   "  3: three          ",
-  // ])
-  // let assert cst.Expr.If(cst.Conditional.Compares(subj, arms)) = block.last().kind
-  // let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
-  // let assert [one, two, three] = arms
-  // for arm in arms {
-  //   assert arm.op == operator.Operator.Eq
-  // }
-  // let assert cst.Expr.IntLiteral(1) = one.object.kind
-  // let assert cst.Expr.IntLiteral(2) = two.object.kind
-  // let assert cst.Expr.IntLiteral(3) = three.object.kind
-  // let assert cst.Consequent.Do(block) = one.then
-  // let assert cst.Expr.Identifier(cst.Path { name: "one", .. }) = block.last().kind
-  // let assert cst.Consequent.Do(block) = two.then
-  // let assert cst.Expr.Identifier(cst.Path { name: "two", .. }) = block.last().kind
-  // let assert cst.Consequent.Do(block) = three.then
-  // let assert cst.Expr.Identifier(cst.Path { name: "three", .. }) = block.last().kind
+  let assert Ok(block) = parse([
+    "if x ==             ",
+    "  1: one            ",
+    "  2: two            ",
+    "  3: three          ",
+  ])
+  let assert cst.Expr.If(cst.Conditional.Compares(subj, arms)) = block.last().kind
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert [one, two, three] = arms
+  for arm in arms {
+    assert arm.op == operator.Operator.Eq
+  }
+  let assert cst.Expr.IntLiteral(1) = one.object.kind
+  let assert cst.Expr.IntLiteral(2) = two.object.kind
+  let assert cst.Expr.IntLiteral(3) = three.object.kind
+  let assert cst.Consequent.Do(block) = one.then
+  let assert cst.Expr.Identifier(cst.Path { name: "one", .. }) = block.last().kind
+  let assert cst.Consequent.Do(block) = two.then
+  let assert cst.Expr.Identifier(cst.Path { name: "two", .. }) = block.last().kind
+  let assert cst.Consequent.Do(block) = three.then
+  let assert cst.Expr.Identifier(cst.Path { name: "three", .. }) = block.last().kind
 
   let assert Ok(block) = parse([
     "if x                   ",

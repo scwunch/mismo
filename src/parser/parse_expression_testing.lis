@@ -183,6 +183,7 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut parser = Parser.new("(1, 2, 3, 4)")
   let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
+
   match expr.kind {
     cst.Expr.TupleLiteral(elems) => {
       t.should_be_true(
@@ -197,7 +198,6 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
     },
     _ => return t.fail(f"Expected TupleLiteral; got {expr.kind}"),
   }
-
   parser = Parser.new("(\n  1\n  2\n  3\n  4)")
   let expr2 = ep.parse().map_err(|e| e.message())?
   match (expr.kind, expr2.kind) {

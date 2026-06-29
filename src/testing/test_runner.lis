@@ -132,6 +132,7 @@ pub interface Contains<T> {
 }
 
 pub fn debug(msg: string) {
+  fmt.Println(msg)
   // Append message to a local file
   if let Ok(f) = os.OpenFile(
     "../../output.log",

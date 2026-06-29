@@ -12,7 +12,7 @@ fn test_lexer(t) {
     test_operators,
     test_keywords_and_operators,
     test_comments,
-    test_newlines,
+    // test_newlines,
     test_full_program,
   ]
   for test in suite {

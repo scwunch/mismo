@@ -11,10 +11,6 @@ impl Parser {
         Identifier("enum") => self.parse_enum(),
         Identifier("fn") => self.parse_function(),
         Identifier("extern") => self.parse_extern(),
-        Newline(_, _) => {
-          let _ = self.next()
-          continue
-        },
         EOF => return self.defs,
         _ => Err(ParseError.new(
           self.peek().span,
@@ -45,8 +41,7 @@ impl Parser {
       let _ = self.consume(TokenKind.RightBracket)?
     }
     let fields = self.parse_fields()?
-    let newline_span = self.next().span
-    span = span.merge(newline_span)
+    span.end = self.peek().span.start
     self.defs.add_type(cst.TypeDecl.new_struct(span, name, type_params, fields))
     Ok(())
   }
@@ -61,8 +56,7 @@ impl Parser {
       let _ = self.consume(TokenKind.RightBracket)?
     }
     let variants = self.parse_variants()?
-    let newline_span = self.next().span
-    span = span.merge(newline_span)
+    span.end = self.peek().span.start
     self.defs.add_type(cst.TypeDecl.new_enum(span, name, type_params, variants))
     Ok(())
   }
@@ -105,7 +99,8 @@ impl Parser {
       self.parse_type()?
     } else {
       match self.peek().kind {
-        Colon | Newline(0, _) => cst.Type.new(
+        Colon => cst.Type.new(self.peek().span, cst.Path.name_("Nil"), []),
+        _ if self.peek_newline(0) => cst.Type.new(
           self.peek().span,
           cst.Path.name_("Nil"),
           [],

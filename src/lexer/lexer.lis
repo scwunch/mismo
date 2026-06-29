@@ -3,15 +3,23 @@ import "go:math"
 pub struct Lexer {
   pub source: Slice<rune>,
   pub index: uint32,
+  pub indent: uint32,
+  pub on_line_start: bool,
 }
 
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    Lexer { source: source as Slice<rune>, index: 0 }
+    Lexer { 
+      source: source as Slice<rune>,
+      index: 0,
+      indent: 0,
+      on_line_start: true,
+    }
   }
 
   /// Returns the next token in the source, advancing the index.
   pub fn next(self: Ref<Lexer>) -> Token {
+    self.on_line_start = false
     let pos = self.index
 
     let tok = match self.peek_char() {
@@ -71,43 +79,43 @@ impl Lexer {
 
   /// Advances to next significant line (non-whitespace, non-comment) and
   /// counts the indentation (spaces/tabs) until the first significant
-  /// character.  Returns newline token.
+  /// character.
+  ///
+  /// Sets @on_line_start to `true` and returns the next token
   fn new_line(self: Ref<Lexer>) -> Token {
-    self.new_line_recursive(self.index)
-  }
-
-  fn new_line_recursive(self: Ref<Lexer>, start: uint32) -> Token {
-    // advance to next line
     loop {
       match self.peek_char() {
         '\n' => break,
-        0 => return Token.newline(start, self.index, 0, 0),
+        0 => {
+          self.indent = 0
+          return Token.eof(self.index)
+        },
         _ => self.index += 1,
       }
     }
 
-    self.index += 1
-
     let mut indent: uint32 = 0
 
-    let next_char = loop {
+    loop {
       match self.peek_char() {
         ' ' | '\t' => indent += 1,
         '\n' => indent = 0,
-        0 => return Token.newline(start, self.index, 0, 0),
         '-' if self.peek_char_at(1) == '-' => {
           if self.peek_char_at(2) == '-' && indent == 0 {
             self.skip_block_comment()
             continue
           }
-          return self.new_line_recursive(start)
+          return self.new_line()
         },
-        c => break c,
+        0 => return Token.eof(self.index),
+        _ => break,
       }
       self.index += 1
     }
-
-    Token.newline(start, self.index, indent, next_char)
+    self.indent = indent
+    let tok = self.next()
+    self.on_line_start = true
+    tok
   }
 
   fn skip_block_comment(self: Ref<Lexer>) {

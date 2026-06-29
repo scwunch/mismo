@@ -14,7 +14,7 @@ pub fn test() {
       test_operators,
       test_keywords_and_operators,
       test_comments,
-      test_newlines,
+      // test_newlines,
       test_full_program,
     ],
   )
@@ -184,11 +184,11 @@ fn test_keywords_and_operators(t: Ref<testing.TestRunner>) -> Result<(), string>
 fn test_comments(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Comments"
   let mut lex = Lexer.new("-- this is a comment\nhello")
-  let tok = lex.next()
-  match tok.kind {
-    TokenKind.Newline(0, 'h') => (),
-    _ => t.fail(f"expected newline, got {tok.kind}")?,
-  }
+  // let tok = lex.next()
+  // match tok.kind {
+  //   TokenKind.Newline(0, 'h') => (),
+  //   _ => t.fail(f"expected newline, got {tok.kind}")?,
+  // }
   let tok2 = lex.next()
   match tok2.kind {
     TokenKind.Identifier("hello") => (),
@@ -210,7 +210,7 @@ fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
     Token.identifier(20, 26, "String"),
     Token.right_paren(26),
     Token.colon(27),
-    Token.newline(28, 31, 2, 'p'),
+    // Token.newline(28, 31, 2, 'p'),
     Token.identifier(31, 36, "print"),
     Token.left_paren(36),
     Token.string_literal(37, 46, "hello, "),
@@ -326,25 +326,25 @@ fn test_read_multiline_string(t: Ref<testing.TestRunner>) -> Result<(), string> 
   Ok(())
 }
 
-fn test_newlines(t: Ref<testing.TestRunner>) -> Result<(), string> {
-  t.test_name = "Lexer Newline"
-  let mut lex = Lexer.new("\n")
-  let tok = lex.next()
-  match tok.kind {
-    TokenKind.Newline(indent, 0) => {
-      if indent != 0 { t.fail(f"expected indent 0, got {indent}")? }
-    },
-    _ => t.fail(f"expected newline, got {tok.kind}")?,
-  }
+// fn test_newlines(t: Ref<testing.TestRunner>) -> Result<(), string> {
+//   t.test_name = "Lexer Newline"
+//   let mut lex = Lexer.new("\n")
+//   let tok = lex.next()
+//   match tok.kind {
+//     TokenKind.Newline(indent, 0) => {
+//       if indent != 0 { t.fail(f"expected indent 0, got {indent}")? }
+//     },
+//     _ => t.fail(f"expected newline, got {tok.kind}")?,
+//   }
 
-  let mut lex2 = Lexer.new("  \n  x")
-  let _ = lex2.next()
-  let tok2 = lex2.next()
-  match tok2.kind {
-    TokenKind.Identifier(name) => {
-      if name != "x" { t.fail(f"expected 'x', got '{name}'")? }
-    },
-    _ => t.fail(f"expected identifier, got {tok2.kind}")?,
-  }
-  Ok(())
-}
+//   let mut lex2 = Lexer.new("  \n  x")
+//   let _ = lex2.next()
+//   let tok2 = lex2.next()
+//   match tok2.kind {
+//     TokenKind.Identifier(name) => {
+//       if name != "x" { t.fail(f"expected 'x', got '{name}'")? }
+//     },
+//     _ => t.fail(f"expected identifier, got {tok2.kind}")?,
+//   }
+//   Ok(())
+// }
