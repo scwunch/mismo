@@ -161,6 +161,7 @@ impl Lexer {
       "break" => Token.break_(start, self.index),
       "continue" => Token.continue_(start, self.index),
       "return" => Token.return_(start, self.index),
+      "else" => Token.else_(start),
       "and" => Token.operator(start, self.index, Operator.And),
       "or" => Token.operator(start, self.index, Operator.Or),
       "not" => Token.operator(start, self.index, Operator.Not),
@@ -390,6 +391,7 @@ impl Lexer {
       match op_char {
         '+' => Operator.Add,
         '-' => Operator.Sub,
+        '*' if self.peek_char() == '*' => Operator.Pow,
         '*' => Operator.Mul,
         '/' => Operator.Div,
         '%' => Operator.Mod,
@@ -397,6 +399,8 @@ impl Lexer {
         '&' => Operator.And,
         '|' => Operator.Or,
         '!' | '~' => Operator.Not,
+        '<' => Operator.Lt,
+        '>' => Operator.Gt,
         '=' => Operator.Assign,
         c => return Token.error(
           start,

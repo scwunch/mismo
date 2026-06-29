@@ -78,7 +78,7 @@ impl ExpressionParser {
 
   fn expression_done(self: Ref<ExpressionParser>) -> bool {
     match self.parser.peek().kind {
-      RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
+      RightParen | RightBracket | RightBrace | Colon | Comma | Else | EOF => true,
       Operator(op) if self.should_stop_at_comparison_operator => op.is_comparer(),
       _ => self.parser.peek_newline(self.expression_indent),
     }

@@ -40,6 +40,7 @@ pub enum TokenKind {
   Break,
   Continue,
   Return,
+  Else,
   Operator(Operator),
   Tilde,
   Bang,
@@ -95,6 +96,7 @@ impl TokenKind {
       Break => "break",
       Continue => "continue",
       Return => "return",
+      Else => "else",
       Operator(op) => f"{op}",
       Tilde => "~",
       Bang => "!",
@@ -326,6 +328,10 @@ impl Token {
 
   pub fn return_(start: uint32, end: uint32) -> Token {
     Token.new(Span { start, end }, TokenKind.Return)
+  }
+
+  pub fn else_(start: uint32) -> Token {
+    Token.new(Span { start, end: start + 4 }, TokenKind.Else)
   }
 
   pub fn error(start: uint32, end: uint32, msg: string) -> Token {
