@@ -154,6 +154,130 @@ fn test_conditional_multiple_arms(t) -> Result<(), error> {
   Ok(())
 }
 
+#[test("parser/conditional/multi-switch")]
+fn test_multi_conditional(t) -> Result<(), error> {
+  let assert Ok(block) = parse([
+    "if                  ",
+    "  x == 1: one       ",
+    "  x == 2: two       ",
+    "  x == 3: three     ",
+  ])
+  let assert cst.Expr.If(cst.Conditional.Multi(conds)) = block.last().kind
+  assert conds.length() == 3
+  for (i, c) in conds.enumerate() {
+    let assert cst.Conditional.Compares(subj, [arm]) = c
+    let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+    let assert cst.Expr.IntLiteral(n) = arm.object.kind
+    assert n == i + 1
+  }
+  Ok(())
+}
+
+#[test("parser/conditional/nested")]
+fn test_nested_conditionals(t) -> Result<(), error> {
+  let assert Ok(block) = parse([
+    "if x > y: r",
+    "if x >",
+    "  y: r1",
+    "  z: r2",
+    "if x",
+    "  > y: r1",
+    "  ==",
+    "    z: r2",
+    "    w: r3",
+    "if",
+    "  x > y: r",
+    "  x >",
+    "    y: r1",
+    "    z: r2",
+    "  x",
+    "    > y: r1",
+    "    ==",
+    "      z: r2",
+    "      w: r3",
+  ])
+  let assert [
+    cst.Expr.If(cond1),
+    cst.Expr.If(cond2),
+    cst.Expr.If(cond3),
+    cst.Expr.If(cond4),
+  ] = block.statements.map(|s| s.kind)
+  let assert cst.Conditional.Compares(subj, [arm]) = cond1
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = arm.object.kind
+
+  let assert cst.Conditional.Compares(subj, [a1, a2]) = cond2
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = a1.object.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = a2.object.kind
+
+  let assert cst.Conditional.Compares(subj, [a1, a2, a3]) = cond3
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  assert a1.op == Operator.Gt
+  assert a2.op == Operator.Eq
+  assert a3.op == Operator.Eq
+
+  let assert cst.Conditional.Multi([cond1, cond2, cond3]) = cond4
+  let assert cst.Conditional.Compares(subj, [arm]) = cond1
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = arm.object.kind
+
+  let assert cst.Conditional.Compares(subj, [a1, a2]) = cond2
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = a1.object.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = a2.object.kind
+
+  let assert cst.Conditional.Compares(subj, [a1, a2, a3]) = cond3
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  assert a1.op == Operator.Gt
+  assert a2.op == Operator.Eq
+  assert a3.op == Operator.Eq
+  Ok(())
+}
+
+#[test("parser/conditional/nested-with-else")]
+fn test_cond_nested_with_else(t) {
+  let assert Ok(block) = parse([
+    "if x > y: ",
+    "  r",
+    "else: ",
+    "  r2",
+    "if x > y: r else: r2",
+    "  ",
+    "-- these next two should parse identically",
+    "if x >",
+    "  y: r1",
+    "  z: r2",
+    "  else: ",
+    "    r3",
+    "if x >",
+    "  y: r1",
+    "  z: r2",
+    "else: ",
+    "  r3",
+    "-- the next three should all parse identically",
+    "if x",
+    "  > y: r1",
+    "  ==",
+    "    z: r2",
+    "    w: r3",
+    "else: r4",
+    "if x",
+    "  > y: r1",
+    "  ==",
+    "    z: r2",
+    "    w: r3",
+    "  else: r4",
+    "if x",
+    "  > y: r1",
+    "  ==",
+    "    z: r2",
+    "    w: r3",
+    "    else: r4",
+    "-- the last three should all parse identically",
+  ])
+}
+
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   Parser
     .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))

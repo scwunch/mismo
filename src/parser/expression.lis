@@ -394,19 +394,23 @@ impl Parser {
 
   fn parse_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
     if self.peek_indent() > self.current_line_indent {
-      let conditionals = self.parse_list('\n', self.parse_conditional)?
+      t.debug("parse multi-conditional")
+      let conditionals = self.parse_list('\n', self.parse_single_conditional)?
       return if conditionals.is_empty() {
         Err(ParseError.new(span.new(0, 0), "expected expression after `if`"))
       } else {
         Ok(cst.Conditional.Multi(conditionals))
       }
     }
+    self.parse_single_conditional()
+  }
 
-    let subject_indent = self.current_line_indent
+  fn parse_single_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
+    // let subject_indent = self.current_line_indent
     let subject = self.parse_subject()?
     match self.peek().kind {
       Operator(op) if op.is_comparer() => {
-        self.current_line_indent = subject_indent
+        // self.current_line_indent = subject_indent
         let arms = self.parse_arms(op)?
         Ok(cst.Conditional.Compares(subject, arms))
       },
@@ -418,7 +422,7 @@ impl Parser {
   }
 
   fn parse_subject(self: Ref<Parser>) -> Result<Ref<cst.Expression>, ParseError> {
-    let mut ep = ExpressionParser.new(self, self.current_line_indent)
+    let mut ep = ExpressionParser.new(self, self.peek_indent())
     ep.should_stop_at_comparison_operator = true
     ep.parse().map(|expr| &expr)
   }
@@ -428,8 +432,8 @@ impl Parser {
     self.parse_list(
       '\n',
       || {
-        if let TokenKind.Operator(op) = self.peek().kind {
-          if op.is_comparer() {
+        match self.peek().kind {
+          Operator(op) => if op.is_comparer() {
             let _ = self.next()
             current_op = op
             op_indent = self.current_line_indent
@@ -439,11 +443,13 @@ impl Parser {
                 "expected expression after operator",
               ))
             }
-          }
-        } else if self.current_line_indent <= op_indent {
-          panic(
-            f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",
-          )
+          },
+          Else => panic("add an ELSE arm here!"),
+          _ => if self.current_line_indent <= op_indent {
+            panic(
+              f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",
+            )
+          },
         }
         let object = self.parse_expression()?
         let then = self.parse_consequent()?
