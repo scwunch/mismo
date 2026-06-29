@@ -458,7 +458,7 @@ fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
-    While(Unary { expr: cond, consequent: body }) => {
+    While(Predicate(cond, Do(body))) => {
       match (cond.kind, body.statements.map(|s| s.kind)) {
         (BoolLiteral(true), [Binop(_)]) => (),
         (_, k) => t.fail(
@@ -467,7 +467,7 @@ fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
         )?,
       }
     },
-    While(c) => t.fail(f"expected unary condtion; got {c}")?,
+    While(c) => t.fail(f"expected ordinary predicate; got {c}")?,
     _ => t.fail(f"expected While node; got {expr.kind}")?,
   }
 
@@ -477,7 +477,7 @@ fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
-    While(Unary { expr: cond, consequent: body }) => {
+    While(Predicate(cond, Do(body))) => {
       match (cond.kind, body.statements) {
         (Binop(binop), stmts) => match (binop.op, stmts.map(|s| s.kind)) {
           (Is, [Binop(dec), Call(call)]) => (),
@@ -491,7 +491,7 @@ fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
         )?,
       }
     },
-    While(c) => t.fail(f"expected unary condtion; got {c}")?,
+    While(c) => t.fail(f"expected ordinary predicate; got {c}")?,
     _ => t.fail(f"expected While node; got {expr.kind}")?,
   }
   Ok(())

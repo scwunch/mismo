@@ -3,6 +3,7 @@ import dx "diagnostics"
 import "lexer"
 import "mode"
 import "span"
+import t "testing"
 
 type Lexer = lexer.Lexer
 
@@ -97,24 +98,24 @@ impl Parser {
   }
 
   /// parse a list of items using a given parse function.  Items are separated by
-  /// (COMMA | COMMA + NEWLINE | NEWLINE) where the NEWLINE must be indented
-  /// beyond the given indent.
+  /// (COMMA | (COMMA + NEWLINE) | NEWLINE) where the NEWLINE must be indented
+  /// beyond the initial indent.
   ///
-  /// Returns either a ParseError, or a tuple containing the parsed items along
-  /// with the index of the ending token
+  /// Returns a slice of parsed items, or the the first ParseError raised.
   ///
-  /// Will consume initial newline, and any trailing comma and newline.
-  /// Beginning and ending brackets are not consumed.
+  /// Will consume initial newline, and any trailing comma.
+  /// Beginning and ending brackets are not consumed.  Parser will end where `peek` is the ending token.
   fn parse_list<Item>(
     self: Ref<Parser>,
     end: rune,
     fun: fn() -> Result<Item, ParseError>,
   ) -> Result<Slice<Item>, ParseError> {
     let mut items = []
+    t.debug(f"parse_list: self.current_line_indent={self.current_line_indent}")
     let indent = self.current_line_indent
     loop {
       match (self.peek().kind, end) {
-        (EOF, _) => break,
+        (EOF, _) |
         (RightBracket, ']') |
         (RightParen, ')') |
         (RightBrace, '}') |
@@ -123,18 +124,15 @@ impl Parser {
           let _ = self.next()
           break
         },
-        (Newline(i, c), _) => {
-          if i > indent {
-            // ignore newline, since next item is indented
-            let _ = self.next()
-            continue
-          }
-          if end == '\n' { break }
-          return Err(ParseError.new(
-            self.peek().span,
-            "list items must be indented deeper than line of list start",
-          ))
+        (Newline(i, _), _) if i > indent => {
+          let _ = self.next()
+          continue
         },
+        (Newline(_, _), '\n') => break,
+        (Newline(_, _), _) => return Err(ParseError.new(
+          self.peek().span,
+          "list items must be indented deeper than line of list start",
+        )),
         _ => {
           items = items.append(fun()?)
           // optional comma

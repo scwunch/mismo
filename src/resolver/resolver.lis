@@ -233,20 +233,21 @@ impl Resolver {
   fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
     let _ = span
     match cond {
-      Binary { .. } => panic(
+      Compares(_, _) => panic(
         "Conditonal.Binary not implemented yet for while loops",
       ),
-      Unary { expr, consequent } => {
-        let cond = self.resolve(expr.*)?
-        let body = self.block(consequent)?
+      Predicate(cond, Do(body)) => {
+        let cond = self.resolve(cond.*)?
+        let body = self.block(body)?
         Ok(ast.Expr.While(&cond, body))
       },
+      Predicate(_, cons) => panic(
+        "only block consequents allowed in while loop",
+      ),
       Multi(conds) => panic(
         "Conditonal.Multi not implemented yet for while loops",
       ),
-      Else { .. } => panic(
-        "Conditonal.Else not implemented yet for while loops",
-      ),
+      Else(_) => panic("unreachable"),
     }
   }
 

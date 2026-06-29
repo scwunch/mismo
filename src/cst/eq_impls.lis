@@ -134,39 +134,27 @@ impl Call {
 impl Conditional {
   pub fn equals(self, other: Conditional) -> bool {
     match (self, other) {
-      (Binary { subject: s1, ops: o1 }, Binary { subject: s2, ops: o2 }) => {
-        s1.equals(s2.*) && o1.equals(o2)
-      },
-      (Unary { expr: e1, consequent: c1 }, Unary { expr: e2, consequent: c2 }) => {
-        e1.equals(e2.*) && c1.equals(c2)
-      },
+      (Compares(s1, a1), Compares(s2, a2)) => s1.equals(s2.*) && a1.equals(a2),
+      (Predicate(p1, c1), Predicate(p2, c2)) => p1.equals(p2.*) && c1.equals(c2),
       (Multi(c1), Multi(c2)) => c1.equals(c2),
-      (Else { consequent: c1 }, Else { consequent: c2 }) => {
-        c1.equals(c2)
-      },
+      (Else(c1), Else(c2)) => c1.equals(c2),
       _ => false,
     }
   }
 }
 
-impl Comparison {
-  pub fn equals(self, other: Comparison) -> bool {
-    self.op == other.op && self.objects.equals(other.objects)
-  }
-}
-
-impl Branch {
-  pub fn equals(self, other: Branch) -> bool {
-    self.object.equals(other.object.*) && self.then.equals(other.then)
+impl Arm {
+  pub fn equals(self, other: Arm) -> bool {
+    self.op == other.op && self.object.equals(other.object) &&
+    self.then.equals(other.then)
   }
 }
 
 impl Consequent {
   pub fn equals(self, other: Consequent) -> bool {
     match (self, other) {
-      (Consequent.And(c1), Consequent.And(c2)) => c1.equals(c2),
-      (Consequent.Or(c1), Consequent.Or(c2)) => c1.equals(c2),
-      (Consequent.Do(e1), Consequent.Do(e2)) => e1.equals(e2.*),
+      (And(c1), And(c2)) | (Or(c1), Or(c2)) => c1.equals(c2.*),
+      (Do(e1), Do(e2)) => e1.equals(e2),
       _ => false,
     }
   }

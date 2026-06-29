@@ -102,53 +102,36 @@ impl ForLoop {
 #[json]
 #[display]
 pub enum Conditional {
-  Binary { subject: Ref<Expression>, ops: Slice<Comparison> },
-  Unary { expr: Ref<Expression>, consequent: Block },
+  Compares(Ref<Expression>, Slice<Arm>),
+  Predicate(Ref<Expression>, Consequent),
   Multi(Slice<Conditional>),
-  Else { consequent: Block },
+  Else(Consequent),
 }
 
 #[json]
-pub struct Comparison {
+pub struct Arm {
   pub op: Operator,
-  pub objects: Slice<Branch>,
-}
-
-#[json]
-pub struct Branch {
-  pub object: Ref<Expression>,
+  pub object: Expression,
   pub then: Consequent,
 }
 
 #[json]
 pub enum Consequent {
-  And(Conditional),
-  Or(Conditional),
+  And(Ref<Conditional>),
+  Or(Ref<Conditional>),
   Do(Block),
 }
 
 impl Conditional {
   pub fn span(self) -> span.Span {
     match self {
-      Binary { subject, ops } => subject.span.merge(ops
-        .get(ops.length() - 1)
-        .map_or(subject.span, |comp| comp.span())),
-      Unary { expr, consequent } => expr.span.merge(consequent.span()),
+      Compares(subject, arms) => subject.span.merge(arms
+        .get(arms.length() - 1)
+        .map_or(subject.span, |arm| arm.then.span())),
+      Predicate(pred, consequent) => pred.span.merge(consequent.span()),
       Multi(conds) => conds[conds.length() - 1].span(),
-      Else { consequent } => consequent.span(),
+      Else(consequent) => consequent.span(),
     }
-  }
-}
-
-impl Comparison {
-  pub fn span(self) -> span.Span {
-    self.objects[self.objects.length() - 1].span()
-  }
-}
-
-impl Branch {
-  pub fn span(self) -> span.Span {
-    self.object.span.merge(self.then.span())
   }
 }
 
@@ -159,6 +142,12 @@ impl Consequent {
       Or(cond) => cond.span(),
       Do(block) => block.span(),
     }
+  }
+}
+
+impl Arm {
+  pub fn new(op: Operator, object: Expression, then: Consequent) -> Arm {
+    Arm { op, object, then }
   }
 }
 

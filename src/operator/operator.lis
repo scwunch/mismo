@@ -1,3 +1,4 @@
+#[equality]
 pub enum Operator {
   Neg,
   Add,
@@ -41,136 +42,134 @@ impl Operator {
     self.sigil()
   }
 
-  pub fn equals(self, other: Operator) -> bool {
-    self == other
+  pub fn is_comparer(self) -> bool {
+    // self.precedence_class() == Prec.Comparison
+    match self {
+      Lt | Gt | Lte | Gte | Eq | Neq | Is | In | IsNot | NotIn => true,
+      _ => false,
+    }
   }
 
   pub fn sigil(self) -> string {
     match self {
-      Operator.Add => "+",
-      Operator.Sub | Neg => "-",
-      Operator.Mul => "*",
-      Operator.Div => "/",
-      Operator.Mod => "%",
-      Operator.Pow => "^",
-      Operator.Not => "not",
-      Operator.And => "and",
-      Operator.Or => "or",
-      Operator.Eq => "==",
-      Operator.Neq => "!=",
-      Operator.Lt => "<",
-      Operator.Gt => ">",
-      Operator.Lte => "<=",
-      Operator.Gte => ">=",
-      Operator.Is => "is",
-      Operator.In => "in",
-      Operator.IsNot => "is not",
-      Operator.NotIn => "not in",
+      Add => "+",
+      Sub | Neg => "-",
+      Mul => "*",
+      Div => "/",
+      Mod => "%",
+      Pow => "^",
+      Not => "not",
+      And => "and",
+      Or => "or",
+      Eq => "==",
+      Neq => "!=",
+      Lt => "<",
+      Gt => ">",
+      Lte => "<=",
+      Gte => ">=",
+      Is => "is",
+      In => "in",
+      IsNot => "is not",
+      NotIn => "not in",
 
       Let => "let",
       Mut => "mut",
       MutBang => "mut!",
       Var => "var",
 
-      Operator.Assign => "=",
-      Operator.AddAssign => "+=",
-      Operator.SubAssign => "-=",
-      Operator.MulAssign => "*=",
-      Operator.DivAssign => "/=",
-      Operator.ModAssign => "%=",
-      Operator.PowAssign => "^=",
-      Operator.AndAssign => "&=",
-      Operator.OrAssign => "|=",
+      Assign => "=",
+      AddAssign => "+=",
+      SubAssign => "-=",
+      MulAssign => "*=",
+      DivAssign => "/=",
+      ModAssign => "%=",
+      PowAssign => "^=",
+      AndAssign => "&=",
+      OrAssign => "|=",
     }
   }
 
   pub fn precedence_class(self) -> Prec {
     match self {
-      Operator.Or => Prec.Or,
-      Operator.And => Prec.And,
-      Operator.Is | Operator.IsNot | Operator.In | Operator.NotIn => Prec.Comparison,
-      Operator.Eq |
-      Operator.Neq |
-      Operator.Lt |
-      Operator.Gt |
-      Operator.Lte |
-      Operator.Gte => Prec.Comparison,
-      Operator.Add | Operator.Sub => Prec.Add,
-      Operator.Mul | Operator.Div | Operator.Mod => Prec.Mul,
-      Operator.Pow => Prec.Pow,
+      Or => Prec.Or,
+      And => Prec.And,
+      Is | IsNot | In | NotIn | Eq | Neq | Lt | Gt | Lte | Gte => Prec.Comparison,
+      Add | Sub => Prec.Add,
+      Mul | Div | Mod => Prec.Mul,
+      Pow => Prec.Pow,
       Not | Neg | Let | Mut | MutBang | Var => Prec.Unary,
-      // Operator.Comma => Prec.Comma,
-      // Operator.Dot => Prec.Call,
-      Operator.Assign |
-      Operator.AddAssign |
-      Operator.SubAssign |
-      Operator.MulAssign |
-      Operator.DivAssign |
-      Operator.ModAssign |
-      Operator.AndAssign |
-      Operator.OrAssign |
-      Operator.PowAssign => Prec.Assign,
+      // Comma => Prec.Comma,
+      // Dot => Prec.Call,
+      Assign |
+      AddAssign |
+      SubAssign |
+      MulAssign |
+      DivAssign |
+      ModAssign |
+      AndAssign |
+      OrAssign |
+      PowAssign => Prec.Assign,
     }
   }
 
   #[allow(match_same_arms)]
   pub fn relative_precedence(self, other: Operator) -> Bind {
     match (self.precedence_class(), other.precedence_class()) {
-      (Prec.Call, _) => Bind.Tighter, // Prec.Call is highest, and left-associative
-      (_, Prec.Call) => Bind.Looser,
+      (Call, _) => Bind.Tighter, // Call is highest, and left-associative
+      (_, Call) => Bind.Looser,
 
-      (Prec.Assign, Prec.Assign) => Bind.Looser, // right-associative
-      (Prec.Unary, Prec.Assign) => Bind.Tighter, // comma is the only operator that works in the LHS of an assignment
-      (_, Prec.Assign) => Bind.None, // everything else require
-      (Prec.Assign, _) => Bind.Looser, // and tighter on the right
-      (Prec.Comma, _) => Bind.Looser, // and comma binds looser than everything else
-      (_, Prec.Comma) => Bind.Tighter,
+      (Assign, Assign) => Bind.Looser, // right-associative
+      (Unary, Assign) => Bind.Tighter, // comma is the only operator that works in the LHS of an assignment
+      (_, Assign) => Bind.None, // everything else require
+      (Assign, _) => Bind.Looser, // and tighter on the right
+      (Comma, _) => Bind.Looser, // and comma binds looser than everything else
+      (_, Comma) => Bind.Tighter,
 
-      (Prec.Or, Prec.Or) => Bind.Tighter,
-      (Prec.Or, Prec.Comparison) => Bind.Tighter,
-      (Prec.Or, Prec.Unary) => Bind.Looser,
-      (Prec.Or, Prec.And) => Bind.None,
-      (Prec.Or, Prec.Add) => Bind.None,
-      (Prec.Or, Prec.Mul) => Bind.None,
-      (Prec.Or, Prec.Pow) => Bind.None,
-      (Prec.And, Prec.And) => Bind.Tighter,
-      (Prec.And, Prec.Comparison) => Bind.Looser,
-      (Prec.And, Prec.Unary) => Bind.Looser,
-      (Prec.And, Prec.Or) => Bind.None,
-      (Prec.And, Prec.Add) => Bind.None,
-      (Prec.And, Prec.Mul) => Bind.None,
-      (Prec.And, Prec.Pow) => Bind.None,
-      (Prec.Comparison, Prec.Or) => Bind.Tighter,
-      (Prec.Comparison, Prec.And) => Bind.Tighter,
-      (Prec.Comparison, Prec.Comparison) => Bind.None,
-      (Prec.Comparison, Prec.Add) => Bind.Looser,
-      (Prec.Comparison, Prec.Mul) => Bind.Looser,
-      (Prec.Comparison, Prec.Pow) => Bind.Looser,
-      (Prec.Comparison, Prec.Unary) => Bind.Looser,
-      (Prec.Add, Prec.Comparison) => Bind.Tighter,
-      (Prec.Add, Prec.Add) => Bind.Tighter,
-      (Prec.Add, Prec.Mul) => Bind.Looser,
-      (Prec.Add, Prec.Pow) => Bind.Looser,
-      (Prec.Add, Prec.Unary) => Bind.Looser,
-      (Prec.Add, Prec.Or) => Bind.None,
-      (Prec.Add, Prec.And) => Bind.None,
-      (Prec.Mul, Prec.Comparison) => Bind.Tighter,
-      (Prec.Mul, Prec.Add) => Bind.Tighter,
-      (Prec.Mul, Prec.Mul) => Bind.Tighter,
-      (Prec.Mul, Prec.Pow) => Bind.Looser,
-      (Prec.Mul, Prec.Unary) => Bind.Looser,
-      (Prec.Mul, Prec.Or) => Bind.None,
-      (Prec.Mul, Prec.And) => Bind.None,
-      (Prec.Pow, Prec.Comparison) => Bind.Tighter,
-      (Prec.Pow, Prec.Add) => Bind.Tighter,
-      (Prec.Pow, Prec.Mul) => Bind.Tighter,
-      (Prec.Pow, Prec.Pow) => Bind.None,
-      (Prec.Pow, Prec.Unary) => Bind.None,
-      (Prec.Pow, Prec.Or) => Bind.None,
-      (Prec.Pow, Prec.And) => Bind.None,
-      (Prec.Unary, Prec.Pow) => Bind.None,
-      (Prec.Unary, Prec.Unary) => Bind.None,
-      (Prec.Unary, _) => Bind.Tighter,
+      (Or, Or) => Bind.Tighter,
+      (Or, Comparison) => Bind.Tighter,
+      (Or, Unary) => Bind.Looser,
+      (Or, And) => Bind.None,
+      (Or, Add) => Bind.None,
+      (Or, Mul) => Bind.None,
+      (Or, Pow) => Bind.None,
+      (And, And) => Bind.Tighter,
+      (And, Comparison) => Bind.Looser,
+      (And, Unary) => Bind.Looser,
+      (And, Or) => Bind.None,
+      (And, Add) => Bind.None,
+      (And, Mul) => Bind.None,
+      (And, Pow) => Bind.None,
+      (Comparison, Or) => Bind.Tighter,
+      (Comparison, And) => Bind.Tighter,
+      (Comparison, Comparison) => Bind.None,
+      (Comparison, Add) => Bind.Looser,
+      (Comparison, Mul) => Bind.Looser,
+      (Comparison, Pow) => Bind.Looser,
+      (Comparison, Unary) => Bind.Looser,
+      (Add, Comparison) => Bind.Tighter,
+      (Add, Add) => Bind.Tighter,
+      (Add, Mul) => Bind.Looser,
+      (Add, Pow) => Bind.Looser,
+      (Add, Unary) => Bind.Looser,
+      (Add, Or) => Bind.None,
+      (Add, And) => Bind.None,
+      (Mul, Comparison) => Bind.Tighter,
+      (Mul, Add) => Bind.Tighter,
+      (Mul, Mul) => Bind.Tighter,
+      (Mul, Pow) => Bind.Looser,
+      (Mul, Unary) => Bind.Looser,
+      (Mul, Or) => Bind.None,
+      (Mul, And) => Bind.None,
+      (Pow, Comparison) => Bind.Tighter,
+      (Pow, Add) => Bind.Tighter,
+      (Pow, Mul) => Bind.Tighter,
+      (Pow, Pow) => Bind.None,
+      (Pow, Unary) => Bind.None,
+      (Pow, Or) => Bind.None,
+      (Pow, And) => Bind.None,
+      (Unary, Pow) => Bind.None,
+      (Unary, Unary) => Bind.None,
+      (Unary, _) => Bind.Tighter,
     }
   }
 }
