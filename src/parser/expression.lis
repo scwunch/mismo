@@ -78,7 +78,7 @@ impl ExpressionParser {
 
   fn expression_done(self: Ref<ExpressionParser>) -> bool {
     match self.parser.peek().kind {
-      RightParen | RightBracket | RightBrace | Colon | Comma | Else | EOF => true,
+      RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
       Operator(op) if self.should_stop_at_comparison_operator => op.is_comparer(),
       _ => self.parser.peek_newline(self.expression_indent),
     }
@@ -119,11 +119,11 @@ impl ExpressionParser {
       StringLiteral(s) => cst.string_lit(tok.span, s),
       Nil => cst.nil_lit(tok.span),
       Bool(b) => cst.bool_lit(tok.span, b),
-      Else => cst.else_(tok.span, self.parser.parse_colon_and_block()?),
+      Else => self.identifier(tok.span, "else")?,
       Error(msg) => return Err(ParseError.new(tok.span, msg)),
       _ => return Err(ParseError.new(
         tok.span,
-        f"Expected term or prefix operator. Got {tok.kind}",
+        f"Expected term or prefix operator. Got `{tok.kind}`",
       )),
     }
     self.terms = self.terms.append(term)
@@ -203,7 +203,7 @@ impl ExpressionParser {
       Error(msg) => Err(ParseError.new(tok_span, msg)),
       _ => Err(ParseError.new(
         tok_span,
-        f"Expected binary operator; got {tok.kind}",
+        f"Expected binary operator; got `{tok.kind}`",
       )),
     }
   }
@@ -464,14 +464,14 @@ impl Parser {
               ))
             }
           },
-          Else => {
-            let span = self.consume(TokenKind.Else)?
-            let block = self.parse_colon_and_block()?
-            // this is not clean... block is repeated
-            let object = cst.else_(span, block)
-            let then = cst.Consequent.Do(block)
-            return Ok(cst.Arm { op: current_op, object, then })
-          },
+          // Else => {
+          //   let span = self.consume(TokenKind.Else)?
+          //   let block = self.parse_colon_and_block()?
+          //   // this is not clean... block is repeated
+          //   let object = cst.else_(span, block)
+          //   let then = cst.Consequent.Do(block)
+          //   return Ok(cst.Arm { op: current_op, object, then })
+          // },
           _ => if self.current_line_indent <= op_indent {
             panic(
               f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",
@@ -492,7 +492,7 @@ impl Parser {
       Colon => Ok(cst.Consequent.Do(self.parse_colon_and_block()?)),
       _ => Err(ParseError.new(
         self.peek().span,
-        "expected `and`, `or`, or colon and block",
+        f"expected `and`, `or`, or colon and block; got {self.peek().kind}",
       )),
     }
   }

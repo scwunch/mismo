@@ -79,11 +79,6 @@ impl Resolver {
         Expr.Break(Some(&e))
       },
       Continue => Expr.Continue,
-      Else(block) => {
-        // TODO: emit a better error for this
-        let _ = self.resolve_path(cst.Path.name_("else"), node.span)?
-        Expr.Block(self.block(block)?)
-      },
       DotName(expr, name) => {
         let arg = [self.resolve(expr.*)?]
         self.bare_call(name, arg, true, node.span)?

@@ -276,13 +276,14 @@ fn test_cond_nested_with_else(t) {
     "else:                                      ",
     "  r2                                       ",
     "                                           ",
-    "if x > y: r else: r2                       ",
+    "if x > y: r                                ",
+    "else: r2                                   ",
     "                                           ",
     "-- these next two should parse identically ",
     "if x >                                     ",
     "  y: r1                                    ",
     "  z: r2                                    ",
-    "  else:                                    ",
+    "  else: -- this error will get caught at name resolution time",
     "    r3                                     ",
     "                                           ",
     "if x >                                     ",
@@ -291,55 +292,69 @@ fn test_cond_nested_with_else(t) {
     "else:                                      ",
     "  r3                                       ",
     "                                           ",
-    "-- the next three should all parse identically",
-    "if x                                       ",
-    "  > y: r1                                  ",
-    "  ==                                       ",
+    "if                                         ",
+    "  a >                                      ",
+    "    y: r1                                  ",
     "    z: r2                                  ",
-    "    w: r3                                  ",
-    "else: r4                                   ",
-    "                                           ",
-    "if x                                       ",
-    "  > y: r1                                  ",
-    "  ==                                       ",
-    "    z: r2                                  ",
-    "    w: r3                                  ",
-    "  else: r4                                 ",
-    "                                           ",
-    "if x                                       ",
-    "  > y: r1                                  ",
-    "  ==                                       ",
-    "    z: r2                                  ",
-    "    w: r3                                  ",
-    "    else: r4                               ",
-    "-- the last three should all parse identically",
+    "  b                                        ",
+    "    > y: r1                                ",
+    "    ==                                     ",
+    "      z: r2                                ",
+    "      w: r3                                ",
+    "  else: \"inner else\"                     ",
+    "else: \"outer else\"                       ",
+    "-- this error should get caught when checking exhaustiveness/redundancy",
   ])
   let stmts = block.statements.map(|s| s.kind)
-  // assert stmts.length() == 10
-  // let assert [
-  //   cst.Expr.If(c1),
-  //   cst.Expr.Else(e1),
-  //   cst.Expr.If(c2),
-  //   cst.Expr.If(c3),
-  //   cst.Expr.If(c4),
-  //   cst.Expr.Else(e4),
-  //   cst.Expr.If(c5),
-  //   cst.Expr.Else(e5),
-  //   cst.Expr.If(c6),
-  //   cst.Expr.If(c7),
-  // ] = stmts
-  // let assert cst.Conditional.Compares(subj, [arm]) = c1
-  // let assert cst.Expr.Identifier(_) = subj.kind
-  // assert arm.op == Operator.Gt
-  // let assert cst.Expr.Identifier(_) = arm.object.kind
-  // let assert [cst.Expr.Identifier(_)] = e1.statements.map(|s| s.kind)
+  let assert [
+    cst.Expr.If(c1),
+    cst.Expr.If(c2),
+    cst.Expr.If(c3),
+    cst.Expr.If(c4),
+    cst.Expr.If(c5),
+  ] = stmts
+  let assert Some(block) = c1.default
+  let assert [stmt] = block.statements
+  let assert cst.Expr.Identifier(cst.Path { name: "r2", .. }) = stmt.kind
+  let assert [cst.Clause.Comparison(subj, [arm])] = c1.clauses
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = arm.object.kind
 
-  // let assert cst.Conditional.Compares(subj, [arm]) = c2
-  // let assert cst.Expr.Identifier(_) = subj.kind
-  // assert arm.op == Operator.Gt
-  // let assert cst.Expr.Identifier(_) = arm.object.kind
-  // let assert [cst.Expr.Identifier(_)] = e2.statements.map(|s| s.kind)
+  let assert Some(block) = c2.default
+  let assert [stmt] = block.statements
+  let assert cst.Expr.Identifier(cst.Path { name: "r2", .. }) = stmt.kind
+  let assert [cst.Clause.Comparison(subj, [arm])] = c2.clauses
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = arm.object.kind
 
+  let assert None = c3.default
+  let assert [cst.Clause.Comparison(_subj, [a1, a2, a3])] = c3.clauses
+  assert (a1.op, a2.op, a3.op) == (Operator.Gt, Operator.Gt, Operator.Gt)
+  // NOTE: the below is an error that will get caught at name resolution time
+  let assert cst.Expr.Identifier(cst.Path { name: "else", .. }) = a3.object.kind
+
+  let assert Some(block) = c4.default
+  assert block.statements.length() == 1
+  let assert cst.Expr.Identifier(cst.Path { name: "r3", .. }) = block.statements[0].kind
+  let assert [cst.Clause.Comparison(_subj, [a1, a2, a3])] = c3.clauses
+  assert (a1.op, a2.op, a3.op) == (Operator.Gt, Operator.Gt, Operator.Gt)
+
+  let assert Some(block) = c5.default
+  let assert cst.Expr.StringLiteral("outer else") = block.last().kind
+  let assert [_, _, cst.Clause.Else(block)] = c5.clauses
+  let assert cst.Expr.StringLiteral("inner else") = block.last().kind
+}
+
+#[test("parser/conditional/and-or-connectives")]
+fn test_conditional_with_and_or(t) {
+  let assert Ok(block) = parse([
+    "if x >                                     ",
+    "  y and something_else:                    ",
+    "  r                                        ",
+    "else:                                      ",
+    "  r2                                       ",
+    "                                           ",
+  ])
 }
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
