@@ -133,11 +133,21 @@ impl Call {
 
 impl Conditional {
   pub fn equals(self, other: Conditional) -> bool {
+    match (self.default, other.default) {
+      (None, None) => self.clauses.equals(other.clauses),
+      (Some(d1), Some(d2)) => self.clauses.equals(other.clauses) &&
+      d1.equals(d2),
+      _ => false,
+    }
+  }
+}
+
+impl Clause {
+  pub fn equals(self, other: Clause) -> bool {
     match (self, other) {
-      (Compares(s1, a1), Compares(s2, a2)) => s1.equals(s2.*) && a1.equals(a2),
-      (Predicate(p1, c1), Predicate(p2, c2)) => p1.equals(p2.*) && c1.equals(c2),
-      (Multi(c1), Multi(c2)) => c1.equals(c2),
-      (Else(c1), Else(c2)) => c1.equals(c2),
+      (Comparison(e1, a1), Comparison(e2, a2)) => e1.equals(e2) && a1.equals(a2),
+      (Predicate(p1, c1), Predicate(p2, c2)) => p1.equals(p2) && c1.equals(c2),
+      (Else(b1), Else(b2)) => b1.equals(b2),
       _ => false,
     }
   }
@@ -153,7 +163,8 @@ impl Arm {
 impl Consequent {
   pub fn equals(self, other: Consequent) -> bool {
     match (self, other) {
-      (And(c1), And(c2)) | (Or(c1), Or(c2)) => c1.equals(c2.*),
+      (And(c1), And(c2)) => c1.equals(c2.*),
+      (Or(e1, b1), Or(e2, b2)) => e1.equals(e2) && b1.equals(b2),
       (Do(e1), Do(e2)) => e1.equals(e2),
       _ => false,
     }

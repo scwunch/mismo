@@ -238,21 +238,33 @@ impl Resolver {
   fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
     let _ = span
     match cond {
-      Compares(_, _) => panic(
-        "Conditonal.Binary not implemented yet for while loops",
-      ),
-      Predicate(cond, Do(body)) => {
-        let cond = self.resolve(cond.*)?
-        let body = self.block(body)?
-        Ok(ast.Expr.While(&cond, body))
+      cst.Conditional { clauses: [clause], default: None } => {
+        match clause {
+          Comparison(subj, [arm]) => {
+            let span = clause.span()
+            let cond = self.resolve(cst.binop_expr(
+              span,
+              subj,
+              arm.op,
+              arm.object,
+            ))?
+            let body = match arm.then {
+              Do(block) => self.block(block)?,
+              _ => panic("complex conditions not supported for while loops"),
+            }
+            Ok(ast.Expr.While(&cond, body))
+          },
+          Predicate(test, Do(body)) => {
+            let cond = self.resolve(test)?
+            let body = self.block(body)?
+            Ok(ast.Expr.While(&cond, body))
+          },
+          _ => panic("complex conditions not supported for while loops"),
+        }
       },
-      Predicate(_, cons) => panic(
-        "only block consequents allowed in while loop",
+      _ => panic(
+        "multiple clauses and/or default not yet supported on while loop",
       ),
-      Multi(conds) => panic(
-        "Conditonal.Multi not implemented yet for while loops",
-      ),
-      Else(_) => panic("unreachable"),
     }
   }
 
