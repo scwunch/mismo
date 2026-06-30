@@ -238,51 +238,85 @@ fn test_nested_conditionals(t) -> Result<(), error> {
 #[test("parser/conditional/nested-with-else")]
 fn test_cond_nested_with_else(t) {
   let assert Ok(block) = parse([
-    "if x > y: ",
-    "  r",
-    "else: ",
-    "  r2",
-    "if x > y: r else: r2",
-    "  ",
-    "-- these next two should parse identically",
-    "if x >",
-    "  y: r1",
-    "  z: r2",
-    "  else: ",
-    "    r3",
-    "if x >",
-    "  y: r1",
-    "  z: r2",
-    "else: ",
-    "  r3",
+    "if x > y:                                  ",
+    "  r                                        ",
+    "else:                                      ",
+    "  r2                                       ",
+    "                                           ",
+    "if x > y: r else: r2                       ",
+    "                                           ",
+    "-- these next two should parse identically ",
+    "if x >                                     ",
+    "  y: r1                                    ",
+    "  z: r2                                    ",
+    "  else:                                    ",
+    "    r3                                     ",
+    "                                           ",
+    "if x >                                     ",
+    "  y: r1                                    ",
+    "  z: r2                                    ",
+    "else:                                      ",
+    "  r3                                       ",
+    "                                           ",
     "-- the next three should all parse identically",
-    "if x",
-    "  > y: r1",
-    "  ==",
-    "    z: r2",
-    "    w: r3",
-    "else: r4",
-    "if x",
-    "  > y: r1",
-    "  ==",
-    "    z: r2",
-    "    w: r3",
-    "  else: r4",
-    "if x",
-    "  > y: r1",
-    "  ==",
-    "    z: r2",
-    "    w: r3",
-    "    else: r4",
+    "if x                                       ",
+    "  > y: r1                                  ",
+    "  ==                                       ",
+    "    z: r2                                  ",
+    "    w: r3                                  ",
+    "else: r4                                   ",
+    "                                           ",
+    "if x                                       ",
+    "  > y: r1                                  ",
+    "  ==                                       ",
+    "    z: r2                                  ",
+    "    w: r3                                  ",
+    "  else: r4                                 ",
+    "                                           ",
+    "if x                                       ",
+    "  > y: r1                                  ",
+    "  ==                                       ",
+    "    z: r2                                  ",
+    "    w: r3                                  ",
+    "    else: r4                               ",
     "-- the last three should all parse identically",
   ])
+  let stmts = block.statements.map(|s| s.kind)
+  assert stmts.length() == 10
+  let assert [
+    cst.Expr.If(c1),
+    cst.Expr.Else(e1),
+    cst.Expr.If(c2),
+    cst.Expr.If(c3),
+    cst.Expr.If(c4),
+    cst.Expr.Else(e4),
+    cst.Expr.If(c5),
+    cst.Expr.Else(e5),
+    cst.Expr.If(c6),
+    cst.Expr.If(c7),
+  ] = stmts
+  let assert cst.Conditional.Compares(subj, [arm]) = c1
+  let assert cst.Expr.Identifier(_) = subj.kind
+  assert arm.op == Operator.Gt
+  let assert cst.Expr.Identifier(_) = arm.object.kind
+  let assert [cst.Expr.Identifier(_)] = e1.statements.map(|s| s.kind)
+
+  let assert cst.Conditional.Compares(subj, [arm]) = c2
+  let assert cst.Expr.Identifier(_) = subj.kind
+  assert arm.op == Operator.Gt
+  let assert cst.Expr.Identifier(_) = arm.object.kind
+  // let assert [cst.Expr.Identifier(_)] = e2.statements.map(|s| s.kind)
+
 }
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
+  let source_code = ": \n" + lines.map(|ln| f"  {ln}\n").join("")
   Parser
-    .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))
+    .new(source_code)
     .parse_colon_and_block()
-    .map_err(dx2err)
+    .map_err(|e| {
+      fmt.Errorf("%v", dx.render(e, source_code as Slice<rune>))
+    })
 }
 
 fn dx2err<E: dx.Diagnostic>(e: E) -> error {

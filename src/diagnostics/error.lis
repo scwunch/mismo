@@ -1,5 +1,6 @@
 import "go:fmt"
 import "go:os"
+import "go:strings"
 
 import "span"
 
@@ -41,8 +42,8 @@ pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
   let loc = location(self, source)
   let mut start = self.span().start as int
   while start > 0 {
+    if source[start - 1] == '\n' { break }
     start -= 1
-    if source[start] == '\n' { break }
   }
   let mut end = self.span().end as int
   while end < source.length() {
@@ -58,8 +59,10 @@ pub fn render(self: Diagnostic, source: Slice<rune>) -> string {
   for _ in self.span().start as int..self.span().end as int {
     highlight = highlight.append('^')
   }
+  let line_no = f"{loc.line}"
+  let gutter = strings.Repeat(" ", line_no.length())
 
-  f"E{self.code()}: {self.message()}\n{line}\n{highlight as string}"
+  f"\nE{self.code()}: {self.message()}\n{line_no} │ {line}\n{gutter} · {highlight as string}\n"
 }
 
 pub interface SyntaxError {

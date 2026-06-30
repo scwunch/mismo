@@ -119,6 +119,7 @@ impl ExpressionParser {
       StringLiteral(s) => cst.string_lit(tok.span, s),
       Nil => cst.nil_lit(tok.span),
       Bool(b) => cst.bool_lit(tok.span, b),
+      Else => cst.else_(tok.span, self.parser.parse_colon_and_block()?),
       Error(msg) => return Err(ParseError.new(tok.span, msg)),
       _ => return Err(ParseError.new(
         tok.span,
@@ -395,18 +396,32 @@ impl Parser {
   fn parse_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
     if self.peek_indent() > self.current_line_indent {
       t.debug("parse multi-conditional")
-      let conditionals = self.parse_list('\n', self.parse_single_conditional)?
-      return if conditionals.is_empty() {
-        Err(ParseError.new(span.new(0, 0), "expected expression after `if`"))
-      } else {
-        Ok(cst.Conditional.Multi(conditionals))
+      match self.parse_list('\n', self.parse_single_conditional)? {
+        [] => Err(ParseError.new(
+          span.new(0, 0),
+          "expected expression after `if`",
+        )),
+        [cond] => Ok(cond),
+        conditionals => Ok(cst.Conditional.Multi(conditionals)),
       }
+    } else {
+      self.parse_single_conditional()
+      // let cond = self.parse_single_conditional()?
+      // if self.consume(TokenKind.Else).is_ok() {
+      //   let then = cst.Consequent.Do(self.parse_colon_and_block()?)
+      //   Ok(cst.Conditional.Multi([cond, cst.Conditional.Else(then)]))
+      // } else {
+      //   Ok(cond)
+      // }
     }
-    self.parse_single_conditional()
   }
 
   fn parse_single_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
     // let subject_indent = self.current_line_indent
+    if self.consume(TokenKind.Else).is_ok() {
+      let then = cst.Consequent.Do(self.parse_colon_and_block()?)
+      return Ok(cst.Conditional.Else(then))
+    }
     let subject = self.parse_subject()?
     match self.peek().kind {
       Operator(op) if op.is_comparer() => {
@@ -444,7 +459,14 @@ impl Parser {
               ))
             }
           },
-          Else => panic("add an ELSE arm here!"),
+          Else => {
+            let span = self.consume(TokenKind.Else)?
+            let block = self.parse_colon_and_block()?
+            // this is not clean... block is repeated
+            let object = cst.else_(span, block)
+            let then = cst.Consequent.Do(block)
+            return Ok(cst.Arm { op: current_op, object, then })
+          },
           _ => if self.current_line_indent <= op_indent {
             panic(
               f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",

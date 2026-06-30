@@ -35,6 +35,8 @@ pub enum Operator {
   PowAssign,
   AndAssign,
   OrAssign,
+
+  Else,
 }
 
 impl Operator {
@@ -86,6 +88,8 @@ impl Operator {
       PowAssign => "^=",
       AndAssign => "&=",
       OrAssign => "|=",
+
+      Else => "else",
     }
   }
 
@@ -100,6 +104,7 @@ impl Operator {
       Not | Neg | Let | Mut | MutBang | Var => Prec.Unary,
       // Comma => Prec.Comma,
       // Dot => Prec.Call,
+      Else |
       Assign |
       AddAssign |
       SubAssign |

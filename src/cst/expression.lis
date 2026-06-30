@@ -36,6 +36,7 @@ pub enum Expr {
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
+  Else(Block),
   // Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
   DotCall(Ref<Expression>, Call),
@@ -277,6 +278,10 @@ pub fn break_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
 
 pub fn continue_(span: span.Span) -> Expression {
   Expression { span, kind: Expr.Continue }
+}
+
+pub fn else_(span: span.Span, block: Block) -> Expression {
+  Expression { span: span.merge(block.span()), kind: Expr.Else(block) }
 }
 
 pub fn extern(span: span.Span) -> Expression {
