@@ -40,7 +40,7 @@ impl Parser {
 
   /// return `true` if the next token is on a new line
   /// unless it's indented greater than the reference
-  pub fn peek_newline(self, reference_indent: uint32) -> bool {
+  pub fn newline_follows(self, reference_indent: uint32) -> bool {
     self.lexer.on_line_start && self.peek_indent() <= reference_indent
   }
 
@@ -129,7 +129,7 @@ impl Parser {
         (RightParen, ')') |
         (RightBrace, '}') |
         (Pipe, '|') => break,
-        _ if self.peek_newline(indent) => {
+        _ if self.newline_follows(indent) => {
           if end == '\n' { break }
           return Err(ParseError.new(
             self.peek().span,
@@ -206,7 +206,7 @@ impl Parser {
 
   /// recover parser to the next top-level statement (ie, indent=0)
   fn recover_to_next_def(self: Ref<Parser>) {
-    while !self.peek_newline(0) {
+    while !self.newline_follows(0) {
       self.next()
     }
   }

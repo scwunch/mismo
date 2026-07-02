@@ -350,11 +350,36 @@ fn test_conditional_with_and_or(t) {
   let assert Ok(block) = parse([
     "if x >                                     ",
     "  y and something_else:                    ",
-    "  r                                        ",
+    "    r                                      ",
+    "else:                                      ",
+    "  r2                                       ",
+    "                                           ",
+    "if a >                                     ",
+    "  0 and b >                                ",
+    "    0: 'a+ b+'                             ",
+    "    100: 'b is big'                        ",
+    "    else: 'a+'                             ",
+    "  _ and b > 0: 'b+'                        ",
+    "    r                                      ",
     "else:                                      ",
     "  r2                                       ",
     "                                           ",
   ])
+  let assert [cst.Expr.If(c1)] = block.statements.map(|s| s.kind)
+  let assert [cst.Clause.Comparison(_subj, [arm])] = c1.clauses
+  assert arm.op == Operator.Gt
+  let assert cst.Expr.Identifier(_) = arm.object.kind
+  let assert cst.Consequent.And(cond2) = arm.then
+  let assert [cst.Clause.Predicate(pred, cons)] = cond2.clauses
+  let assert None = cond2.default
+  let assert cst.Expr.Identifier(cst.Path { name: "something_else", .. }) = pred.kind
+  let assert cst.Consequent.Do(block) = cons
+  let stmts = block.statements.map(|s| s.kind)
+  let assert [cst.Expr.Identifier(cst.Path { name: "r", .. })] = stmts
+
+  let assert Some(block) = c1.default
+  let stmts = block.statements.map(|s| s.kind)
+  let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = stmts
 }
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {

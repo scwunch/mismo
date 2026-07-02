@@ -100,7 +100,7 @@ impl Parser {
     } else {
       match self.peek().kind {
         Colon => cst.Type.new(self.peek().span, cst.Path.name_("Nil"), []),
-        _ if self.peek_newline(0) => cst.Type.new(
+        _ if self.newline_follows(0) => cst.Type.new(
           self.peek().span,
           cst.Path.name_("Nil"),
           [],
