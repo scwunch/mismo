@@ -232,34 +232,43 @@ impl Resolver {
 
   fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
     let _ = span
-    match cond {
-      cst.Conditional { clauses: [clause], default: None } => {
-        match clause {
-          Comparison(subj, [arm]) => {
-            let span = clause.span()
-            let cond = self.resolve(cst.binop_expr(
-              span,
-              subj,
-              arm.op,
-              arm.object,
-            ))?
-            let body = match arm.then {
-              Do(block) => self.block(block)?,
-              _ => panic("complex conditions not supported for while loops"),
-            }
-            Ok(ast.Expr.While(&cond, body))
-          },
-          Predicate(test, Do(body)) => {
-            let cond = self.resolve(test)?
-            let body = self.block(body)?
-            Ok(ast.Expr.While(&cond, body))
-          },
-          _ => panic("complex conditions not supported for while loops"),
-        }
+    match cond.arms {
+      [Leaf(condition, block)] => {
+        let cond = self.resolve(condition)?
+        let body = self.block(block)?
+        Ok(ast.Expr.While(&cond, body))
       },
-      _ => panic(
-        "multiple clauses and/or default not yet supported on while loop",
-      ),
+      _ => panic("currently only basic while blocks are supported"),
+
+      // match cond {
+      //   cst.Conditional { clauses: [clause], default: None } => {
+      //     match clause {
+      //       Comparison(subj, [arm]) => {
+      //         let span = clause.span()
+      //         let cond = self.resolve(cst.binop_expr(
+      //           span,
+      //           subj,
+      //           arm.op,
+      //           arm.object,
+      //         ))?
+      //         let body = match arm.then {
+      //           Do(block) => self.block(block)?,
+      //           _ => panic("complex conditions not supported for while loops"),
+      //         }
+      //         Ok(ast.Expr.While(&cond, body))
+      //       },
+      //       Predicate(test, Do(body)) => {
+      //         let cond = self.resolve(test)?
+      //         let body = self.block(body)?
+      //         Ok(ast.Expr.While(&cond, body))
+      //       },
+      //       _ => panic("complex conditions not supported for while loops"),
+      //     }
+      //   },
+      //   _ => panic(
+      //     "multiple clauses and/or default not yet supported on while loop",
+      //   ),
+      // }
     }
   }
 

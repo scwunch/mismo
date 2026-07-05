@@ -20,7 +20,7 @@ struct ExpressionParser {
   operators: Slice<Operator>,
   expression_indent: uint32,
   expecting: Expecting,
-  inside_conditional: bool,
+  // inside_conditional: bool,
 }
 
 impl ExpressionParser {
@@ -31,8 +31,8 @@ impl ExpressionParser {
       operators: [],
       expression_indent,
       expecting: Expecting.Term,
-      inside_conditional: false,
     }
+    // inside_conditional: false,
   }
 
   fn optional_expression(self: Ref<ExpressionParser>) -> Result<Option<Ref<cst.Expression>>, ParseError> {
@@ -41,16 +41,18 @@ impl ExpressionParser {
     Ok(Some(&expr))
   }
 
-  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
+  fn do_parse(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
     loop {
       match self.expecting {
         Expecting.Term => self.read_operand()?,
-        Expecting.Operator => {
-          if self.expression_done() { break }
-          self.read_operator()?
-        },
+        Expecting.Operator => self.read_operator()?,
       }
+      if self.expression_done() { return Ok(()) }
     }
+  }
+
+  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
+    self.do_parse()?
 
     if self.expecting == Expecting.Term {
       let op_str = self.operators[self.operators.length() - 1].string()
@@ -67,7 +69,7 @@ impl ExpressionParser {
     if !self.operators.is_empty() || self.terms.length() != 1 {
       return Err(ParseError.new(
         self.parser.peek().span,
-        "operators and terms did not add up",
+        "operators and terms did not add up (this is probably a compiler bug)",
       ))
     }
 
@@ -76,10 +78,38 @@ impl ExpressionParser {
     Ok(result)
   }
 
+  fn parse_segment(self: Ref<ExpressionParser>) -> Result<(cst.Expression, Option<Operator>), ParseError> {
+    self.do_parse()?
+
+    match self.expecting {
+      Expecting.Term => {
+        match (self.terms, self.operators) {
+          ([term], [op]) => Ok((term, Some(op))),
+          _ => Err(ParseError.new(
+            self.parser.peek().span,
+            "operators and terms didn't add up (compiler bug?)",
+          )),
+        }
+      },
+      Expecting.Operator => {
+        while self.operators.length() > 0 {
+          self.compress()?
+        }
+        match (self.terms, self.operators) {
+          ([term], []) => Ok((term, None)),
+          _ => Err(ParseError.new(
+            self.parser.peek().span,
+            "operators and terms did not add up (compiler bug?)",
+          )),
+        }
+      },
+    }
+  }
+
   fn expression_done(self: Ref<ExpressionParser>) -> bool {
     match self.parser.peek().kind {
       RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
-      Operator(op) if self.inside_conditional => op.is_conditional_op(),
+      // Operator(op) if self.inside_conditional => op.is_conditional_op(),
       _ => self.parser.newline_follows(self.expression_indent),
     }
   }
@@ -350,6 +380,27 @@ impl Parser {
     expr_parser.parse()
   }
 
+  /// Parse a segment of a conditional.  Regular parsing rules apply except:
+  /// 1. the expression may not continue onto a newline, no matter the indent
+  /// 2. if the expression ends with a binary operator, `parse_segment` will return that operator along with the expression
+  fn parse_segment(self: Ref<Parser>) -> Result<(cst.Expression, Option<Operator>), ParseError> {
+    // to make sure the expression ends on *any* newline, we just sent the indent really high
+    ExpressionParser.new(self, 1 as uint32 << 31).parse_segment()
+    // let mut expr_parser = ExpressionParser.new(self, 1 as uint32 << 31)
+    // match expr_parser.parse() {
+    //   Ok(expr) => Ok((expr, None)),
+    //   Err(e) if e.msg == "Not enough terms to complete expression" => {
+    //     // this is a hack.  We are checking to see if the reason the parser failed was because of an extra operator.
+    //     // Then we assume that as long as we have one expression, and one operator, then that's what we want to return.
+    //     match (expr_parser.terms, expr_parser.operators) {
+    //       ([expr], [op]) => Ok((expr, Some(op))),
+    //       _ => Err(e),
+    //     }
+    //   },
+    //   Err(e) => Err(e),
+    // }
+  }
+
   pub fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Block, ParseError> {
     let colon = self.consume(TokenKind.Colon)?
     let statements = self.parse_list('\n', self.parse_expression)?
@@ -361,22 +412,24 @@ impl Parser {
   }
 
   fn parse_while_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
-    let indent = self.peek_indent()
-    let condition = self.parse_expression()?
-    let body = self.parse_colon_and_block()?
-    let span = span.merge(body.last().span)
-    let else_ = if self.peek_indent() == indent &&
-    self.consume(TokenKind.Else).is_ok() {
-      Some(self.parse_colon_and_block()?)
-    } else {
-      None
-    }
-    let cond = cst.Conditional.predicate(
-      condition,
-      cst.Consequent.Do(body),
-      else_,
-    )
-    Ok(cst.while_(span, cond))
+    let conditional = self.parse_conditional(span)?
+    let span = span.merge(conditional.end_span())
+    Ok(cst.while_(span, conditional))
+    // let condition = self.parse_expression()?
+    // let body = self.parse_colon_and_block()?
+    // let span = span.merge(body.last().span)
+    // let else_ = if self.peek_indent() == indent &&
+    // self.consume(TokenKind.Else).is_ok() {
+    //   Some(self.parse_colon_and_block()?)
+    // } else {
+    //   None
+    // }
+    // let cond = cst.Conditional.predicate(
+    //   condition,
+    //   cst.Consequent.Do(body),
+    //   else_,
+    // )
+    // Ok(cst.while_(span, cond))
   }
 
   fn parse_for_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
@@ -400,18 +453,15 @@ impl Parser {
   }
 
   fn parse_if_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
-    let cond = self.parse_conditional()?
+    let cond = self.parse_conditional(span)?
     Ok(cst.if_(span.merge(cond.span()), cond))
   }
 
-  fn parse_conditional(self: Ref<Parser>) -> Result<cst.Conditional, ParseError> {
+  fn parse_conditional(self: Ref<Parser>, span: span.Span) -> Result<cst.Conditional, ParseError> {
     let cond_indent = self.current_line_indent
-    let clauses = self.parse_list('\n', self.parse_conditional_clause)?
-    if clauses.is_empty() {
-      return Err(ParseError.new(
-        span.new(0, 0),
-        "expected expression after `if`",
-      ))
+    let arms = self.parse_list('\n', self.parse_arm)?
+    if arms.is_empty() {
+      return Err(ParseError.new(span, "expected expression after `if`"))
     }
     let default = if self.peek_indent() == cond_indent &&
     self.consume(TokenKind.Else).is_ok() {
@@ -419,42 +469,44 @@ impl Parser {
     } else {
       None
     }
-    Ok(cst.Conditional { clauses, default })
+    Ok(cst.Conditional { arms, default })
   }
 
-  fn parse_conditional_clause(self: Ref<Parser>) -> Result<cst.Clause, ParseError> {
-    // let subject_indent = self.current_line_indent
-    if self.consume(TokenKind.Else).is_ok() {
-      return Ok(cst.Clause.Else(self.parse_colon_and_block()?))
-    }
-    let subject = self.parse_partial_expression_in_conditional()?
-    match self.peek().kind {
-      Operator(And) | Operator(Or) => panic("what to do?"),
-      Operator(op) if op.is_conditional_op() => {
-        // self.current_line_indent = subject_indent
-        let arms = self.parse_arms(op)?
-        Ok(cst.Clause.Comparison(subject, arms))
-      },
-      _ => {
-        let block = self.parse_consequent()?
-        Ok(cst.Clause.Predicate(subject, block))
-      },
+  fn parse_arm(self: Ref<Parser>) -> Result<cst.Arm, ParseError> {
+    let arm_indent = self.peek_indent()
+    let (segment, op) = self.parse_segment()?
+    if self.peek_indent() > arm_indent {
+      let branches = self.parse_branches(op)?
+      Ok(cst.Arm.Node(segment, branches))
+    } else {
+      let block = self.parse_colon_and_block()?
+      Ok(cst.Arm.Leaf(segment, block))
     }
   }
 
-  fn parse_partial_expression_in_conditional(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
-    let mut ep = ExpressionParser.new(self, self.peek_indent())
-    ep.inside_conditional = true
-    ep.parse()
-  }
-
-  fn parse_arms(self: Ref<Parser>, mut current_op: Operator) -> Result<Slice<cst.Arm>, ParseError> {
+  fn parse_branches(self: Ref<Parser>, op: Option<Operator>) -> Result<Slice<cst.Branch>, ParseError> {
     let mut op_indent = self.current_line_indent
+    let mut current_op = match op {
+      Some(op) => op,
+      None => {
+        op_indent = self.peek_indent()
+        match self.peek().kind {
+          Operator(op) => {
+            let _ = self.next()
+            op
+          },
+          tok => return Err(ParseError.new(
+            self.peek().span,
+            f"Expected binary operator; got `{tok}`",
+          )),
+        }
+      },
+    }
     self.parse_list(
       '\n',
       || {
         match self.peek().kind {
-          Operator(op) => if op.is_conditional_op() {
+          Operator(op) => {
             let _ = self.next()
             current_op = op
             op_indent = self.current_line_indent
@@ -465,46 +517,16 @@ impl Parser {
               ))
             }
           },
-          // Else => {
-          //   let span = self.consume(TokenKind.Else)?
-          //   let block = self.parse_colon_and_block()?
-          //   // this is not clean... block is repeated
-          //   let object = cst.else_(span, block)
-          //   let then = cst.Consequent.Do(block)
-          //   return Ok(cst.Arm { op: current_op, object, then })
-          // },
-          _ => if self.current_line_indent <= op_indent {
+          _ => if self.peek_indent() <= op_indent {
             panic(
               f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",
             )
           },
         }
-        let object = self.parse_partial_expression_in_conditional()?
-        let then = self.parse_consequent()?
-        Ok(cst.Arm { op: current_op, object, then })
+        let arm = self.parse_arm()?
+        Ok(cst.Branch { op: current_op, arm })
       },
     )
-  }
-
-  fn parse_consequent(self: Ref<Parser>) -> Result<cst.Consequent, ParseError> {
-    match self.peek().kind {
-      Operator(And) => {
-        let _and_span = self.consume(TokenKind.Operator(Operator.And))
-        let cond = self.parse_conditional()?
-        Ok(cst.Consequent.And(&cond))
-      },
-      Operator(Or) => {
-        let _or_span = self.consume(TokenKind.Operator(Operator.Or))
-        let expr = self.parse_expression()?
-        let block = self.parse_colon_and_block()?
-        Ok(cst.Consequent.Or(expr, block))
-      },
-      Colon => Ok(cst.Consequent.Do(self.parse_colon_and_block()?)),
-      _ => Err(ParseError.new(
-        self.peek().span,
-        f"expected `and`, `or`, or colon and block; got {self.peek().kind}",
-      )),
-    }
   }
 }
 

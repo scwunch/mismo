@@ -102,47 +102,27 @@ impl ForLoop {
 #[json]
 #[display]
 pub struct Conditional {
-  pub clauses: Slice<Clause>, // at least one predicate or comparison
-  pub default: Option<Block>, // note: the `else` may be either here or in the `clauses` property, depending on the indentation
+  pub arms: Slice<Arm>,
+  pub default: Option<Block>,
 }
 
 #[json]
-pub enum Clause {
-  Comparison(Expression, Slice<Arm>),
-  Predicate(Expression, Consequent),
-  Else(Block),
+pub enum Arm {
+  Leaf(Expression, Block),
+  Node(Expression, Slice<Branch>),
 }
 
 #[json]
-pub struct Arm {
+pub struct Branch {
   pub op: Operator,
-  pub object: Expression,
-  pub then: Consequent,
-}
-
-#[json]
-pub enum Consequent {
-  And(Ref<Conditional>),
-  Or(Expression, Block),
-  Do(Block),
+  pub arm: Arm,
 }
 
 impl Conditional {
-  pub fn predicate(test: Expression, cons: Consequent, default: Option<Block>) -> Conditional {
-    Conditional { clauses: [Clause.Predicate(test, cons)], default }
-  }
-
-  pub fn comparison(subj: Expression, arms: Slice<Arm>, default: Option<Block>) -> Conditional {
-    Conditional { clauses: [Clause.Comparison(subj, arms)], default }
-  }
-
   pub fn span(self) -> span.Span {
-    match self.clauses {
-      [clause] => clause.span(),
-      [clause, ..] => clause.span().merge(self.end_span()),
+    match self.arms {
+      [arm, ..] => arm.span().merge(self.end_span()),
       _ => span.new(0, 0),
-
-      // self.clauses[0].span().merge(self.end_span())
     }
   }
 
@@ -150,49 +130,24 @@ impl Conditional {
   pub fn end_span(self) -> span.Span {
     match self.default {
       Some(block) => block.last().span,
-      None => self.clauses[self.clauses.length() - 1].span(),
-    }
-  }
-}
-
-impl Clause {
-  pub fn span(self) -> span.Span {
-    match self {
-      Comparison(subj, arms) => subj.span.merge(arms[arms.length() - 1].then.end_span()),
-      Predicate(test, then) => test.span.merge(then.span()),
-      Else(block) => block.span(),
-    }
-  }
-
-  pub fn end_span(self) -> span.Span {
-    match self {
-      Comparison(_, arms) => arms[arms.length() - 1].then.end_span(),
-      Predicate(test, then) => then.end_span(),
-      Else(block) => block.last().span,
-    }
-  }
-}
-
-impl Consequent {
-  pub fn span(self) -> span.Span {
-    match self {
-      And(cond) => cond.span(),
-      Or(test, block) => test.span.merge(block.last().span),
-      Do(block) => block.span(),
-    }
-  }
-
-  pub fn end_span(self) -> span.Span {
-    match self {
-      And(cond) => cond.end_span(),
-      Or(_, block) | Do(block) => block.last().span,
+      None => self.arms[self.arms.length() - 1].end_span(),
     }
   }
 }
 
 impl Arm {
-  pub fn new(op: Operator, object: Expression, then: Consequent) -> Arm {
-    Arm { op, object, then }
+  pub fn span(self) -> span.Span {
+    match self {
+      Leaf(expr, block) => expr.span.merge(block.last().span),
+      Node(expr, branches) => expr.span.merge(branches[branches.length() - 1].arm.end_span()),
+    }
+  }
+
+  pub fn end_span(self) -> span.Span {
+    match self {
+      Leaf(_, block) => block.last().span,
+      Node(_, branches) => branches[branches.length() - 1].arm.end_span(),
+    }
   }
 }
 
@@ -208,6 +163,10 @@ impl Block {
 
   pub fn last(self) -> Expression {
     self.statements[self.statements.length() - 1]
+  }
+
+  pub fn expr_kinds(self) -> Slice<Expr> {
+    self.statements.map(|s| s.kind)
   }
 }
 
