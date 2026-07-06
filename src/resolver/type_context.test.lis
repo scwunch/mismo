@@ -88,7 +88,7 @@ fn test_eval_type_nominal(t) -> Result<(), error> {
   )
 
   // Option[Int]
-  let option_ref = ctx.env.type_defs["Option"]
+  let assert Some(option_ref) = ctx.env.type_defs.get("Option")
   let assert Ok(ty) = ctx.eval_type(cst.typ(
     0,
     11,

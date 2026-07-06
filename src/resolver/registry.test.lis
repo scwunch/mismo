@@ -22,7 +22,7 @@ fn test_register_and_fill_struct(t) -> Result<(), error> {
   register_types(ctx.env, [decl])
   elaborate_types(ctx.env, [decl])
 
-  let def = ctx.env.type_defs["Point"]
+  let assert Some(def) = ctx.env.type_defs.get("Point")
   assert def.name == "Point"
   assert def.type_parameters.is_empty()
   let assert ast.TypeKind.Struct(fields) = def.kind
@@ -50,7 +50,7 @@ fn test_register_and_fill_enum(t) -> Result<(), error> {
   register_types(ctx.env, [decl])
   elaborate_types(ctx.env, [decl])
 
-  let def = ctx.env.type_defs["Color"]
+  let assert Some(def) = ctx.env.type_defs.get("Color")
   assert def.name == "Color"
   assert def.type_parameters.is_empty()
   let assert ast.TypeKind.Enum(variants) = def.kind

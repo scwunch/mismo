@@ -51,7 +51,9 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
 
 pub fn elaborate_types(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
   for decl in types {
-    let def = self.type_defs[decl.name]
+    let Some(def) = self.type_defs.get(decl.name) else {
+      panic(f"type not found: {decl.name}")
+    }
     let ctx = TypeContext.new(self, def.type_parameters)
     match decl.body {
       cst.TypeBody.Struct(fields) => {

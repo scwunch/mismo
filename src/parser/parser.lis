@@ -13,8 +13,6 @@ pub type Token = lexer.Token
 
 pub type TokenKind = lexer.TokenKind
 
-pub type ParseError = dx.ParseError
-
 pub struct Parser {
   lexer: Lexer,
   peeked: Token,
@@ -55,7 +53,7 @@ impl Parser {
     self.lexer.indent
   }
 
-  fn parse_path(self: Ref<Parser>, mut span_: span.Span, mut name: string) -> Result<(span.Span, cst.Path), ParseError> {
+  fn parse_path(self: Ref<Parser>, mut span_: span.Span, mut name: string) -> Result<(span.Span, cst.Path), dx.ParseError> {
     let mut path = []
     loop {
       if self.consume(TokenKind.NamespaceSeparator).is_ok() {
@@ -72,7 +70,7 @@ impl Parser {
   // e.g. "let", "if", "+", "*"
   //
   // returns an error if the peeked token is not an identifier, keyword, or operator
-  fn consume_identifier(self: Ref<Parser>) -> Result<string, ParseError> {
+  fn consume_identifier(self: Ref<Parser>) -> Result<string, dx.ParseError> {
     let ident = match self.peek().kind {
       TokenKind.Identifier(name) => name,
       TokenKind.Let => "let",
@@ -86,7 +84,7 @@ impl Parser {
       TokenKind.For => "for",
       TokenKind.While => "while",
       TokenKind.Operator(op) => op.sigil(),
-      tok => return Err(ParseError.new(
+      tok => return Err(dx.ParseError.new(
         self.peek().span,
         f"Expected identifier.  Got {tok}",
       )),
@@ -111,15 +109,15 @@ impl Parser {
   /// (COMMA | (COMMA + NEWLINE) | NEWLINE) where the NEWLINE must be indented
   /// beyond the initial indent.
   ///
-  /// Returns a slice of parsed items, or the the first ParseError raised.
+  /// Returns a slice of parsed items, or the the first dx.ParseError raised.
   ///
   /// Will consume initial newline, and any trailing comma.
   /// Beginning and ending brackets are not consumed.  Parser will end where `peek` is the ending token.
   fn parse_list<Item>(
     self: Ref<Parser>,
     end: rune,
-    fun: fn() -> Result<Item, ParseError>,
-  ) -> Result<Slice<Item>, ParseError> {
+    fun: fn() -> Result<Item, dx.ParseError>,
+  ) -> Result<Slice<Item>, dx.ParseError> {
     let mut items = []
     let indent = self.current_line_indent
     loop {
@@ -131,7 +129,7 @@ impl Parser {
         (Pipe, '|') => break,
         _ if self.newline_follows(indent) => {
           if end == '\n' { break }
-          return Err(ParseError.new(
+          return Err(dx.ParseError.new(
             self.peek().span,
             "list items must be indented deeper than line of list start",
           ))
@@ -146,7 +144,7 @@ impl Parser {
     Ok(items)
   }
 
-  fn parse_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
+  fn parse_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
     let span = self.peek().span
     let Ok(name) = self.consume_identifier() else {
       return self.parse_tuple_or_fn_type()
@@ -160,18 +158,18 @@ impl Parser {
     Ok(cst.Type.new(span, path, type_args))
   }
 
-  fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, ParseError> {
+  fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, dx.ParseError> {
     let mode = self.consume_mode()
     let typ = self.parse_type()?
     Ok(cst.ParamType { mode, typ })
   }
 
-  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<cst.Type, ParseError> {
+  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
     let mut span = self.peek().span
     let _ = self
       .consume(TokenKind.LeftParen)
       .map_err(|_| {
-        ParseError.new(
+        dx.ParseError.new(
           span,
           f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
         )
@@ -188,11 +186,11 @@ impl Parser {
     }
   }
 
-  fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, ParseError> {
+  fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, dx.ParseError> {
     if self.peek().kind == kind {
       Ok(self.next().span)
     } else {
-      Err(ParseError.new(
+      Err(dx.ParseError.new(
         self.peek().span,
         f"Expected {kind}; got {self.peek().kind}",
       ))
@@ -200,14 +198,14 @@ impl Parser {
   }
 
   /// emit an error
-  fn emit_error(self: Ref<Parser>, err: ParseError) {
+  fn emit_error(self: Ref<Parser>, err: dx.ParseError) {
     self.defs.errors = self.defs.errors.append(err)
   }
 
   /// recover parser to the next top-level statement (ie, indent=0)
   fn recover_to_next_def(self: Ref<Parser>) {
     while !self.newline_follows(0) {
-      self.next()
+      let _ = self.next()
     }
   }
 }

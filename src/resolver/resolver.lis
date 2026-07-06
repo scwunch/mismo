@@ -123,7 +123,7 @@ impl Resolver {
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
   fn capture(self, varid: Ref<ast.Variable>, index: int) -> bool {
-    let mut self = self
+    // let mut self = &self
     let mut is_capture = false
     for i in 0..self.capture_set_stack.length() {
       let capset = &self.capture_set_stack.*[i]
@@ -136,7 +136,7 @@ impl Resolver {
   }
 
   fn block(self, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
-    let mut self = self
+    let self = &self
     let expressions = slice.map_result(
       block.statements,
       |stmt| {
@@ -171,7 +171,7 @@ impl Resolver {
   }
 
   fn closure(self, params: Slice<ast.Parameter>, body: cst.Block) -> Result<Expr, dx.ResolveError> {
-    let mut self = self
+    let self = &self
     let ret_type = Type.Never
     self.push_closure_env()
     self.scope.bindings = self.append_params(params)

@@ -19,6 +19,7 @@ pub fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
 fn main():
   print(\"hello world\")
   "
+
   // match specialize(source) {
   //   Err(errors) => {
   //     let _ = t.fail("unexpected compilation failure")
@@ -44,7 +45,6 @@ fn main():
   //       "pub fn main_0() void {
   //       _ = print_1(&string_from_literal(\"hello world\"));
   //       }
-
   //     pub fn print_1(s: *const String_t) void {
   //       _ = .{};
   //       }
@@ -71,15 +71,10 @@ impl Source {
           i += 1
           j += 1
         },
-        (Some(a), Some(b)) => {
-          if a == ' ' || a == '\n' {
-            i += 1
-          } else if b == ' ' || b == '\n' { j += 1 } else { return false }
-        },
         (Some(' '), _) | (Some('\n'), _) => i += 1,
         (_, Some(' ')) | (_, Some('\n')) => j += 1,
         (None, None) => return true,
-        _ => false,
+        _ => return false,
       }
     }
   }
