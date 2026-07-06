@@ -20,7 +20,6 @@ struct ExpressionParser {
   operators: Slice<Operator>,
   expression_indent: uint32,
   expecting: Expecting,
-  // inside_conditional: bool,
 }
 
 impl ExpressionParser {
@@ -32,16 +31,15 @@ impl ExpressionParser {
       expression_indent,
       expecting: Expecting.Term,
     }
-    // inside_conditional: false,
   }
 
-  fn optional_expression(self: Ref<ExpressionParser>) -> Result<Option<Ref<cst.Expression>>, ParseError> {
+  fn optional_expression(self: Ref<ExpressionParser>) -> Result<Option<Ref<cst.Expression>>, dx.ParseError> {
     if self.expression_done() { return Ok(None) }
     let expr = self.parser.parse_expression()?
     Ok(Some(&expr))
   }
 
-  fn do_parse(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
+  fn do_parse(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     loop {
       match self.expecting {
         Expecting.Term => self.read_operand()?,
@@ -51,12 +49,12 @@ impl ExpressionParser {
     }
   }
 
-  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
+  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
     self.do_parse()?
 
     if self.expecting == Expecting.Term {
       let op_str = self.operators[self.operators.length() - 1].string()
-      return Err(ParseError.new(
+      return Err(dx.ParseError.new(
         self.parser.peek().span,
         f"expected operand after {op_str}",
       ))
@@ -67,7 +65,7 @@ impl ExpressionParser {
     }
 
     if !self.operators.is_empty() || self.terms.length() != 1 {
-      return Err(ParseError.new(
+      return Err(dx.ParseError.new(
         self.parser.peek().span,
         "operators and terms did not add up (this is probably a compiler bug)",
       ))
@@ -78,14 +76,14 @@ impl ExpressionParser {
     Ok(result)
   }
 
-  fn parse_segment(self: Ref<ExpressionParser>) -> Result<(cst.Expression, Option<Operator>), ParseError> {
+  fn parse_segment(self: Ref<ExpressionParser>) -> Result<(cst.Expression, Option<Operator>), dx.ParseError> {
     self.do_parse()?
 
     match self.expecting {
       Expecting.Term => {
         match (self.terms, self.operators) {
           ([term], [op]) => Ok((term, Some(op))),
-          _ => Err(ParseError.new(
+          _ => Err(dx.ParseError.new(
             self.parser.peek().span,
             "operators and terms didn't add up (compiler bug?)",
           )),
@@ -97,7 +95,7 @@ impl ExpressionParser {
         }
         match (self.terms, self.operators) {
           ([term], []) => Ok((term, None)),
-          _ => Err(ParseError.new(
+          _ => Err(dx.ParseError.new(
             self.parser.peek().span,
             "operators and terms did not add up (compiler bug?)",
           )),
@@ -109,12 +107,11 @@ impl ExpressionParser {
   fn expression_done(self: Ref<ExpressionParser>) -> bool {
     match self.parser.peek().kind {
       RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
-      // Operator(op) if self.inside_conditional => op.is_conditional_op(),
       _ => self.parser.newline_follows(self.expression_indent),
     }
   }
 
-  fn read_operand(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
+  fn read_operand(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     let tok = self.parser.next()
     let term = match tok.kind {
       Operator(Sub) => return self.handle_prefix(Operator.Neg),
@@ -123,7 +120,7 @@ impl ExpressionParser {
         if self.parser.peek().kind == TokenKind.LeftParen {
           self.function_call(tok.span, cst.Path.name_(op.sigil()), None)?
         } else {
-          return Err(ParseError.new(
+          return Err(dx.ParseError.new(
             tok.span,
             f"Expected term or prefix operator. Got operator '{op}'",
           ))
@@ -150,8 +147,8 @@ impl ExpressionParser {
       Nil => cst.nil_lit(tok.span),
       Bool(b) => cst.bool_lit(tok.span, b),
       Else => self.identifier(tok.span, "else")?,
-      Error(msg) => return Err(ParseError.new(tok.span, msg)),
-      _ => return Err(ParseError.new(
+      Error(msg) => return Err(dx.ParseError.new(tok.span, msg)),
+      _ => return Err(dx.ParseError.new(
         tok.span,
         f"Expected term or prefix operator. Got `{tok.kind}`",
       )),
@@ -161,12 +158,12 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn handle_prefix(self: Ref<ExpressionParser>, prefix_op: Operator) -> Result<(), ParseError> {
+  fn handle_prefix(self: Ref<ExpressionParser>, prefix_op: Operator) -> Result<(), dx.ParseError> {
     self.push_operator(prefix_op)?
     self.read_operand()
   }
 
-  fn identifier(self: Ref<ExpressionParser>, span: span.Span, name: string) -> Result<cst.Expression, ParseError> {
+  fn identifier(self: Ref<ExpressionParser>, span: span.Span, name: string) -> Result<cst.Expression, dx.ParseError> {
     match name {
       "true" => Ok(cst.bool_lit(span, true)),
       "false" => Ok(cst.bool_lit(span, false)),
@@ -190,12 +187,12 @@ impl ExpressionParser {
     typ_span: Span,
     type_path: cst.Path,
     type_args: Slice<cst.Type>,
-  ) -> Result<cst.Expression, ParseError> {
+  ) -> Result<cst.Expression, dx.ParseError> {
     let _ = self.parser.consume(lexer.TokenKind.Dot)?
     let name = self.parser.consume_identifier()?
     let (span_, path) = self.parser.parse_path(typ_span, name)?
     if !path.namespace.is_empty() {
-      return Err(ParseError.new(
+      return Err(dx.ParseError.new(
         span_,
         "static method calls cannot be namespaced",
       ))
@@ -208,7 +205,7 @@ impl ExpressionParser {
     Ok(cst.type_dot_call(span_, type_path, type_args, call))
   }
 
-  fn read_operator(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
+  fn read_operator(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     let tok = self.parser.next()
     let tok_span = tok.span
     match tok.kind {
@@ -222,30 +219,30 @@ impl ExpressionParser {
         self.terms = self.terms.append(self.handle_dot(receiver)?)
         Ok(())
       },
-      LeftParen => Err(ParseError.new(
+      LeftParen => Err(dx.ParseError.new(
         tok_span,
         "only named functions are supported, cannot 'call' arbitrary expressions",
       )),
-      LeftBracket => Err(ParseError.new(
+      LeftBracket => Err(dx.ParseError.new(
         tok_span,
         "Use `.get(i)` to index into collections.",
       )),
-      Error(msg) => Err(ParseError.new(tok_span, msg)),
-      _ => Err(ParseError.new(
+      Error(msg) => Err(dx.ParseError.new(tok_span, msg)),
+      _ => Err(dx.ParseError.new(
         tok_span,
         f"Expected binary operator; got `{tok.kind}`",
       )),
     }
   }
 
-  fn push_operator(self: Ref<ExpressionParser>, right_op: Operator) -> Result<(), ParseError> {
+  fn push_operator(self: Ref<ExpressionParser>, right_op: Operator) -> Result<(), dx.ParseError> {
     loop {
       match self.operators.get(self.operators.length() - 1) {
         None => break,
         Some(left_op) => match left_op.relative_precedence(right_op) {
           Tighter => self.compress()?,
           Looser => break,
-          None => return Err(ParseError.new(
+          None => return Err(dx.ParseError.new(
             self.parser.peek().span,
             f"Relative precedence not defined between '{left_op}' [left] and '{right_op}' [right].  Disambiguate with parentheses.",
           )),
@@ -256,7 +253,7 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn compress(self: Ref<ExpressionParser>) -> Result<(), ParseError> {
+  fn compress(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     if self.operators.is_empty() { return Ok(()) }
     let last = self.operators.length() - 1
     let op = self.operators[last]
@@ -274,9 +271,9 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, ParseError> {
+  fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
     if self.terms.is_empty() {
-      return Err(ParseError.new(
+      return Err(dx.ParseError.new(
         self.parser.peek().span,
         "Not enough terms to complete expression",
       ))
@@ -287,7 +284,7 @@ impl ExpressionParser {
     Ok(t)
   }
 
-  fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
+  fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
     let exprs = self.parse_list(')')?
     let end = self.parser.consume(TokenKind.RightParen)?
     let s = _span.merge(end)
@@ -297,14 +294,14 @@ impl ExpressionParser {
     }
   }
 
-  fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, ParseError> {
+  fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
     let items = self.parse_list(']')?
     let rbracket_span = self.parser.consume(TokenKind.RightBracket)?
     let s = _span.merge(rbracket_span)
     Ok(cst.array_lit(s, items))
   }
 
-  fn handle_dot(self: Ref<ExpressionParser>, receiver: cst.Expression) -> Result<cst.Expression, ParseError> {
+  fn handle_dot(self: Ref<ExpressionParser>, receiver: cst.Expression) -> Result<cst.Expression, dx.ParseError> {
     let start = receiver.span.merge(self.parser.peek().span)
     let (span, path) = self.parser.parse_path(
       start,
@@ -334,7 +331,7 @@ impl ExpressionParser {
     start: Span,
     fn_name: cst.Path,
     type_args: Option<Slice<cst.Type>>,
-  ) -> Result<cst.Expression, ParseError> {
+  ) -> Result<cst.Expression, dx.ParseError> {
     let (span, call) = self.parse_call(start, fn_name, type_args)?
     Ok(cst.call_expr(span, call))
   }
@@ -344,7 +341,7 @@ impl ExpressionParser {
     start: Span,
     fn_name: cst.Path,
     type_args: Option<Slice<cst.Type>>,
-  ) -> Result<(span.Span, cst.Call), ParseError> {
+  ) -> Result<(span.Span, cst.Call), dx.ParseError> {
     // let type_args = self.parse_type_args()?
     let _ = self.parser.consume(TokenKind.LeftParen)?
     let args = self.parse_list(')')?
@@ -353,7 +350,7 @@ impl ExpressionParser {
     Ok((s, cst.Call { fn_name, type_args, args }))
   }
 
-  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Option<Slice<cst.Type>>, ParseError> {
+  fn parse_type_args(self: Ref<ExpressionParser>) -> Result<Option<Slice<cst.Type>>, dx.ParseError> {
     if self.parser.peek().kind != TokenKind.LeftBracket { return Ok(None) }
     let _ = self.parser.next()
     let types = self.parser.parse_list(']', self.parser.parse_type)?
@@ -361,7 +358,7 @@ impl ExpressionParser {
     Ok(Some(types))
   }
 
-  fn parse_closure(self: Ref<ExpressionParser>, span: span.Span) -> Result<cst.Expression, ParseError> {
+  fn parse_closure(self: Ref<ExpressionParser>, span: span.Span) -> Result<cst.Expression, dx.ParseError> {
     let parameters = self.parser.parse_list('|', self.parser.parse_parameter)?
     let _ = self.parser.consume(TokenKind.Pipe)?
     let body = self.parser.parse_colon_and_block()?
@@ -369,13 +366,13 @@ impl ExpressionParser {
     Ok(cst.closure(span, parameters, body))
   }
 
-  fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, ParseError> {
+  fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, dx.ParseError> {
     self.parser.parse_list(end, self.parser.parse_expression)
   }
 }
 
 impl Parser {
-  pub fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, ParseError> {
+  pub fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, dx.ParseError> {
     let mut expr_parser = ExpressionParser.new(self, self.peek_indent())
     expr_parser.parse()
   }
@@ -383,35 +380,22 @@ impl Parser {
   /// Parse a segment of a conditional.  Regular parsing rules apply except:
   /// 1. the expression may not continue onto a newline, no matter the indent
   /// 2. if the expression ends with a binary operator, `parse_segment` will return that operator along with the expression
-  fn parse_segment(self: Ref<Parser>) -> Result<(cst.Expression, Option<Operator>), ParseError> {
-    // to make sure the expression ends on *any* newline, we just sent the indent really high
+  fn parse_segment(self: Ref<Parser>) -> Result<(cst.Expression, Option<Operator>), dx.ParseError> {
+    // to make sure the expression ends on *any* newline, we just set the indent really high
     ExpressionParser.new(self, 1 as uint32 << 31).parse_segment()
-    // let mut expr_parser = ExpressionParser.new(self, 1 as uint32 << 31)
-    // match expr_parser.parse() {
-    //   Ok(expr) => Ok((expr, None)),
-    //   Err(e) if e.msg == "Not enough terms to complete expression" => {
-    //     // this is a hack.  We are checking to see if the reason the parser failed was because of an extra operator.
-    //     // Then we assume that as long as we have one expression, and one operator, then that's what we want to return.
-    //     match (expr_parser.terms, expr_parser.operators) {
-    //       ([expr], [op]) => Ok((expr, Some(op))),
-    //       _ => Err(e),
-    //     }
-    //   },
-    //   Err(e) => Err(e),
-    // }
   }
 
-  pub fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Block, ParseError> {
+  pub fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Block, dx.ParseError> {
     let colon = self.consume(TokenKind.Colon)?
     let statements = self.parse_list('\n', self.parse_expression)?
     if statements.is_empty() {
-      Err(ParseError.new(colon, "Empty block"))
+      Err(dx.ParseError.new(colon, "Empty block"))
     } else {
       Ok(cst.Block { statements })
     }
   }
 
-  fn parse_while_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
+  fn parse_while_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let conditional = self.parse_conditional(span)?
     let span = span.merge(conditional.end_span())
     Ok(cst.while_(span, conditional))
@@ -432,17 +416,17 @@ impl Parser {
     // Ok(cst.while_(span, cond))
   }
 
-  fn parse_for_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
+  fn parse_for_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let header = self.parse_expression()?
     let (patt, iter) = match header.kind {
       Binop(binop) => match binop.* {
         cst.Binop { left, op: In, right } => (left, right),
-        _ => return Err(ParseError.new(
+        _ => return Err(dx.ParseError.new(
           span.merge(header.span),
           "Proper syntax is `for <pattern> in <iterable>: <body>` eg, `for x in xs: ...`",
         )),
       },
-      _ => return Err(ParseError.new(
+      _ => return Err(dx.ParseError.new(
         span.merge(header.span),
         "Proper syntax is `for <pattern> in <iterable>: <body>` eg, `for x in xs: ...`",
       )),
@@ -452,16 +436,16 @@ impl Parser {
     Ok(cst.for_(span, patt, iter, body))
   }
 
-  fn parse_if_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, ParseError> {
+  fn parse_if_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let cond = self.parse_conditional(span)?
     Ok(cst.if_(span.merge(cond.span()), cond))
   }
 
-  fn parse_conditional(self: Ref<Parser>, span: span.Span) -> Result<cst.Conditional, ParseError> {
+  fn parse_conditional(self: Ref<Parser>, span: span.Span) -> Result<cst.Conditional, dx.ParseError> {
     let cond_indent = self.current_line_indent
     let arms = self.parse_list('\n', self.parse_arm)?
     if arms.is_empty() {
-      return Err(ParseError.new(span, "expected expression after `if`"))
+      return Err(dx.ParseError.new(span, "expected expression after `if`"))
     }
     let default = if self.peek_indent() == cond_indent &&
     self.consume(TokenKind.Else).is_ok() {
@@ -472,11 +456,17 @@ impl Parser {
     Ok(cst.Conditional { arms, default })
   }
 
-  fn parse_arm(self: Ref<Parser>) -> Result<cst.Arm, ParseError> {
+  fn parse_arm(self: Ref<Parser>) -> Result<cst.Arm, dx.ParseError> {
     let arm_indent = self.peek_indent()
     let (segment, op) = self.parse_segment()?
     if self.peek_indent() > arm_indent {
-      let branches = self.parse_branches(op)?
+      let branches = match op {
+        Some(op) => self.parse_list(
+          '\n',
+          || Ok(cst.Branch { op, arm: self.parse_arm()? }),
+        )?,
+        None => self.parse_branches()?,
+      }
       Ok(cst.Arm.Node(segment, branches))
     } else {
       let block = self.parse_colon_and_block()?
@@ -484,45 +474,37 @@ impl Parser {
     }
   }
 
-  fn parse_branches(self: Ref<Parser>, op: Option<Operator>) -> Result<Slice<cst.Branch>, ParseError> {
-    let mut op_indent = self.current_line_indent
-    let mut current_op = match op {
-      Some(op) => op,
-      None => {
-        op_indent = self.peek_indent()
-        match self.peek().kind {
-          Operator(op) => {
-            let _ = self.next()
-            op
-          },
-          tok => return Err(ParseError.new(
-            self.peek().span,
-            f"Expected binary operator; got `{tok}`",
-          )),
-        }
-      },
-    }
+  /// parse op-split branches
+  fn parse_branches(self: Ref<Parser>) -> Result<Slice<cst.Branch>, dx.ParseError> {
+    let op_indent = self.peek_indent()
+    let mut current_op = Operator.SubAssign
     self.parse_list(
       '\n',
       || {
-        match self.peek().kind {
-          Operator(op) => {
-            let _ = self.next()
-            current_op = op
-            op_indent = self.current_line_indent
-            if self.newline_follows(op_indent) {
-              return Err(ParseError.new(
-                self.peek().span,
-                "expected expression after operator",
-              ))
-            }
-          },
-          _ => if self.peek_indent() <= op_indent {
-            panic(
-              f"Oops, this arm should be indented under the last `{current_op}`; what should I do here?",
-            )
-          },
+        if self.peek_indent() == op_indent {
+          // get next operator
+          current_op = match self.peek().kind {
+            Operator(op) if op.is_binary() => {
+              let _ = self.next()
+              if self.newline_follows(op_indent) {
+                return Err(dx.ParseError.new(
+                  self.peek().span,
+                  "Unexpected end of block; expected match arm.",
+                ))
+              }
+              op
+            },
+            Else => return Err(dx.ParseError.new(
+              self.peek().span,
+              "`else` only allowed at same indent as `if`; expected binary operator here.",
+            )),
+            tok => return Err(dx.ParseError.new(
+              self.peek().span,
+              f"Expected binary operator, got `{tok}`.",
+            )),
+          }
         }
+
         let arm = self.parse_arm()?
         Ok(cst.Branch { op: current_op, arm })
       },

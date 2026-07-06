@@ -42,11 +42,15 @@ impl Operator {
     self.sigil()
   }
 
-  pub fn is_conditional_op(self) -> bool {
+  pub fn is_unary(self) -> bool {
     match self {
-      Lt | Gt | Lte | Gte | Eq | Neq | Is | In | IsNot | NotIn | And | Or => true,
+      Neg | Not | Let | Mut | MutBang | Var => true,
       _ => false,
     }
+  }
+
+  pub fn is_binary(self) -> bool {
+    !self.is_unary()
   }
 
   pub fn sigil(self) -> string {
