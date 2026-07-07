@@ -27,8 +27,8 @@ pub enum Expr {
   Binding(mode.Mode, Ref<Expression>),
   Binop(Ref<Binop>),
   Call(Call),
-  If(Conditional),
-  While(Conditional),
+  If(If),
+  While(If),
   For(Ref<ForLoop>),
   Block(Block),
   Neg(Ref<Expression>),
@@ -101,52 +101,71 @@ impl ForLoop {
 
 #[json]
 #[display]
-pub struct Conditional {
-  pub arms: Slice<Arm>,
+pub struct If {
+  pub checks: Slice<Check>,
   pub default: Option<Block>,
 }
 
 #[json]
-pub enum Arm {
-  Leaf(Expression, Block),
-  Node(Expression, Slice<Branch>),
+#[display]
+pub enum Check {
+  Test(Expression, Block),
+  Match(Expression, Slice<Arm>),
 }
 
 #[json]
-pub struct Branch {
-  pub op: Operator,
-  pub arm: Arm,
+pub struct Arm {
+  pub pattern: Expression,
+  pub then: Then,
 }
 
-impl Conditional {
+#[json]
+#[equality]
+pub enum Then {
+  Block(Block),
+  If(If),
+}
+
+impl If {
   pub fn span(self) -> span.Span {
-    match self.arms {
-      [arm, ..] => arm.span().merge(self.end_span()),
-      _ => span.new(0, 0),
-    }
+    self.checks[0].span().merge(self.end_span())
   }
 
   #[allow(manual_map_or)]
   pub fn end_span(self) -> span.Span {
     match self.default {
       Some(block) => block.last().span,
-      None => self.arms[self.arms.length() - 1].end_span(),
+      None => self.checks[self.checks.length() - 1].end_span(),
+    }
+  }
+}
+
+impl Check {
+  pub fn span(self) -> span.Span {
+    match self {
+      Test(expr, block) => expr.span.merge(block.last().span),
+      Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
+    }
+  }
+
+  #[allow(manual_map_or)]
+  pub fn end_span(self) -> span.Span {
+    match self {
+      Test(_, block) => block.last().span,
+      Match(_, arms) => arms[arms.length() - 1].end_span(),
     }
   }
 }
 
 impl Arm {
   pub fn span(self) -> span.Span {
-    match self {
-      Leaf(expr, block) => expr.span.merge(block.last().span),
-      Node(expr, branches) => expr.span.merge(branches[branches.length() - 1].arm.end_span()),
-    }
+    self.pattern.span.merge(self.end_span())
   }
 
   pub fn end_span(self) -> span.Span {
-    match self {
-      Leaf(_, block) => block.last().span,
-      Node(_, branches) => branches[branches.length() - 1].arm.end_span(),
+    match self.then {
+      Block(block) => block.last().span,
+      If(cond) => cond.end_span(),
     }
   }
 }
@@ -227,11 +246,11 @@ pub fn call_expr(span: span.Span, call: Call) -> Expression {
   Expression { span, kind: Expr.Call(call) }
 }
 
-pub fn if_(span: span.Span, cond: Conditional) -> Expression {
+pub fn if_expr(span: span.Span, cond: If) -> Expression {
   Expression { span, kind: Expr.If(cond) }
 }
 
-pub fn while_(span: span.Span, cond: Conditional) -> Expression {
+pub fn while_(span: span.Span, cond: If) -> Expression {
   Expression { span, kind: Expr.While(cond) }
 }
 

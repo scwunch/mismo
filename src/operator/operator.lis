@@ -129,7 +129,7 @@ impl Operator {
       (_, Comma) => Bind.Tighter,
 
       (Or, Or) => Bind.Tighter,
-      (Or, Comparison) => Bind.Tighter,
+      (Or, Comparison) => Bind.Looser,
       (Or, Unary) => Bind.Looser,
       (Or, And) => Bind.None,
       (Or, Add) => Bind.None,

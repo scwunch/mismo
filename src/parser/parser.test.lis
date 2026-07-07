@@ -56,312 +56,164 @@ fn wrap_test(test_func: fn(Ref<myt.TestRunner>) -> Result<(), string>) -> fn(Tes
   }
 }
 
-#[test("parser/conditional/parse_segment")]
-fn test_parse_segment(t) {
-  let assert Ok((segment, op)) = Parser.new("1 + 3 * 4\n").parse_segment()
-  let assert Ok(expr) = Parser.new("1 + 3 * 4\n").parse_expression()
-  assert op == None
-  assert segment.equals(expr)
-
-  let assert Ok(expr) = Parser.new("1 + 3 * 4 ==\n  5").parse_expression()
-  let mut p = Parser.new("1 + 3 * 4 ==\n  5")
-  let assert Ok((segment, op)) = p.parse_segment()
-  assert !expr.equals(segment)
-  assert op == Some(Operator.Eq)
-  assert p.peek().kind.string() == "5"
-  let assert cst.Expr.Binop(binop) = expr.kind
-  assert binop.op == Operator.Eq
-  let assert cst.Expr.Binop(binop) = segment.kind
-  assert binop.op == Operator.Add
-
-  let assert Ok(expr) = Parser.new("1 + 3 * 4 \n  ==5").parse_expression()
-  let mut p = Parser.new("1 + 3 * 4 \n  ==5")
-  let assert Ok((segment, op)) = p.parse_segment()
-  assert !expr.equals(segment)
-  assert op == None
-  assert p.peek().kind.string() == "=="
-  let assert cst.Expr.Binop(binop) = expr.kind
-  assert binop.op == Operator.Eq
-  let assert cst.Expr.Binop(binop) = segment.kind
-  assert binop.op == Operator.Add
-
-  let source_lines = [
-    "if a >                                     ",
-    "  0 and b >                                ",
-    "    1: 'a+ b+'                             ",
-  ]
-  let mut p = Parser.new(source_lines.join("\n"))
-  assert p.next().kind.string() == "if"
-  let assert Ok((seg, op)) = p.parse_segment()
-  let assert Some(Operator.Gt) = op
-  let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = seg.kind
-
-  // let's look into this
-  let mut ep = ExpressionParser.new(&p, 1 as uint32 << 31)
-  let assert Ok(()) = ep.do_parse()
-  let assert [] = ep.terms
-  let assert [] = ep.operators
-
-  let assert Ok((seg, op)) = p.parse_segment()
-  let assert Some(Operator.Gt) = op
-  let assert cst.Expr.Binop(binop) = seg.kind
-  assert binop.op == Operator.And
-}
-
-#[test("parser/conditional/arms/single")]
-fn test_conditional_single_arm(t) -> Result<(), error> {
-  let assert Ok(block) = parse(["if yes is no: what"])
+#[test("parser/conditional/simple")]
+fn test_simple_conditional(t) {
+  let assert Ok(block) = parse(["if yes == no: what"])
   let assert [
-    cst.Expr.If(
-      cst.Conditional { arms: [cst.Arm.Leaf(test, what)], default: None },
-    ),
+    cst.Expr.If(cst.If { checks: [cst.Check.Test(test, what)], default: None }),
   ] = block.expr_kinds()
   let assert cst.Expr.Binop(binop) = test.kind
-  assert binop.op == Operator.Is
+  assert binop.op == Operator.Eq
   let assert [cst.Expr.Identifier(cst.Path { name: "what", .. })] = what.expr_kinds()
 
   let assert Ok(block) = parse([
-    "if yes is           ",
-    "  no:               ",
-    "    what            ",
-  ])
-  let assert [cst.Expr.If(cst.Conditional { arms: [arm], default: None })] = block.expr_kinds()
-  let assert cst.Arm.Node(expr, [branch]) = arm
-  let assert cst.Expr.Identifier(cst.Path { name: "yes", .. }) = expr.kind
-  assert branch.op == Operator.Is
-  let assert cst.Arm.Leaf(expr, block) = branch.arm
-  let assert cst.Expr.Identifier(cst.Path { name: "no", .. }) = expr.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "what", .. })] = block.expr_kinds()
-
-  let block = parse([
     "if yes              ",
-    "  is                ",
+    "  ==                ",
     "    no:             ",
     "      what          ",
-  ])
-  let assert Ok(block) = block
-  let assert [cst.Expr.If(cst.Conditional { arms: [arm], default: None })] = block.expr_kinds()
-  let assert cst.Arm.Node(expr, [branch]) = arm
-  let assert cst.Expr.Identifier(cst.Path { name: "yes", .. }) = expr.kind
-  assert branch.op == Operator.Is
-  let assert cst.Arm.Leaf(expr, block) = branch.arm
-  let assert cst.Expr.Identifier(cst.Path { name: "no", .. }) = expr.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "what", .. })] = block.expr_kinds()
-  Ok(())
-}
-
-#[test("parser/conditional/arms/multiple")]
-fn test_conditional_multiple_arms(t) {
-  let assert Ok(block) = parse([
-    "if x ==             ",
-    "  1: one            ",
-    "  2: two            ",
-    "  3: three          ",
+    "else:               ",
+    "  okay              ",
   ])
   let assert [
     cst.Expr.If(
-      cst.Conditional { arms: [cst.Arm.Node(subj, branches)], default: None },
+      cst.If { checks: [cst.Check.Test(test, what)], default: Some(okay) },
     ),
   ] = block.expr_kinds()
-  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
-  assert branches.length() == 3
-  for (i, b) in branches.enumerate() {
-    assert b.op == operator.Operator.Eq
-    let assert cst.Arm.Leaf(obj, block) = b.arm
-    let assert cst.Expr.IntLiteral(value) = obj.kind
-    assert value == i + 1
-    let assert [cst.Expr.Identifier(cst.Path { name, .. })] = block.expr_kinds()
-    assert name == ["one", "two", "three"][i]
-  }
-
-  let assert Ok(block) = parse([
-    "if x                   ",
-    "  == 1: one            ",
-    "  == 2: two            ",
-    "  == 3: three          ",
-  ])
-  let assert [
-    cst.Expr.If(
-      cst.Conditional { arms: [cst.Arm.Node(subj, branches)], default: None },
-    ),
-  ] = block.expr_kinds()
-  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = subj.kind
-  assert branches.length() == 3
-  for (i, b) in branches.enumerate() {
-    assert b.op == operator.Operator.Eq
-    let assert cst.Arm.Leaf(obj, block) = b.arm
-    let assert cst.Expr.IntLiteral(value) = obj.kind
-    assert value == i + 1
-    let assert [cst.Expr.Identifier(cst.Path { name, .. })] = block.expr_kinds()
-    assert name == ["one", "two", "three"][i]
-  }
+  let assert cst.Expr.Binop(binop) = test.kind
+  assert binop.op == Operator.Eq
+  let assert [cst.Expr.Identifier(cst.Path { name: "what", .. })] = what.expr_kinds()
+  let assert [cst.Expr.Identifier(cst.Path { name: "okay", .. })] = okay.expr_kinds()
 }
 
-#[test("parser/conditional/multi-switch")]
-fn test_multi_conditional(t) -> Result<(), error> {
+#[test("parser/conditional/multiple-checks")]
+fn test_multi_check_conditional(t) {
   let assert Ok(block) = parse([
     "if                  ",
-    "  x == 1: one       ",
-    "  x == 2: two       ",
-    "  x == 3: three     ",
-  ])
-  let assert cst.Expr.If(cst.Conditional { arms, default: None }) = block.last().kind
-  assert arms.length() == 3
-  for (i, arm) in arms.enumerate() {
-    let assert cst.Arm.Leaf(cond, block) = arm
-    let assert cst.Expr.Binop(binop) = cond.kind
-    let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = binop.left.kind
-    assert binop.op == Operator.Eq
-    let assert cst.Expr.IntLiteral(n) = binop.right.kind
-    assert n == i + 1
-    let assert [cst.Expr.Identifier(cst.Path { name, .. })] = block.expr_kinds()
-    assert name == ["one", "two", "three"][i]
-  }
-  Ok(())
-}
-
-#[test("parser/conditional/nested")]
-fn test_nested_conditionals(t) -> Result<(), error> {
-  let assert Ok(block) = parse([
-    "if x > y: r  ",
-    "             ",
-    "if x >       ",
-    "  y: r1      ",
-    "  z: r2      ",
-    "             ",
-    "if x         ",
-    "  > y: r1    ",
-    "  ==         ",
-    "    z: r2    ",
-    "    w: r3    ",
-    "             ",
-    "if           ",
-    "  x > y: r   ",
-    "  x >        ",
-    "    y: r1    ",
-    "    z: r2    ",
-    "  x          ",
-    "    > y: r1  ",
-    "    ==       ",
-    "      z: r2  ",
-    "      w: r3  ",
+    "  cond1:            ",
+    "          1         ",
+    "  x > 0:            ",
+    "    2               ",
+    "else:               ",
+    "  okay              ",
   ])
   let assert [
-    cst.Expr.If(cond1),
-    cst.Expr.If(cond2),
-    cst.Expr.If(cond3),
-    cst.Expr.If(cond4),
+    cst.Expr.If(cst.If { checks: [check1, check2], default: Some(okay) }),
   ] = block.expr_kinds()
-
-  let assert None = cond1.default
-  let assert [cst.Arm.Leaf(test, block)] = cond1.arms
-  let assert cst.Expr.Binop(_) = test.kind
-  let assert [cst.Expr.Identifier(_)] = block.expr_kinds()
-
-  let assert None = cond2.default
-  let assert [cst.Arm.Node(subj, branches)] = cond2.arms
-  let assert cst.Expr.Identifier(_) = subj.kind
-  let assert [
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(y, b1) },
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(z, b2) },
-  ] = branches
-  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = y.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = z.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "r1", .. })] = b1.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = b2.expr_kinds()
-
-  let assert None = cond3.default
-  let assert [cst.Arm.Node(subj, branches)] = cond3.arms
-  let assert cst.Expr.Identifier(_) = subj.kind
-  let assert [
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(y, b1) },
-    cst.Branch { op: Operator.Eq, arm: cst.Arm.Leaf(z, b2) },
-    cst.Branch { op: Operator.Eq, arm: cst.Arm.Leaf(w, b3) },
-  ] = branches
-  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = y.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = z.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "w", .. }) = w.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "r1", .. })] = b1.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = b2.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r3", .. })] = b3.expr_kinds()
-
-  let assert None = cond4.default
-  let assert [
-    cst.Arm.Leaf(test, block),
-    cst.Arm.Node(subj1, branches1),
-    cst.Arm.Node(subj2, branches2),
-  ] = cond4.arms
-
-  // arm 1 == conditional 1
-  let assert cst.Expr.Binop(_) = test.kind
-  let assert [cst.Expr.Identifier(_)] = block.expr_kinds()
-
-  // arm 2 == condtional 2
-  let assert cst.Expr.Identifier(_) = subj1.kind
-  let assert [
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(y, b1) },
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(z, b2) },
-  ] = branches1
-  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = y.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = z.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "r1", .. })] = b1.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = b2.expr_kinds()
-
-  // arm 3 == condtional 3
-  let assert cst.Expr.Identifier(_) = subj2.kind
-  let assert [
-    cst.Branch { op: Operator.Gt, arm: cst.Arm.Leaf(y, b1) },
-    cst.Branch { op: Operator.Eq, arm: cst.Arm.Leaf(z, b2) },
-    cst.Branch { op: Operator.Eq, arm: cst.Arm.Leaf(w, b3) },
-  ] = branches2
-  let assert cst.Expr.Identifier(cst.Path { name: "y", .. }) = y.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "z", .. }) = z.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "w", .. }) = w.kind
-  let assert [cst.Expr.Identifier(cst.Path { name: "r1", .. })] = b1.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = b2.expr_kinds()
-  let assert [cst.Expr.Identifier(cst.Path { name: "r3", .. })] = b3.expr_kinds()
-  Ok(())
+  let assert [cst.Expr.Identifier(cst.Path { name: "okay", .. })] = okay.expr_kinds()
+  let assert cst.Check.Test(cond1, b1) = check1
+  let assert cst.Check.Test(cond2, b2) = check2
+  let assert cst.Expr.Identifier(cst.Path { name: "cond1", .. }) = cond1.kind
+  let assert cst.Expr.Binop(binop) = cond2.kind
+  assert binop.op == Operator.Gt
+  let assert [cst.Expr.IntLiteral(1)] = b1.expr_kinds()
+  let assert [cst.Expr.IntLiteral(2)] = b2.expr_kinds()
 }
 
-#[test("parser/conditional/and-or-connectives")]
-fn test_conditional_with_and_or(t) {
+#[test("parser/conditional/simple-match")]
+fn test_simple_match(t) {
   let assert Ok(block) = parse([
-    "if x >                                     ",
-    "  y and something_else:                    ",
-    "    r                                      ",
-    "else:                                      ",
-    "  r2                                       ",
-    "                                           ",
-    "if a >                                     ",
-    "  0 and b >                                ",
-    "    0: 'a+ b+'                             ",
-    "    100: 'b is big'                        ",
-    "    else: 'a+'                             ",
-    "  _ and b > 0: 'b+'                        ",
-    "    r                                      ",
-    "else:                                      ",
-    "  r2                                       ",
-    "                                           ",
+    "if opt is           ",
+    "  Some(val): 1      ",
+    "  None: 2           ",
   ])
-  let assert [] = block.expr_kinds()
+  let assert [
+    cst.Expr.If(cst.If { checks: [cst.Check.Match(subj, arms)], default: None }),
+  ] = block.expr_kinds()
+  let assert cst.Expr.Identifier(cst.Path { name: "opt", .. }) = subj.kind
+  let assert [
+    cst.Arm { pattern: p1, then: cst.Then.Block(b1) },
+    cst.Arm { pattern: p2, then: cst.Then.Block(b2) },
+  ] = arms
+  let assert cst.Expr.Call(call) = p1.kind
+  let assert cst.Path { name: "Some", .. } = call.fn_name
+  let assert [cst.Expr.IntLiteral(1)] = b1.expr_kinds()
+  let assert [cst.Expr.IntLiteral(2)] = b2.expr_kinds()
+  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = p2.kind
+
+  let assert Ok(block) = parse(["if opt is None: 0          "])
+  let assert [
+    cst.Expr.If(
+      cst.If { checks: [cst.Check.Match(subj, [arm])], default: None },
+    ),
+  ] = block.expr_kinds()
+  let assert cst.Expr.Identifier(cst.Path { name: "opt", .. }) = subj.kind
+  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = arm.pattern.kind
+  let assert cst.Then.Block(block) = arm.then
+  let assert [cst.Expr.IntLiteral(0)] = block.expr_kinds()
 }
 
-//   let assert [cst.Expr.If(c1)] = block.statements.map(|s| s.kind)
-//   let assert [cst.Clause.Comparison(_subj, [arm])] = c1.clauses
-//   assert arm.op == Operator.Gt
-//   let assert cst.Expr.Identifier(_) = arm.object.kind
-//   let assert cst.Consequent.And(cond2) = arm.then
-//   let assert [cst.Clause.Predicate(pred, cons)] = cond2.clauses
-//   let assert None = cond2.default
-//   let assert cst.Expr.Identifier(cst.Path { name: "something_else", .. }) = pred.kind
-//   let assert cst.Consequent.Do(block) = cons
-//   let stmts = block.statements.map(|s| s.kind)
-//   let assert [cst.Expr.Identifier(cst.Path { name: "r", .. })] = stmts
+#[test("parser/conditional/match-with-guards")]
+fn test_match_guards(t) {
+  let assert Ok(block) = parse([
+    "if opt is               ",
+    "  Some(val) if cond: 1  ",
+    "  None if cond:      2  ",
+  ])
+  let assert [
+    cst.Expr.If(cst.If { checks: [cst.Check.Match(subj, arms)], default: None }),
+  ] = block.expr_kinds()
+  let assert cst.Expr.Identifier(cst.Path { name: "opt", .. }) = subj.kind
+  let assert [
+    cst.Arm { pattern: p1, then: cst.Then.If(cond1) },
+    cst.Arm { pattern: p2, then: cst.Then.If(cond2) },
+  ] = arms
+  let assert cst.Expr.Call(call) = p1.kind
+  let assert cst.Path { name: "Some", .. } = call.fn_name
+  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = p2.kind
+  let assert cst.If { checks: [cst.Check.Test(cond, b1)], default: None } = cond1
+  let assert cst.Expr.Identifier(cst.Path { name: "cond", .. }) = cond.kind
+  let assert [cst.Expr.IntLiteral(1)] = b1.expr_kinds()
+  let assert cst.If { checks: [cst.Check.Test(cond, b2)], default: None } = cond2
+  let assert cst.Expr.Identifier(cst.Path { name: "cond", .. }) = cond.kind
+  let assert [cst.Expr.IntLiteral(2)] = b2.expr_kinds()
 
-//   let assert Some(block) = c1.default
-//   let stmts = block.statements.map(|s| s.kind)
-//   let assert [cst.Expr.Identifier(cst.Path { name: "r2", .. })] = stmts
-// }
+  let assert Ok(block) = parse([
+    "if x is                      ",
+    "   0: 'null'                 ",
+    "   x if                      ",
+    "      x < 0: 'negative'      ",
+    "      0 > x: 'not positive'  ",
+    "   x if x % 2 is             ",
+    "      0: 'even'              ",
+    "      _: 'odd'               ",
+  ])
+  let assert [
+    cst.Expr.If(
+      cst.If { checks: [cst.Check.Match(_subj, arms)], default: None },
+    ),
+  ] = block.expr_kinds()
+  let assert [
+    cst.Arm { pattern: p1, then: cst.Then.Block(b1) },
+    cst.Arm { pattern: p2, then: cst.Then.If(cond1) },
+    cst.Arm { pattern: p3, then: cst.Then.If(cond2) },
+  ] = arms
+  let assert cst.Expr.IntLiteral(0) = p1.kind
+  let assert [cst.Expr.StringLiteral("null")] = b1.expr_kinds()
+
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = p2.kind
+  let assert None = cond1.default
+  let assert [cst.Check.Test(t1, neg), cst.Check.Test(t2, pos)] = cond1.checks
+  let assert cst.Expr.Binop(binop1) = t1.kind
+  let assert cst.Expr.Binop(binop2) = t2.kind
+  assert binop1.op == Operator.Lt
+  assert binop2.op == Operator.Gt
+  let assert [cst.Expr.StringLiteral("negative")] = neg.expr_kinds()
+  let assert [cst.Expr.StringLiteral("not positive")] = pos.expr_kinds()
+
+  let assert cst.Expr.Identifier(cst.Path { name: "x", .. }) = p3.kind
+  let assert None = cond2.default
+  let assert [cst.Check.Match(subj, arms)] = cond2.checks
+  let assert cst.Expr.Binop(binop) = subj.kind
+  assert binop.op == Operator.Mod
+  let assert [
+    cst.Arm { pattern: p1, then: cst.Then.Block(b1) },
+    cst.Arm { pattern: p2, then: cst.Then.Block(b2) },
+  ] = arms
+  let assert cst.Expr.IntLiteral(0) = p1.kind
+  let assert [cst.Expr.StringLiteral("even")] = b1.expr_kinds()
+  let assert cst.Expr.Identifier(cst.Path { name: "_", .. }) = p2.kind
+  let assert [cst.Expr.StringLiteral("odd")] = b2.expr_kinds()
+}
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   let source_code = ": \n" + lines.map(|ln| f"  {ln}\n").join("")
@@ -372,7 +224,3 @@ fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
       fmt.Errorf("%v", dx.render(e, source_code as Slice<rune>))
     })
 }
-
-// fn dx2err<E: dx.Diagnostic>(e: E) -> error {
-//   fmt.Errorf("%v", e.message())
-// }

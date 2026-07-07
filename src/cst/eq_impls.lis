@@ -131,11 +131,21 @@ impl Call {
   }
 }
 
-impl Conditional {
-  pub fn equals(self, other: Conditional) -> bool {
+impl If {
+  pub fn equals(self, other: If) -> bool {
     match (self.default, other.default) {
-      (None, None) => self.arms.equals(other.arms),
-      (Some(d1), Some(d2)) => self.arms.equals(other.arms) && d1.equals(d2),
+      (None, None) => self.checks.equals(other.checks),
+      (Some(d1), Some(d2)) => self.checks.equals(other.checks) && d1.equals(d2),
+      _ => false,
+    }
+  }
+}
+
+impl Check {
+  pub fn equals(self, other: Check) -> bool {
+    match (self, other) {
+      (Test(e1, b1), Test(e2, b2)) => e1.equals(e2) && b1.equals(b2),
+      (Match(e1, a1), Match(e2, a2)) => e1.equals(e2) && a1.equals(a2),
       _ => false,
     }
   }
@@ -143,17 +153,7 @@ impl Conditional {
 
 impl Arm {
   pub fn equals(self, other: Arm) -> bool {
-    match (self, other) {
-      (Leaf(e1, b1), Leaf(e2, b2)) => e1.equals(e2) && b1.equals(b2),
-      (Node(e1, b1), Node(e2, b2)) => e1.equals(e2) && b1.equals(b2),
-      _ => false,
-    }
-  }
-}
-
-impl Branch {
-  pub fn equals(self, other: Branch) -> bool {
-    self.op == other.op && self.arm.equals(other.arm)
+    self.pattern.equals(other.pattern) && self.then.equals(other.then)
   }
 }
 

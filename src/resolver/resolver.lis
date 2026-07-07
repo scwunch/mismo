@@ -224,16 +224,16 @@ impl Resolver {
     Err(dx.InvalidAssignmentTargetError.new(lhs.span, lhs))
   }
 
-  fn if_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
+  fn if_expr(self, cond: cst.If, span: span.Span) -> Result<Expr, dx.ResolveError> {
     let _ = cond
     let _ = span
     panic("not implemented yet")
   }
 
-  fn while_expr(self, cond: cst.Conditional, span: span.Span) -> Result<Expr, dx.ResolveError> {
+  fn while_expr(self, cond: cst.If, span: span.Span) -> Result<Expr, dx.ResolveError> {
     let _ = span
-    match cond.arms {
-      [Leaf(condition, block)] => {
+    match cond.checks {
+      [Test(condition, block)] => {
         let cond = self.resolve(condition)?
         let body = self.block(block)?
         Ok(ast.Expr.While(&cond, body))
