@@ -215,6 +215,51 @@ fn test_match_guards(t) {
   let assert [cst.Expr.StringLiteral("odd")] = b2.expr_kinds()
 }
 
+#[test("parser/conditional/match-with-inline-guards")]
+fn test_inline_guards(t) {
+  let assert Ok(block) = parse([
+    "if opt is Some(a) if a is [a] if a is (x, y): ",
+    "   b                                         ",
+  ])
+  let assert [
+    cst.Expr.If(
+      cst.If { checks: [cst.Check.Match(_subj, [arm])], default: None },
+    ),
+  ] = block.expr_kinds()
+  let assert cst.Expr.Call(_call) = arm.pattern.kind
+  let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
+  let assert cst.Check.Match(subj, [arm]) = check
+  let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind
+  let assert cst.Expr.ArrayLiteral([_a]) = arm.pattern.kind
+  let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
+  let assert cst.Check.Match(subj, [arm]) = check
+  let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind
+  let assert cst.Expr.TupleLiteral([_x, _y]) = arm.pattern.kind
+  let assert cst.Then.Block(_block) = arm.then
+
+  let assert Ok(block) = parse([
+    "if opt is Some(a)                           ",
+    "   if a is [a]                              ",
+    "   if a is (x, y):                          ",
+    "      b                                     ",
+  ])
+  let assert [
+    cst.Expr.If(
+      cst.If { checks: [cst.Check.Match(_subj, [arm])], default: None },
+    ),
+  ] = block.expr_kinds()
+  let assert cst.Expr.Call(_call) = arm.pattern.kind
+  let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
+  let assert cst.Check.Match(subj, [arm]) = check
+  let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind
+  let assert cst.Expr.ArrayLiteral([_a]) = arm.pattern.kind
+  let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
+  let assert cst.Check.Match(subj, [arm]) = check
+  let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind
+  let assert cst.Expr.TupleLiteral([_x, _y]) = arm.pattern.kind
+  let assert cst.Then.Block(_block) = arm.then
+}
+
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   let source_code = ": \n" + lines.map(|ln| f"  {ln}\n").join("")
   Parser
