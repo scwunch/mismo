@@ -26,16 +26,17 @@ pub enum Expr {
   AssignCapture(Ref<Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(Call),
-  ConcreteCall(int, Slice<Expression>),
-  SwitchIf(Slice<Case>),
-  Match(Match),
-  While(Ref<Expression>, Block),
+  If(If),
+  While(If),
+  For(ForLoop),
   Block(Block),
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
   // FieldAccess(Ref<Expression>, int),
-  Constructor(Type, Slice<string>),
+  BareConstructor(string, Slice<Expression>),
+  StructConstructor(Type, Slice<Expression>),
+  EnumConstructor(Variant, Slice<Expression>),
   Extern,
 }
 
@@ -52,6 +53,10 @@ impl Block {
 
   pub fn empty() -> Block {
     Block { statements: [], typ: Type.Never }
+  }
+
+  pub fn last(self) -> Expression {
+    self.statements[self.statements.length() - 1]
   }
 
   pub fn is_extern(self) -> bool {
@@ -145,39 +150,93 @@ impl Closure {
 }
 
 #[json]
-pub struct Case {
-  pub predicate: Expression,
-  pub consequent: Block,
-}
-
-impl Case {
-  pub fn new(predicate: Expression, consequent: Block) -> Case {
-    Case { predicate, consequent }
-  }
+#[display]
+#[equality]
+pub struct If {
+  pub checks: Slice<Check>,
+  pub default: Option<Block>,
 }
 
 #[json]
-pub struct Match {
-  pub subject: Ref<Expression>,
-  pub cases: Slice<MatchArm>,
-}
-
-impl Match {
-  pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
-    Match { subject, cases }
-  }
+#[display]
+#[equality]
+pub enum Check {
+  Test(Expression, Block),
+  Match(Expression, Slice<Arm>),
 }
 
 #[json]
-pub struct MatchArm {
+#[equality]
+pub struct Arm {
   pub pattern: Expression,
-  pub body: Block,
+  pub then: Then,
 }
 
-impl MatchArm {
-  pub fn new(pattern: Expression, body: Block) -> MatchArm {
-    MatchArm { pattern, body }
+#[json]
+#[equality]
+pub enum Then {
+  Block(Block),
+  If(If),
+}
+
+impl If {
+  pub fn span(self) -> span.Span {
+    self.checks[0].span().merge(self.end_span())
   }
+
+  #[allow(manual_map_or)]
+  pub fn end_span(self) -> span.Span {
+    match self.default {
+      Some(block) => block.last().span,
+      None => self.checks[self.checks.length() - 1].end_span(),
+    }
+  }
+
+  pub fn equals(self, other: If) -> bool {
+    self.checks.equals(other.checks) &&
+    self.default.map_or_else(
+      || other.default.is_none(),
+      |b1| other.default.map_or(false, |b2| b1.equals(b2)),
+    )
+  }
+}
+
+impl Check {
+  pub fn span(self) -> span.Span {
+    match self {
+      Test(expr, block) => expr.span.merge(block.last().span),
+      Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
+    }
+  }
+
+  #[allow(manual_map_or)]
+  pub fn end_span(self) -> span.Span {
+    match self {
+      Test(_, block) => block.last().span,
+      Match(_, arms) => arms[arms.length() - 1].end_span(),
+    }
+  }
+}
+
+impl Arm {
+  pub fn span(self) -> span.Span {
+    self.pattern.span.merge(self.end_span())
+  }
+
+  pub fn end_span(self) -> span.Span {
+    match self.then {
+      Block(block) => block.last().span,
+      If(cond) => cond.end_span(),
+    }
+  }
+}
+
+#[json]
+#[equality]
+pub struct ForLoop {
+  pub binding: Ref<Variable>,
+  pub iter: Ref<Expression>,
+  pub body: Block,
 }
 
 impl Expression {

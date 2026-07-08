@@ -34,6 +34,7 @@ impl Registry {
   }
 
   pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<Registry, dx.ResolveError> {
+    if path.namespace.is_empty() { return Ok(self) }
     self.imports
       .get(path.namespace.join("::"))
       .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))

@@ -1,5 +1,240 @@
-import "error"
+import "mode"
+import "span"
 
-pub fn lower() -> bool {
-  true
+#[display]
+#[json]
+pub struct Expression {
+  pub span: span.Span,
+  pub kind: Expr,
 }
+
+#[display]
+#[json]
+pub enum Expr {
+  Nil,
+  BoolLiteral(bool),
+  IntLiteral(int),
+  FloatLiteral(float64),
+  StringLiteral(string),
+  ArrayLiteral(Slice<Expression>),
+  TupleLiteral(Slice<Expression>),
+  Closure(Closure),
+  Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
+  Identifier(Ref<Variable>),
+  CapturedIdent(Ref<Variable>),
+  Assign(Ref<Variable>, Ref<Expression>),
+  AssignCapture(Ref<Variable>, Ref<Expression>),
+  Binding(mode.Mode, Ref<Expression>),
+  Call(Call),
+  ConcreteCall(int, Slice<Expression>),
+  SwitchIf(Slice<Case>),
+  Match(Match),
+  While(Ref<Expression>, Block),
+  Block(Block),
+  Return(Option<Ref<Expression>>),
+  Break(Option<Ref<Expression>>),
+  Continue,
+  // FieldAccess(Ref<Expression>, int),
+  Constructor(Type, Slice<string>),
+  Extern,
+}
+
+pub struct Block {
+  pub statements: Slice<Expression>,
+  pub typ: Type,
+}
+
+impl Block {
+  pub fn new(statements: Slice<Expression>) -> Block {
+    if statements.is_empty() { panic("Block must have at least one statement") }
+    Block { statements, typ: Type.Never }
+  }
+
+  pub fn empty() -> Block {
+    Block { statements: [], typ: Type.Never }
+  }
+
+  pub fn is_extern(self) -> bool {
+    match self.statements {
+      [Expression { kind: Extern, .. }] => true,
+      _ => false,
+    }
+  }
+}
+
+pub struct Variable {
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+  pub init: uint32,
+  pub consumed: Option<uint32>,
+}
+
+impl Variable {
+  pub fn from_param(param: Parameter) -> Variable {
+    Variable { 
+      mode: param.mode,
+      name: param.name,
+      typ: param.typ,
+      init: param.span.start,
+      consumed: None,
+    }
+  }
+
+  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
+    Variable { mode, name, typ: Type.Never, init, consumed: None }
+  }
+}
+
+/// all the info required to resolve function overload in type checking phase
+#[display]
+#[json]
+pub struct Call {
+  pub local_candidates: Slice<Ref<Variable>>,
+  pub global_candidates: Slice<Ref<FunctionDef>>,
+  pub type_args: Option<Slice<Type>>,
+  pub args: Slice<Expression>,
+  pub is_dotname: bool,
+}
+
+impl Call {
+  pub fn new(
+    local_candidates: Slice<Ref<Variable>>,
+    global_candidates: Slice<Ref<FunctionDef>>,
+    type_args: Option<Slice<Type>>,
+    args: Slice<Expression>,
+    is_dotname: bool,
+  ) -> Call {
+    Call { local_candidates, global_candidates, type_args, args, is_dotname }
+  }
+}
+
+#[json]
+pub struct Closure {
+  pub env: Slice<Capture>,
+  pub params: Slice<Parameter>,
+  pub ret_type: Type,
+  pub body: Block,
+}
+
+#[json]
+pub struct Capture {
+  pub mode: mode.Mode,
+  pub variable: Ref<Variable>,
+}
+
+impl Capture {
+  pub fn new(varid: Ref<Variable>) -> Capture {
+    Capture { mode: mode.Mode.Let, variable: varid }
+  }
+}
+
+impl Closure {
+  pub fn typ(self) -> Type {
+    // let params = self.params.map(|p| ParamType{mode: p.mode, typ: p.typ})
+    Type.Fn(self.params.map(Parameter.param_type), &self.ret_type)
+  }
+
+  pub fn call_mode(self) -> mode.Mode {
+    self.env.fold(mode.Mode.Let, |acc, cap| acc.union(cap.mode))
+  }
+
+  pub fn is_movable(self) -> bool {
+    self.env.all(|c| c.mode == mode.Mode.Var)
+  }
+}
+
+#[json]
+pub struct Case {
+  pub predicate: Expression,
+  pub consequent: Block,
+}
+
+impl Case {
+  pub fn new(predicate: Expression, consequent: Block) -> Case {
+    Case { predicate, consequent }
+  }
+}
+
+#[json]
+pub struct Match {
+  pub subject: Ref<Expression>,
+  pub cases: Slice<MatchArm>,
+}
+
+impl Match {
+  pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
+    Match { subject, cases }
+  }
+}
+
+#[json]
+pub struct MatchArm {
+  pub pattern: Expression,
+  pub body: Block,
+}
+
+impl MatchArm {
+  pub fn new(pattern: Expression, body: Block) -> MatchArm {
+    MatchArm { pattern, body }
+  }
+}
+
+impl Expression {
+  pub fn new(span: span.Span, kind: Expr) -> Expression {
+    Expression { span, kind }
+  }
+
+  pub fn blank() -> Expression {
+    Expression.new(span.new(0, 0), Expr.Nil)
+  }
+
+  // pub fn typ(self) -> Type {
+  //   self.kind.typ()
+  // }
+}
+
+impl Expr {
+  pub fn is_extern(self) -> bool {
+    self.equals(Expr.Extern)
+  }
+}
+
+// impl Expr {
+//   pub fn typ(self) -> Type {
+//     match self {
+//       Expr.Nil => Type.nil(),
+//       Expr.BoolLiteral(bool) => Type.Bool,
+//       Expr.IntLiteral(int) => Type.Int,
+//       Expr.FloatLiteral(float64) => Type.Float,
+//       Expr.StringLiteral(string) => Type.String,
+//       Expr.ArrayLiteral(_, typ) => typ,
+//       Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
+//       Expr.Closure(closure) => closure.typ(),
+//       Expr.Identifier(id) => id.typ,
+//       Expr.Declare(_, _, _) => Type.nil(),
+//       Expr.Assign(id, _) => id.typ,
+//       Expr.Binding(_, expr) => expr.typ(),
+//       Expr.Call(call) => call.fun.return_type,
+//       Expr.SwitchIf(cases) => cases.cases[0].1.typ(),
+//       Expr.Match(cases) => cases.cases[0].expr.typ(),
+//       Expr.Loop(_, typ) => typ,
+//       Expr.Block(_, typ) => typ,
+//       Expr.Return(_) => Type.Never,
+//       Expr.Break(_) => Type.Never,
+//       Expr.Continue => Type.Never,
+//       Expr.FieldAccess(obj, i) => match obj.typ() {
+//         Type.Adt(def, args) => match def.kind {
+//           Struct(fields) => fields[i].typ.substitute(args),
+//           Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
+//         },
+//         _ => panic("compiler bug 73: FieldAccess on non-ADT"),
+//       },
+//       Expr.ConcreteCall(_, _) => panic(
+//         "compiler bug 75: concrete call should never have 'type' method called on it",
+//       ),
+//       Expr.Constructor(typ, _) => typ,
+//       Expr.Extern => Type.Never,
+//     }
+//   }
+// }

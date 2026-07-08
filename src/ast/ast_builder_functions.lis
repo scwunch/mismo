@@ -57,13 +57,13 @@ pub fn binding_expr(mode: mode.Mode, expr: Ref<Expression>) -> Expression {
 //   }
 // }
 
-pub fn concrete_call_expr(id: int, args: Slice<Expression>) -> Expression {
-  Expression { span: span.new(0, 0), kind: Expr.ConcreteCall(id, args) }
-}
+// pub fn concrete_call_expr(id: int, args: Slice<Expression>) -> Expression {
+//   Expression { span: span.new(0, 0), kind: Expr.ConcreteCall(id, args) }
+// }
 
-pub fn switch_if_expr(cases: Slice<Case>) -> Expression {
-  Expression { span: span.new(0, 0), kind: Expr.SwitchIf(cases) }
-}
+// pub fn switch_if_expr(cases: Slice<Case>) -> Expression {
+//   Expression { span: span.new(0, 0), kind: Expr.SwitchIf(cases) }
+// }
 
 // fn match_expr(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Expression {
 //   Expression {
@@ -72,9 +72,9 @@ pub fn switch_if_expr(cases: Slice<Case>) -> Expression {
 //   }
 // }
 
-pub fn while_expr(cond: Ref<Expression>, body: Block) -> Expression {
-  Expression { span: span.new(0, 0), kind: Expr.While(cond, body) }
-}
+// pub fn while_expr(cond: Ref<Expression>, body: Block) -> Expression {
+//   Expression { span: span.new(0, 0), kind: Expr.While(cond, body) }
+// }
 
 pub fn block_expr(body: Slice<Expression>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Block(Block.new(body)) }
@@ -92,9 +92,9 @@ pub fn continue_expr() -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Continue }
 }
 
-pub fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
-  Expression { span: span.new(0, 0), kind: Expr.Constructor(typ, fields) }
-}
+// pub fn constructor_expr(typ: Type, fields: Slice<string>) -> Expression {
+//   Expression { span: span.new(0, 0), kind: Expr.Constructor(typ, fields) }
+// }
 
 pub fn extern_expr() -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Extern }

@@ -170,6 +170,29 @@ impl<Node> InvalidAssignmentTargetError<Node> {
   }
 }
 
+pub struct InvalidPatternError<Node> {
+  pub _s_: Span,
+  pub node: Node,
+}
+
+impl<Node> InvalidPatternError<Node> {
+  pub fn new(span: Span, node: Node) -> InvalidPatternError<Node> {
+    InvalidPatternError { _s_: span, node }
+  }
+
+  pub fn code(self) -> int {
+    2004
+  }
+
+  pub fn message(self) -> string {
+    f"invalid pattern or invalid assignment target: `{self.node}`"
+  }
+
+  pub fn span(self) -> Span {
+    self._s_
+  }
+}
+
 pub struct TypeParameterArityError {
   pub _s_: Span,
   pub name: string,

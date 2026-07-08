@@ -55,10 +55,9 @@ impl Expr {
       },
       (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
       (Call(a), Call(b)) => a.equals(b),
-      (ConcreteCall(i1, a1), ConcreteCall(i2, a2)) => i1 == i2 && a1.equals(a2),
-      (SwitchIf(a), SwitchIf(b)) => a.equals(b),
-      (Match(a), Match(b)) => a.equals(b),
-      (While(c1, a1), While(c2, a2)) => c1.equals(c2.*) && a1.equals(a2),
+      (If(a), If(b)) => a.equals(b),
+      (While(c1), While(c2)) => c1.equals(c2),
+      (For(f1), For(f2)) => f1.equals(f2),
       (Block(b1), Block(b2)) => b1.equals(b2),
       (Return(None), Return(None)) => true,
       (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
@@ -66,7 +65,11 @@ impl Expr {
       (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
       (Continue, Continue) => true,
       // (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
-      (Constructor(t1, a1), Constructor(t2, a2)) => t1.equals(t2) &&
+      (BareConstructor(s1, a1), BareConstructor(s2, a2)) => s1 == s2 &&
+      a1.equals(a2),
+      (StructConstructor(t1, a1), StructConstructor(t2, a2)) => t1.equals(t2) &&
+      a1.equals(a2),
+      (EnumConstructor(v1, a1), EnumConstructor(v2, a2)) => v1.equals(v2) &&
       a1.equals(a2),
       (Extern, Extern) => true,
       (Nil, _) |
@@ -84,37 +87,19 @@ impl Expr {
       (AssignCapture(_, _), _) |
       (Binding(_, _), _) |
       (Call(_), _) |
-      (ConcreteCall(_, _), _) |
-      (SwitchIf(_), _) |
-      (Match(_), _) |
-      (While(_, _), _) |
+      (If(_), _) |
+      (While(_), _) |
+      (For(_), _) |
       (Block(_), _) |
       (Return(_), _) |
       (Break(_), _) |
       (Continue, _) |
       // (FieldAccess(_, _), _) |
-      (Constructor(_, _), _) |
+      (BareConstructor(_, _), _) |
+      (StructConstructor(_, _), _) |
+      (EnumConstructor(_, _), _) |
       (Extern, _) => false,
     }
-  }
-}
-
-impl Case {
-  pub fn equals(self, other: Case) -> bool {
-    self.predicate.equals(other.predicate) &&
-    self.consequent.equals(other.consequent)
-  }
-}
-
-impl Match {
-  pub fn equals(self, other: Match) -> bool {
-    self.subject.equals(other.subject.*) && self.cases.equals(other.cases)
-  }
-}
-
-impl MatchArm {
-  pub fn equals(self, other: MatchArm) -> bool {
-    self.pattern.equals(other.pattern) && self.body.equals(other.body)
   }
 }
 
