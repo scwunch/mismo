@@ -281,8 +281,89 @@ fn test_dotname_call(t) -> Result<(), error> {
 }
 
 #[test("resolver/call: dot-call syntax (`foo.bar(args)`)")]
-fn test_dot_call(t) -> Result<(), error> {
-  Ok(())
+fn test_dot_call(t) {
+  t.skip("not tested yet")
+}
+
+#[test("resolver/conditional/simple: `if true: 2`")]
+fn test_simple_conditional(t) {
+  let assert Ok(cst_block) = parse(["if true: 2"])
+  let assert Ok(block) = Resolver.new_blank().block(cst_block)
+  let assert [ast.Expr.If(cond)] = block.kinds()
+  let assert None = cond.default
+  let assert [ast.Check.Test(expr, block)] = cond.checks
+  let assert ast.Expr.BoolLiteral(true) = expr.kind
+  let assert [ast.Expr.IntLiteral(2)] = block.kinds()
+}
+
+#[test("resolver/conditional/branching: each branch is scoped properly")]
+fn test_conditional_branching(t) {
+  let assert Ok(cst_block) = parse([
+    "let x = 1            ",
+    "if x == 0:           ",
+    "   let y = 5         ",
+    "else:                ",
+    "   mut y = 'oh'      ",
+    "y                    ",
+  ])
+  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  assert e.code() == 2002
+
+  let assert Ok(cst_block) = parse([
+    "let x = 1            ",
+    "if x == 0:           ",
+    "   let y = 5         ",
+    "else:                ",
+    "   y      ",
+  ])
+  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  assert e.code() == 2002
+
+  // shadowing
+  let assert Ok(cst_block) = parse([
+    "let x = 1            ",
+    "if x is Some(x):     ",
+    "   x                 ",
+  ])
+  let assert Ok(block) = Resolver.with_mock_prelude().block(cst_block)
+  let assert [decl, ast.Expr.If(cond)] = block.kinds()
+  let assert ast.Expr.Declare(_, x0, _) = decl
+  let assert [ast.Check.Match(_subj, [arm])] = cond.checks
+  let assert ast.Expr.BareConstructor("Some", [arg]) = arm.pattern.kind
+  let assert ast.Expr.Identifier(x2) = arg.kind
+  let assert ast.Then.Block(block) = arm.then
+  let assert [ast.Expr.Identifier(x3)] = block.kinds()
+  assert x0 != x2
+  assert x0 != x3
+  assert x2 == x3
+
+  let assert Ok(cst_block) = parse([
+    "let a = 1            ",
+    "if a is Some(b) if b is Some(c) if c is Some(d):     ",
+    "   d                 ",
+  ])
+  let assert Ok(_block) = Resolver.with_mock_prelude().block(cst_block)
+  let assert Ok(cst_block) = parse([
+    "let a = 1            ",
+    "if a is              ",
+    "   Some(b): b        ",
+    "   None: b           ",
+  ])
+  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  assert e.code() == 2002
+}
+
+#[test("resolver/conditional/wildcard")]
+fn test_wildcard(t) {
+  t.skip("TODO")
+}
+#[test("resolver/conditional: tuples and arrays")]
+fn test_tuple_matching(t) {
+  t.skip("TODO")
+}
+#[test("resolver/conditional/enum-matching: bare variants, and qualified variants")]
+fn test_enum_matching(t) {
+  t.skip("TODO")
 }
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
@@ -298,5 +379,6 @@ fn dx2err<E: dx.Diagnostic>(e: E) -> error {
 
 fn fail(t: TestContext, message: string) -> Result<Never, error> {
   t.log(message)
+  assert false
   Err(fmt.Errorf("%s", message))
 }

@@ -59,6 +59,10 @@ impl Block {
     self.statements[self.statements.length() - 1]
   }
 
+  pub fn kinds(self) -> Slice<Expr> {
+    self.statements.map(|s| s.kind)
+  }
+
   pub fn is_extern(self) -> bool {
     match self.statements {
       [Expression { kind: Extern, .. }] => true,
@@ -77,7 +81,7 @@ pub struct Variable {
 
 impl Variable {
   pub fn from_param(param: Parameter) -> Variable {
-    Variable { 
+    Variable {
       mode: param.mode,
       name: param.name,
       typ: param.typ,

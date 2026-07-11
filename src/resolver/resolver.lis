@@ -30,6 +30,13 @@ impl Resolver {
     )
   }
 
+  fn with_mock_prelude() -> Resolver {
+    Resolver.new(
+      ast.Registry.with_mock_prelude(),
+      &ast.FunctionDef.mock("dummy", [], [], Type.nil()),
+    )
+  }
+
   fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Nil => Expr.Nil,
@@ -226,11 +233,10 @@ impl Resolver {
   }
 
   fn if_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {
-    let self = &self
     Ok(ast.Expr.If(self.resolve_conditional(cond)?))
   }
 
-  fn resolve_conditional(self: Ref<Resolver>, cond: cst.If) -> Result<ast.If, dx.ResolveError> {
+  fn resolve_conditional(self, cond: cst.If) -> Result<ast.If, dx.ResolveError> {
     let checks = slice.map_result(cond.checks, self.resolve_check)?
     let default = match cond.default {
       Some(default) => Some(self.block(default)?),
@@ -239,7 +245,7 @@ impl Resolver {
     Ok(ast.If { checks, default })
   }
 
-  fn resolve_check(self: Ref<Resolver>, check: cst.Check) -> Result<ast.Check, dx.ResolveError> {
+  fn resolve_check(self, check: cst.Check) -> Result<ast.Check, dx.ResolveError> {
     match check {
       Test(expr, block) => Ok(ast.Check.Test(
         self.resolve(expr)?,
@@ -253,7 +259,8 @@ impl Resolver {
     }
   }
 
-  fn resolve_arm(self: Ref<Resolver>, arm: cst.Arm) -> Result<ast.Arm, dx.ResolveError> {
+  fn resolve_arm(self, arm: cst.Arm) -> Result<ast.Arm, dx.ResolveError> {
+    let self = &self
     let pattern = self.resolve_pattern(arm.pattern)?
     let then = match arm.then {
       Block(block) => ast.Then.Block(self.block(block)?),
@@ -318,7 +325,7 @@ impl Resolver {
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  // TODO: the verbose match is a workaround for compiler bug
+  // TODO: the verbose `match` is a workaround for compiler bug
   #[allow(verbose_failure_propagation)]
   fn resolve_qualified_constructor(
     self: Ref<Resolver>,
@@ -345,7 +352,6 @@ impl Resolver {
   }
 
   fn while_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {
-    let self = &self
     let cond = self.resolve_conditional(cond)?
     Ok(ast.Expr.While(cond))
     // let _ = span
@@ -429,7 +435,7 @@ impl Resolver {
     }
     let args = slice.map_result(call.args, self.resolve)?
     Ok(ast.Expr.Call(
-      ast.Call { 
+      ast.Call {
         local_candidates: [],
         global_candidates,
         type_args,
@@ -465,7 +471,7 @@ impl Resolver {
       return Err(dx.MissingNameError.new(fname.name, span) as dx.ResolveError)
     }
     Ok(ast.Expr.Call(
-      ast.Call { 
+      ast.Call {
         local_candidates: [],
         global_candidates,
         type_args,
@@ -497,7 +503,7 @@ impl Resolver {
       return Err(dx.MissingNameError.new(fname, span) as dx.ResolveError)
     }
     Ok(ast.Expr.Call(
-      ast.Call { 
+      ast.Call {
         local_candidates,
         global_candidates,
         type_args: None,

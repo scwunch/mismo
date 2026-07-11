@@ -17,6 +17,14 @@ impl Registry {
     Registry { .. }
   }
 
+  pub fn with_mock_prelude() -> Ref<Registry> {
+    let self = &Registry{..}
+    for fn_name in ["==", "+", "-", "*", "/", "print"] {
+      self.add_function(&FunctionDef.mock(fn_name, [], [], Type.nil()))
+    }
+    self
+  }
+
   pub fn add_function(self: Ref<Registry>, func: Ref<FunctionDef>) {
     let i = self.function_defs.length()
     self.function_defs = self.function_defs.append(func)
