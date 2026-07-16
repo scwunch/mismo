@@ -1,8 +1,11 @@
 import "mode"
+import "ty"
 import "span"
+import "ast"
 
 #[display]
 #[json]
+#[equality]
 pub struct Expression {
   pub span: span.Span,
   pub kind: Expr,
@@ -10,48 +13,58 @@ pub struct Expression {
 
 #[display]
 #[json]
+#[equality]
 pub enum Expr {
   Nil,
   BoolLiteral(bool),
   IntLiteral(int),
   FloatLiteral(float64),
   StringLiteral(string),
-  ArrayLiteral(Slice<Expression>),
+  ArrayLiteral(Slice<Expression>, ty.Type),
   TupleLiteral(Slice<Expression>),
   Closure(Closure),
-  Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
-  Identifier(Ref<Variable>),
-  CapturedIdent(Ref<Variable>),
-  Assign(Ref<Variable>, Ref<Expression>),
-  AssignCapture(Ref<Variable>, Ref<Expression>),
+  Declare(mode.Mode, Ref<ast.Variable>, Ref<Expression>),
+  Identifier(Ref<ast.Variable>),
+  CapturedIdent(Ref<ast.Variable>),
+  Assign(Ref<ast.Variable>, Ref<Expression>),
+  AssignCapture(Ref<ast.Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(Call),
   ConcreteCall(int, Slice<Expression>),
-  SwitchIf(Slice<Case>),
-  Match(Match),
+  If(If, ty.Type),
   While(Ref<Expression>, Block),
   Block(Block),
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
-  // FieldAccess(Ref<Expression>, int),
-  Constructor(Type, Slice<string>),
+  FieldAccess(Ref<Expression>, int),
+  StructConstructor(ty.Type, Slice<Expression>),
+  EnumConstructor(ty.Variant, Slice<Expression>),
   Extern,
 }
 
+#[equality]
 pub struct Block {
   pub statements: Slice<Expression>,
-  pub typ: Type,
+  pub typ: ty.Type,
 }
 
 impl Block {
   pub fn new(statements: Slice<Expression>) -> Block {
     if statements.is_empty() { panic("Block must have at least one statement") }
-    Block { statements, typ: Type.Never }
+    Block { statements, typ: ty.Type.Never }
   }
 
-  pub fn empty() -> Block {
-    Block { statements: [], typ: Type.Never }
+  pub fn kinds(self) -> Slice<Expr> {
+    self.statements.map(|s| s.kind)
+  }
+
+  pub fn span(self) -> span.Span {
+    self.statements[0].span.merge(self.last().span)
+  }
+
+  pub fn last(self) -> Expression {
+    self.statements[self.statements.length() - 1]
   }
 
   pub fn is_extern(self) -> bool {
@@ -62,77 +75,63 @@ impl Block {
   }
 }
 
-pub struct Variable {
-  pub mode: mode.Mode,
-  pub name: string,
-  pub typ: Type,
-  pub init: uint32,
-  pub consumed: Option<uint32>,
-}
-
-impl Variable {
-  pub fn from_param(param: Parameter) -> Variable {
-    Variable { 
-      mode: param.mode,
-      name: param.name,
-      typ: param.typ,
-      init: param.span.start,
-      consumed: None,
-    }
-  }
-
-  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
-    Variable { mode, name, typ: Type.Never, init, consumed: None }
-  }
-}
-
 /// all the info required to resolve function overload in type checking phase
 #[display]
 #[json]
+#[equality]
 pub struct Call {
-  pub local_candidates: Slice<Ref<Variable>>,
-  pub global_candidates: Slice<Ref<FunctionDef>>,
-  pub type_args: Option<Slice<Type>>,
+  pub fun: Ref<ast.FunctionDef>,
+  pub type_args: Option<Slice<ty.Type>>,
   pub args: Slice<Expression>,
-  pub is_dotname: bool,
 }
 
 impl Call {
   pub fn new(
-    local_candidates: Slice<Ref<Variable>>,
-    global_candidates: Slice<Ref<FunctionDef>>,
-    type_args: Option<Slice<Type>>,
+    fun: Ref<ast.FunctionDef>,
+    type_args: Option<Slice<ty.Type>>,
     args: Slice<Expression>,
-    is_dotname: bool,
   ) -> Call {
-    Call { local_candidates, global_candidates, type_args, args, is_dotname }
+    Call { fun, type_args, args }
+  }
+
+  pub fn equals(self, other: Call) -> bool {
+    if self.fun != other.fun || !self.args.equals(other.args) {
+      return false
+    }
+    match (self.type_args, other.type_args) {
+      (None, None) => true,
+      (Some(ta1), Some(ta2)) => ta1.equals(ta2),
+      _ => false,
+    }
   }
 }
 
 #[json]
+#[equality]
 pub struct Closure {
   pub env: Slice<Capture>,
-  pub params: Slice<Parameter>,
-  pub ret_type: Type,
+  pub params: Slice<ty.Parameter>,
+  pub ret_type: ty.Type,
   pub body: Block,
 }
 
 #[json]
+#[equality]
 pub struct Capture {
   pub mode: mode.Mode,
-  pub variable: Ref<Variable>,
+  pub variable: Ref<ast.Variable>,
 }
 
 impl Capture {
-  pub fn new(varid: Ref<Variable>) -> Capture {
+  pub fn new(varid: Ref<ast.Variable>) -> Capture {
     Capture { mode: mode.Mode.Let, variable: varid }
   }
 }
 
 impl Closure {
-  pub fn typ(self) -> Type {
-    // let params = self.params.map(|p| ParamType{mode: p.mode, typ: p.typ})
-    Type.Fn(self.params.map(Parameter.param_type), &self.ret_type)
+  pub fn typ(self) -> ty.Type {
+    // let params = self.params.map(|p| Paramty.Type{mode: p.mode, typ: p.typ})
+    ty.Type.Fn(self.params.map(ty.Parameter.param_type), &self.ret_type)
   }
 
   pub fn call_mode(self) -> mode.Mode {
@@ -144,41 +143,197 @@ impl Closure {
   }
 }
 
-#[json]
+pub enum Decision {
+  Leaf(Block),
+  Guard{cond: Expression, then: Ref<Decision>, else_: Ref<Decision>},
+  Switch{scrutinee: Place, cases: Slice<Case>, else_: Ref<Decision>},
+  Bind{name: string, place: Place, then: Ref<Decision>},
+  Fail,
+}
+
 pub struct Case {
-  pub predicate: Expression,
-  pub consequent: Block,
+  tag: int,
+  then: Decision,
 }
 
-impl Case {
-  pub fn new(predicate: Expression, consequent: Block) -> Case {
-    Case { predicate, consequent }
-  }
+pub struct Place {
+  varid: Ref<ast.Variable>,
+  path: Slice<int>,
 }
 
-#[json]
-pub struct Match {
-  pub subject: Ref<Expression>,
-  pub cases: Slice<MatchArm>,
-}
-
-impl Match {
-  pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
-    Match { subject, cases }
-  }
+pub struct If {
+  pub checks: Slice<Check>,
+  pub default: Option<Block>,
+  pub decision: Decision,
+  pub typ: ty.Type,
 }
 
 #[json]
-pub struct MatchArm {
+#[display]
+#[equality]
+pub enum Check {
+  Test(Expression, Block),
+  Match(Expression, Slice<Arm>),
+}
+
+#[json]
+#[equality]
+pub struct Arm {
   pub pattern: Expression,
-  pub body: Block,
+  pub then: Then,
 }
 
-impl MatchArm {
-  pub fn new(pattern: Expression, body: Block) -> MatchArm {
-    MatchArm { pattern, body }
+#[json]
+#[equality]
+pub enum Then {
+  Block(Block),
+  If(If),
+}
+
+impl If {
+  pub fn new(checks: Slice<Check>, default: Option<Block>, typ: ty.Type) -> If {
+    If{checks, default, decision: Decision.Fail, typ}
+  }
+
+  pub fn span(self) -> span.Span {
+    self.checks[0].span().merge(self.end_span())
+  }
+
+  #[allow(manual_map_or)]
+  pub fn end_span(self) -> span.Span {
+    match self.default {
+      Some(block) => block.last().span,
+      None => self.checks[self.checks.length() - 1].end_span(),
+    }
+  }
+
+  pub fn equals(self, other: If) -> bool {
+    self.checks.equals(other.checks) &&
+    self.default.map_or_else(
+      || other.default.is_none(),
+      |b1| other.default.map_or(false, |b2| b1.equals(b2)),
+    )
+  }
+
+  pub fn fold<A>(self, accumulator: A, f: fn(A, Expression) -> A) -> A {
+    let mut acc = accumulator
+    for check in self.checks {
+      match check {
+        Test(_, blk) => acc = f(acc, blk.last()),
+        Match(_, arms) => {
+          for arm in arms {
+            match arm.then {
+              Block(blk) => acc = f(acc, blk.last()),
+              If(cond) => acc = cond.fold(acc, f),
+            }
+          }
+        }
+      }
+    }
+    self.default.map_or(acc, |blk| f(acc, blk.last()))
   }
 }
+
+impl Check {
+  pub fn span(self) -> span.Span {
+    match self {
+      Test(expr, block) => expr.span.merge(block.last().span),
+      Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
+    }
+  }
+
+
+  #[allow(manual_map_or)]
+  pub fn end_span(self) -> span.Span {
+    match self {
+      Test(_, block) => block.last().span,
+      Match(_, arms) => arms[arms.length() - 1].end_span(),
+    }
+  }
+}
+
+impl Arm {
+  pub fn span(self) -> span.Span {
+    self.pattern.span.merge(self.end_span())
+  }
+
+  pub fn end_span(self) -> span.Span {
+    match self.then {
+      Block(block) => block.last().span,
+      If(cond) => cond.end_span(),
+    }
+  }
+}
+
+// pub struct If {
+//   pub checks: Slice<Match>,
+//   pub default: Option<Block>,
+// }
+
+// pub struct Match {
+//   pub subject: Expression,
+//   pub arms: Slice<Arm>,
+// }
+
+// pub struct Arm {
+//   pub pattern: Pattern,
+//   pub then: Then,
+// }
+
+// pub enum Pattern {
+//   Test(Expression)
+//   Variant(ty.Variant, Slice<Pattern>),
+//   Tuple(Slice<Pattern>),
+//   Array(Slice<Pattern>),
+//   String(string),
+//   Struct(ty.TypeDef, Slice<Pattern>),
+//   Splat(Ref<ast.Variable>),
+//   Bind(Ref<ast.Variable>),
+//   Wildcard,
+// }
+
+// #[json]
+// #[equality]
+// pub enum Then {
+//   Block(Block),
+//   If(If),
+// }
+
+// #[json]
+// pub struct Case {
+//   pub predicate: Expression,
+//   pub consequent: Block,
+// }
+
+// impl Case {
+//   pub fn new(predicate: Expression, consequent: Block) -> Case {
+//     Case { predicate, consequent }
+//   }
+// }
+
+// #[json]
+// pub struct Match {
+//   pub subject: Ref<Expression>,
+//   pub cases: Slice<MatchArm>,
+// }
+
+// impl Match {
+//   pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
+//     Match { subject, cases }
+//   }
+// }
+
+// #[json]
+// pub struct MatchArm {
+//   pub pattern: Expression,
+//   pub body: Block,
+// }
+
+// impl MatchArm {
+//   pub fn new(pattern: Expression, body: Block) -> MatchArm {
+//     MatchArm { pattern, body }
+//   }
+// }
 
 impl Expression {
   pub fn new(span: span.Span, kind: Expr) -> Expression {
@@ -189,52 +344,53 @@ impl Expression {
     Expression.new(span.new(0, 0), Expr.Nil)
   }
 
-  // pub fn typ(self) -> Type {
-  //   self.kind.typ()
-  // }
+  pub fn typ(self) -> ty.Type {
+    self.kind.typ()
+  }
 }
 
 impl Expr {
   pub fn is_extern(self) -> bool {
-    self.equals(Expr.Extern)
+    if let Expr.Extern = self {
+      true
+    } else { false }
   }
 }
 
-// impl Expr {
-//   pub fn typ(self) -> Type {
-//     match self {
-//       Expr.Nil => Type.nil(),
-//       Expr.BoolLiteral(bool) => Type.Bool,
-//       Expr.IntLiteral(int) => Type.Int,
-//       Expr.FloatLiteral(float64) => Type.Float,
-//       Expr.StringLiteral(string) => Type.String,
-//       Expr.ArrayLiteral(_, typ) => typ,
-//       Expr.TupleLiteral(exprs) => Type.Tuple(exprs.map(|e| e.typ())),
-//       Expr.Closure(closure) => closure.typ(),
-//       Expr.Identifier(id) => id.typ,
-//       Expr.Declare(_, _, _) => Type.nil(),
-//       Expr.Assign(id, _) => id.typ,
-//       Expr.Binding(_, expr) => expr.typ(),
-//       Expr.Call(call) => call.fun.return_type,
-//       Expr.SwitchIf(cases) => cases.cases[0].1.typ(),
-//       Expr.Match(cases) => cases.cases[0].expr.typ(),
-//       Expr.Loop(_, typ) => typ,
-//       Expr.Block(_, typ) => typ,
-//       Expr.Return(_) => Type.Never,
-//       Expr.Break(_) => Type.Never,
-//       Expr.Continue => Type.Never,
-//       Expr.FieldAccess(obj, i) => match obj.typ() {
-//         Type.Adt(def, args) => match def.kind {
-//           Struct(fields) => fields[i].typ.substitute(args),
-//           Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
-//         },
-//         _ => panic("compiler bug 73: FieldAccess on non-ADT"),
-//       },
-//       Expr.ConcreteCall(_, _) => panic(
-//         "compiler bug 75: concrete call should never have 'type' method called on it",
-//       ),
-//       Expr.Constructor(typ, _) => typ,
-//       Expr.Extern => Type.Never,
-//     }
-//   }
-// }
+impl Expr {
+  pub fn typ(self) -> ty.Type {
+    match self {
+      Nil => ty.nil(),
+      BoolLiteral(bool) => ty.Type.Bool,
+      IntLiteral(int) => ty.Type.Int,
+      FloatLiteral(float64) => ty.Type.Float,
+      StringLiteral(string) => ty.Type.String,
+      ArrayLiteral(_, typ) => typ,
+      TupleLiteral(exprs) => ty.Type.Tuple(exprs.map(|e| e.typ())),
+      Closure(closure) => closure.typ(),
+      Identifier(id) | CapturedIdent(id) |
+      Assign(id, _) | AssignCapture(id, _) => id.typ,
+      Declare(_, _, _) => ty.nil(),
+      Binding(_, expr) => expr.typ(),
+      Call(call) => call.fun.return_type,
+      If(_, t) => t,
+      While(_, blk) | Block(blk) => blk.typ,
+      FieldAccess(obj, i) => match obj.typ() {
+        ty.Type.Adt(def, args) => match def.kind {
+          Struct(fields) => fields[i].typ.substitute(args),
+          Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
+        },
+        _ => panic("compiler bug 73: FieldAccess on non-ADT"),
+      },
+      ConcreteCall(_, _) => panic(
+        "compiler bug 75: concrete call should never have 'type' method called on it",
+      ),
+      StructConstructor(typ, _) => typ,
+      EnumConstructor(_, _) => panic("TODO: rework this"),
+      Return(_) |
+      Break(_) |
+      Continue |
+      Extern => ty.Type.Never,
+    }
+  }
+}

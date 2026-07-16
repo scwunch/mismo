@@ -442,4 +442,54 @@ impl Emitter {
   fn emit(self: Ref<Emitter>, str: string) {
     self.buffer = self.buffer.append(str)
   }
+
+  fn emit_if(self: Ref<Emitter>, node: ast.If) {
+    for check in node.checks {
+      match check {
+        Test(expr, block) => self.emit_check_test(expr, block),
+        Match(expr, arms) => self.emit_switch(expr, arms),
+      }
+    }
+    if let Some(block) = self.default {
+      self.emit_block(block)
+    } else {
+      self.emit("{}")
+    }
+  }
+
+  fn emit_check_test(self: Ref<Emitter>, expr: ast.Expression, block: ast.Block) {
+    self.emit("if ")
+    self.emit_expr(expr.kind)
+    self.emit(" ")
+    self.emit_block(block)
+    self.emit(" else ")
+  }
+
+  fn emit_switch(self: Ref<Emitter>, expr: ast.Expression, arms: Slice<ast.Arm>) {
+    self.emit("switch ")
+    self.emit_expr(expr.kind)
+    self.start_block()
+    for arm in arms {
+      self.emit_arm(arm)
+    }
+    self.end_block()
+  }
+
+  fn emit_arm(self: Ref<Emitter>, arm: ast.Arm) {
+    match arm.pattern.kind {
+      EnumConstructor(variant, sub_patterns) => {
+        self.emit(".")
+        self.emit(variant.name)
+        self.emit(" => ")
+        if sub_patterns.length() > 0 => {
+          self.emit_list(sub_patterns, "|", "|",  )
+          // wait, if the sub-patterns are not merely captures, then we need to insert more checks here.
+          // I guess we still capture the variables, and run whatever checks on them afterward
+        }
+      },
+      _ => panic(f"expected EnumConstructor; got {arm.pattern}"),
+    }
+  }
 }
+
+import "ast"

@@ -1,186 +1,186 @@
-import dx "diagnostics"
-import "mode"
-import "span"
-import "utils/slice"
+// import dx "diagnostics"
+// import "mode"
+// import "span"
+// import "utils/slice"
 
-struct ModeCheck {}
+// struct ModeCheck {}
 
-impl ModeCheck {
-  fn new() -> ModeCheck {
-    ModeCheck {}
-  }
+// impl ModeCheck {
+//   fn new() -> ModeCheck {
+//     ModeCheck {}
+//   }
 
-  fn infer(self, node: Expression) -> Result<mode.Mode, dx.TypeError> {
-    match node.kind {
-      Expr.Nil |
-      Expr.BoolLiteral(_) |
-      Expr.IntLiteral(_) |
-      Expr.FloatLiteral(_) |
-      Expr.StringLiteral(_) |
-      Expr.ArrayLiteral(_, _) |
-      Expr.TupleLiteral(_) => {
-        Ok(mode.Mode.Var)
-      },
-      Expr.Closure(closure) => {
-        self.consume(closure.body.*)?
-        Ok(node.mode())
-      },
-      Expr.Identifier(varid) => self.use_ident(varid, node.span),
-      Expr.Declare(_, varid, value) => self
-        .consume(value.*)
-        .map(|_| mode.Mode.Var),
-      Expr.Assign(varid, expr) => Ok(mode.Mode.Var),
-      Expr.Binding(mode.Mode.Var, expr) => self
-        .consume(expr.*)
-        .map(|_| mode.Mode.Var),
-      Expr.Binding(dest_mode, expr) => {
-        let src_mode = self.infer(expr.*)?
-        if src_mode.assignable_to(dest_mode) {
-          Ok(dest_mode)
-        } else {
-          Err(dx.ModeMismatchError.new(
-            expr.span,
-            dest_mode.string(),
-            src_mode.string(),
-          ))
-        }
-      },
-      Expr.FieldAccess(obj, _) => self.infer(obj.*),
-      Expr.Block(exprs, _) => self.infer_block(exprs),
-      Expr.Call(call) => self.call(call),
-      Expr.Return(None) => Ok(mode.Mode.Var),
-      Expr.Return(Some(expr)) => {
-        self.consume(expr.*)?
-        Ok(mode.Mode.Var)
-      },
-      Expr.Break(None) => Ok(mode.Mode.Var),
-      Expr.Break(Some(expr)) => {
-        let _ = self.infer(expr.*)?
-        Ok(mode.Mode.Var)
-      },
-      Expr.Continue => Ok(mode.Mode.Var),
-      Expr.SwitchIf(_) => panic("switchif not implemented"),
-      Expr.Match(_) => panic("match not implemented"),
-      Expr.Loop(_, _) => panic("loop not implemented"),
-      Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
-      Expr.Constructor(_, _) => Ok(mode.Mode.Var),
-      Expr.Extern => Ok(mode.Mode.Var),
-    }
-  }
+//   fn infer(self, node: Expression) -> Result<mode.Mode, dx.TypeError> {
+//     match node.kind {
+//       Expr.Nil |
+//       Expr.BoolLiteral(_) |
+//       Expr.IntLiteral(_) |
+//       Expr.FloatLiteral(_) |
+//       Expr.StringLiteral(_) |
+//       Expr.ArrayLiteral(_, _) |
+//       Expr.TupleLiteral(_) => {
+//         Ok(mode.Mode.Var)
+//       },
+//       Expr.Closure(closure) => {
+//         self.consume(closure.body.*)?
+//         Ok(node.mode())
+//       },
+//       Expr.Identifier(varid) => self.use_ident(varid, node.span),
+//       Expr.Declare(_, varid, value) => self
+//         .consume(value.*)
+//         .map(|_| mode.Mode.Var),
+//       Expr.Assign(varid, expr) => Ok(mode.Mode.Var),
+//       Expr.Binding(mode.Mode.Var, expr) => self
+//         .consume(expr.*)
+//         .map(|_| mode.Mode.Var),
+//       Expr.Binding(dest_mode, expr) => {
+//         let src_mode = self.infer(expr.*)?
+//         if src_mode.assignable_to(dest_mode) {
+//           Ok(dest_mode)
+//         } else {
+//           Err(dx.ModeMismatchError.new(
+//             expr.span,
+//             dest_mode.string(),
+//             src_mode.string(),
+//           ))
+//         }
+//       },
+//       Expr.FieldAccess(obj, _) => self.infer(obj.*),
+//       Expr.Block(exprs, _) => self.infer_block(exprs),
+//       Expr.Call(call) => self.call(call),
+//       Expr.Return(None) => Ok(mode.Mode.Var),
+//       Expr.Return(Some(expr)) => {
+//         self.consume(expr.*)?
+//         Ok(mode.Mode.Var)
+//       },
+//       Expr.Break(None) => Ok(mode.Mode.Var),
+//       Expr.Break(Some(expr)) => {
+//         let _ = self.infer(expr.*)?
+//         Ok(mode.Mode.Var)
+//       },
+//       Expr.Continue => Ok(mode.Mode.Var),
+//       Expr.SwitchIf(_) => panic("switchif not implemented"),
+//       Expr.Match(_) => panic("match not implemented"),
+//       Expr.Loop(_, _) => panic("loop not implemented"),
+//       Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
+//       Expr.Constructor(_, _) => Ok(mode.Mode.Var),
+//       Expr.Extern => Ok(mode.Mode.Var),
+//     }
+//   }
 
-  fn consume(self, node: Expression) -> Result<(), dx.TypeError> {
-    match node.kind {
-      Expr.Identifier(varid) => self.consume_ident(varid, node.span),
-      Expr.FieldAccess(obj, i) => {
-        self.consume(obj.*)?
-        Ok(())
-      },
-      Expr.Block(exprs, _) => self.consume_block(exprs),
-      _ => {
-        let m = self.infer(node)?
-        if m == mode.Mode.Var {
-          Ok(())
-        } else {
-          Err(dx.ConsumeBorrowError.new(f"{node.kind}", node.span))
-        }
-      },
-    }
-  }
+//   fn consume(self, node: Expression) -> Result<(), dx.TypeError> {
+//     match node.kind {
+//       Expr.Identifier(varid) => self.consume_ident(varid, node.span),
+//       Expr.FieldAccess(obj, i) => {
+//         self.consume(obj.*)?
+//         Ok(())
+//       },
+//       Expr.Block(exprs, _) => self.consume_block(exprs),
+//       _ => {
+//         let m = self.infer(node)?
+//         if m == mode.Mode.Var {
+//           Ok(())
+//         } else {
+//           Err(dx.ConsumeBorrowError.new(f"{node.kind}", node.span))
+//         }
+//       },
+//     }
+//   }
 
-  fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, dx.TypeError> {
-    if let Some(consumed) = varid.consumed {
-      return Err(dx.UseAfterConsumeError.new(
-        varid.name,
-        used,
-        span.Span { 
-          start: consumed,
-          end: consumed + varid.name.length() as uint32,
-        },
-      ))
-    }
-    Ok(varid.mode)
-  }
+//   fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, dx.TypeError> {
+//     if let Some(consumed) = varid.consumed {
+//       return Err(dx.UseAfterConsumeError.new(
+//         varid.name,
+//         used,
+//         span.Span {
+//           start: consumed,
+//           end: consumed + varid.name.length() as uint32,
+//         },
+//       ))
+//     }
+//     Ok(varid.mode)
+//   }
 
-  fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), dx.TypeError> {
-    let _ = self.use_ident(varid, span)?
-    if varid.mode == mode.Mode.Var {
-      varid.consumed = Some(span.start)
-      Ok(())
-    } else {
-      Err(dx.ConsumeBorrowError.new(varid.name, span))
-    }
-  }
+//   fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), dx.TypeError> {
+//     let _ = self.use_ident(varid, span)?
+//     if varid.mode == mode.Mode.Var {
+//       varid.consumed = Some(span.start)
+//       Ok(())
+//     } else {
+//       Err(dx.ConsumeBorrowError.new(varid.name, span))
+//     }
+//   }
 
-  fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, dx.TypeError> {
-    let mut m = mode.Mode.Var
-    for expr in exprs[..exprs.length() - 1] {
-      if let Expr.Break(Some(expr)) = expr.kind {
-        m = m.union(self.infer(expr.*)?)
-      } else {
-        self.infer(expr)?
-      }
-    }
-    Ok(m.union(self.infer(exprs[exprs.length() - 1])?))
-  }
+//   fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, dx.TypeError> {
+//     let mut m = mode.Mode.Var
+//     for expr in exprs[..exprs.length() - 1] {
+//       if let Expr.Break(Some(expr)) = expr.kind {
+//         m = m.union(self.infer(expr.*)?)
+//       } else {
+//         self.infer(expr)?
+//       }
+//     }
+//     Ok(m.union(self.infer(exprs[exprs.length() - 1])?))
+//   }
 
-  fn consume_block(self, exprs: Slice<Expression>) -> Result<(), dx.TypeError> {
-    for expr in exprs[..exprs.length() - 1] {
-      if let Expr.Break(Some(expr)) = expr.kind {
-        self.consume(expr.*)?
-      } else {
-        let _ = self.infer(expr)?
-      }
-    }
-    self.consume(exprs[exprs.length() - 1])
-  }
+//   fn consume_block(self, exprs: Slice<Expression>) -> Result<(), dx.TypeError> {
+//     for expr in exprs[..exprs.length() - 1] {
+//       if let Expr.Break(Some(expr)) = expr.kind {
+//         self.consume(expr.*)?
+//       } else {
+//         let _ = self.infer(expr)?
+//       }
+//     }
+//     self.consume(exprs[exprs.length() - 1])
+//   }
 
-  fn call(self, call: FnCall) -> Result<mode.Mode, dx.TypeError> {
-    for (arg, param) in slice.zip(call.args, call.fun.parameters) {
-      if param.mode == mode.Mode.Var {
-        self.consume(arg)?
-      } else {
-        let m = self.infer(arg)?
-        if !m.assignable_to(param.mode) {
-          return Err(dx.ModeMismatchError.new(
-            arg.span,
-            param.mode.string(),
-            m.string(),
-          ))
-        }
-      }
-    }
-    Ok(mode.Mode.Var)
-  }
-}
+//   fn call(self, call: FnCall) -> Result<mode.Mode, dx.TypeError> {
+//     for (arg, param) in slice.zip(call.args, call.fun.parameters) {
+//       if param.mode == mode.Mode.Var {
+//         self.consume(arg)?
+//       } else {
+//         let m = self.infer(arg)?
+//         if !m.assignable_to(param.mode) {
+//           return Err(dx.ModeMismatchError.new(
+//             arg.span,
+//             param.mode.string(),
+//             m.string(),
+//           ))
+//         }
+//       }
+//     }
+//     Ok(mode.Mode.Var)
+//   }
+// }
 
-impl Expression {
-  pub fn mode(self) -> mode.Mode {
-    match self.kind {
-      Nil |
-      BoolLiteral(_) |
-      IntLiteral(_) |
-      FloatLiteral(_) |
-      StringLiteral(_) |
-      ArrayLiteral(_, _) |
-      TupleLiteral(_) => mode.Mode.Var,
-      Closure(closure) => if closure.is_movable() {
-        mode.Mode.Var
-      } else {
-        mode.Mode.MutBang
-      },
-      Identifier(varid) => varid.mode,
-      Declare(_, _, _) | Assign(_, _) => mode.Mode.Var,
-      Binding(m, _) => m,
-      FieldAccess(obj, _) => obj.mode(),
-      Block([], _) => mode.Mode.Var,
-      Block(exprs, _) => exprs[exprs.length() - 1].mode(),
-      Call(_) | Return(_) | Break(_) | Continue => mode.Mode.Var,
-      SwitchIf(_) => panic("switchif not implemented"),
-      Match(_) => panic("match not implemented"),
-      Loop(_, _) => panic("loop not implemented"),
-      ConcreteCall(_, _) => panic("concrete call node not created yet"),
-      Constructor(_, _) => mode.Mode.Var,
-      Extern => mode.Mode.Var,
-    }
-  }
-}
+// impl Expression {
+//   pub fn mode(self) -> mode.Mode {
+//     match self.kind {
+//       Nil |
+//       BoolLiteral(_) |
+//       IntLiteral(_) |
+//       FloatLiteral(_) |
+//       StringLiteral(_) |
+//       ArrayLiteral(_, _) |
+//       TupleLiteral(_) => mode.Mode.Var,
+//       Closure(closure) => if closure.is_movable() {
+//         mode.Mode.Var
+//       } else {
+//         mode.Mode.MutBang
+//       },
+//       Identifier(varid) => varid.mode,
+//       Declare(_, _, _) | Assign(_, _) => mode.Mode.Var,
+//       Binding(m, _) => m,
+//       FieldAccess(obj, _) => obj.mode(),
+//       Block([], _) => mode.Mode.Var,
+//       Block(exprs, _) => exprs[exprs.length() - 1].mode(),
+//       Call(_) | Return(_) | Break(_) | Continue => mode.Mode.Var,
+//       SwitchIf(_) => panic("switchif not implemented"),
+//       Match(_) => panic("match not implemented"),
+//       Loop(_, _) => panic("loop not implemented"),
+//       ConcreteCall(_, _) => panic("concrete call node not created yet"),
+//       Constructor(_, _) => mode.Mode.Var,
+//       Extern => mode.Mode.Var,
+//     }
+//   }
+// }

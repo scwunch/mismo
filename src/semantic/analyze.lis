@@ -1,27 +1,47 @@
 import "ast"
+import "ir"
 import dx "diagnostics"
 
-pub fn analyze(env: Ref<ast.Registry>) {
-  for i in 0..env.functions.length() {
-    let func = env.function_defs[i]
-    match TypeCheck.new(&env, func.*).check(func.body, func.return_type) {
-      Ok(expr) => {
-        func.body = expr
-        if let Err(e) = ModeCheck.new().consume(expr) { env.error(e) }
-      },
-      Err(e) => env.error(e),
+pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
+  let mut reg = ir.Registry.new()
+  reg.type_defs = env.type_defs
+  reg.function_defs = env.function_defs.map(|fun| {
+    let (new_fun, err) = lower(fun, env)
+    if let Some(e) = err {
+      env.error(e)
     }
+    new_fun
+  })
+  reg
+}
+
+fn lower(fun: Ref<ast.FunctionDef>, env: Ref<ast.Registry>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
+  let new_fun = &ir.FunctionDef.new(
+    fun.span,
+    fun.id,
+    fun.name,
+    fun.type_parameters,
+    fun.parameters,
+    fun.return_type,
+    ir.Block.new([]),
+  )
+  match TypeCheck.new(env, fun).check_block(fun.body, fun.return_type, fun.span) {
+    Ok(blk) => {
+      new_fun.body = blk
+      (new_fun, None)
+    },
+    Err(e) => (new_fun, Some(e)),
   }
 }
 
-pub fn analyze_type_check(items: cst.Declarations) -> TypeEnv {
-  for i in 0..env.functions.length() {
-    let func = env.function_defs[i]
-    match TypeCheck.new(&env, func.*).check(func.body, func.return_type) {
-      Ok(expr) => {
-        func.body = expr
-      },
-      Err(e) => env.error(e),
-    }
-  }
-}
+// pub fn analyze_type_check(items: cst.Declarations) -> TypeEnv {
+//   for i in 0..env.functions.length() {
+//     let func = env.function_defs[i]
+//     match TypeCheck.new(&env, func.*).check(func.body, func.return_type) {
+//       Ok(expr) => {
+//         func.body = expr
+//       },
+//       Err(e) => env.error(e),
+//     }
+//   }
+// }

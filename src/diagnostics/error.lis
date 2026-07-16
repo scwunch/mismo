@@ -147,6 +147,28 @@ impl MissingNameError {
   }
 }
 
+pub struct UnusedValueError {
+  pub _s_: Span
+}
+
+impl UnusedValueError {
+  pub fn new(span: Span) -> UnusedValueError {
+    UnusedValueError { _s_: span }
+  }
+
+  pub fn code(self) -> int {
+    2008
+  }
+
+  pub fn message(self) -> string {
+    "Value is not used.  Assign to `_` to discard."
+  }
+
+  pub fn span(self) -> Span {
+    self._s_
+  }
+}
+
 pub struct InvalidAssignmentTargetError<Node> {
   pub _s_: Span,
   pub node: Node,
@@ -337,14 +359,15 @@ impl HeterogeneousArrayLiteralError {
 }
 
 pub struct TypeMismatchError {
-  pub _s_: Span,
+  pub src_span: Span,
   pub expected: string,
   pub actual: string,
+  pub actual_span: Span,
 }
 
 impl TypeMismatchError {
-  pub fn new(span: Span, expected: string, actual: string) -> TypeMismatchError {
-    TypeMismatchError { _s_: span, expected, actual }
+  pub fn new(src_span: Span, expected: string, actual: string, actual_span: Span) -> TypeMismatchError {
+    TypeMismatchError { src_span, expected, actual, actual_span }
   }
 
   pub fn code(self) -> int {
@@ -356,7 +379,7 @@ impl TypeMismatchError {
   }
 
   pub fn span(self) -> Span {
-    self._s_
+    self.actual_span
   }
 }
 

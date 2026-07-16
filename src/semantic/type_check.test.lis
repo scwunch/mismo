@@ -1,0 +1,3 @@
+
+#[test("typecheck/")]
+fn test_type_check(t) {}
