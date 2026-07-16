@@ -105,7 +105,6 @@ impl Variable {
 /// all the info required to resolve function overload in type checking phase
 #[display]
 #[json]
-#[equality]
 pub struct Call {
   pub local_candidates: Slice<Ref<Variable>>,
   pub global_candidates: Slice<Ref<FunctionDef>>,
@@ -123,6 +122,17 @@ impl Call {
     is_dotname: bool,
   ) -> Call {
     Call { local_candidates, global_candidates, type_args, args, is_dotname }
+  }
+
+  pub fn equals(self, other: Call) -> bool {
+    match (self.type_args, other.type_args) {
+      (None, None) => (),
+      (Some(ta1), Some(ta2)) if ta1.equals(ta2) => (),
+      _ => return false,
+    }
+    self.local_candidates.equals(other.local_candidates) &&
+    self.global_candidates.equals(other.global_candidates) &&
+    self.args.equals(other.args)
   }
 }
 
