@@ -1,40 +1,17 @@
 import dx "diagnostics"
-import "mode"
 import "ty"
-import "span"
 
 #[json]
 pub struct Registry {
-  pub imports: Map<string, Registry>,
   pub type_defs: Map<string, Ref<ty.TypeDef>>,
   pub function_defs: Slice<Ref<FunctionDef>>,
-  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
+  pub main: Slice<Ref<FunctionDef>>,
   pub errors: Slice<dx.TypeError>,
 }
 
 impl Registry {
   pub fn new() -> Registry {
     Registry { .. }
-  }
-
-  pub fn with_mock_prelude() -> Ref<Registry> {
-    let self = &Registry{..}
-    for fn_name in ["==", "+", "-", "*", "/", "print"] {
-      self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
-    }
-    self
-  }
-
-  pub fn add_function(self: Ref<Registry>, func: Ref<FunctionDef>) {
-    let i = self.function_defs.length()
-    self.function_defs = self.function_defs.append(func)
-    let def = self.function_defs[i]
-    match self.signatures.get(def.name) {
-      Some(existing) => {
-        self.signatures[def.name] = existing.append(def)
-      },
-      None => self.signatures[def.name] = [def],
-    }
   }
 
   pub fn error(self: Ref<Registry>, err: dx.TypeError) {
