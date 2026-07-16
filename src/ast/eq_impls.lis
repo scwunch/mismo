@@ -11,196 +11,196 @@ impl Call {
   }
 }
 
-impl Closure {
-  pub fn equals(self, other: Closure) -> bool {
-    self.env.equals(other.env) && self.params.equals(other.params) &&
-    self.ret_type.equals(other.ret_type) &&
-    self.body.equals(other.body)
-  }
-}
+// impl Closure {
+//   pub fn equals(self, other: Closure) -> bool {
+//     self.env.equals(other.env) && self.params.equals(other.params) &&
+//     self.ret_type.equals(other.ret_type) &&
+//     self.body.equals(other.body)
+//   }
+// }
 
-impl Capture {
-  pub fn equals(self, other: Capture) -> bool {
-    self.mode == other.mode && self.variable == other.variable
-  }
-}
+// impl Capture {
+//   pub fn equals(self, other: Capture) -> bool {
+//     self.mode == other.mode && self.variable == other.variable
+//   }
+// }
 
-impl Expression {
-  pub fn equals(self, other: Expression) -> bool {
-    self.span == other.span && self.kind.equals(other.kind)
-  }
-}
+// impl Expression {
+//   pub fn equals(self, other: Expression) -> bool {
+//     self.span == other.span && self.kind.equals(other.kind)
+//   }
+// }
 
-impl Expr {
-  #[allow(float_cmp, match_same_arms)]
-  pub fn equals(self, other: Expr) -> bool {
-    match (self, other) {
-      (Nil, Nil) => true,
-      (BoolLiteral(a), BoolLiteral(b)) => a == b,
-      (IntLiteral(a), IntLiteral(b)) => a == b,
-      (FloatLiteral(a), FloatLiteral(b)) => a == b,
-      (StringLiteral(a), StringLiteral(b)) => a == b,
-      (ArrayLiteral(a1), ArrayLiteral(a2)) => a1.equals(a2),
-      (TupleLiteral(a), TupleLiteral(b)) => a.equals(b),
-      (Closure(c1), Closure(c2)) => c1.equals(c2),
-      (Declare(m1, var1, val1), Declare(m2, var2, val2)) => {
-        m1 == m2 && var1 == var2 && val1.equals(val2.*)
-      },
-      (Identifier(a), Identifier(b)) | (CapturedIdent(a), CapturedIdent(b)) => {
-        a == b
-      },
-      (Assign(a1, a2), Assign(b1, b2)) |
-      (AssignCapture(a1, a2), AssignCapture(b1, b2)) => {
-        a1 == b1 && a2.equals(b2.*)
-      },
-      (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
-      (Call(a), Call(b)) => a.equals(b),
-      (If(a), If(b)) => a.equals(b),
-      (While(c1), While(c2)) => c1.equals(c2),
-      (For(f1), For(f2)) => f1.equals(f2),
-      (Block(b1), Block(b2)) => b1.equals(b2),
-      (Return(None), Return(None)) => true,
-      (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
-      (Break(None), Break(None)) => true,
-      (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
-      (Continue, Continue) => true,
-      // (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
-      (BareConstructor(s1, a1), BareConstructor(s2, a2)) => s1 == s2 &&
-      a1.equals(a2),
-      (StructConstructor(t1, a1), StructConstructor(t2, a2)) => t1.equals(t2) &&
-      a1.equals(a2),
-      (EnumConstructor(v1, a1), EnumConstructor(v2, a2)) => v1.equals(v2) &&
-      a1.equals(a2),
-      (Extern, Extern) => true,
-      (Nil, _) |
-      (BoolLiteral(_), _) |
-      (IntLiteral(_), _) |
-      (FloatLiteral(_), _) |
-      (StringLiteral(_), _) |
-      (ArrayLiteral(_), _) |
-      (TupleLiteral(_), _) |
-      (Closure(_), _) |
-      (Declare(_, _, _), _) |
-      (Identifier(_), _) |
-      (CapturedIdent(_), _) |
-      (Assign(_, _), _) |
-      (AssignCapture(_, _), _) |
-      (Binding(_, _), _) |
-      (Call(_), _) |
-      (If(_), _) |
-      (While(_), _) |
-      (For(_), _) |
-      (Block(_), _) |
-      (Return(_), _) |
-      (Break(_), _) |
-      (Continue, _) |
-      // (FieldAccess(_, _), _) |
-      (BareConstructor(_, _), _) |
-      (StructConstructor(_, _), _) |
-      (EnumConstructor(_, _), _) |
-      (Extern, _) => false,
-    }
-  }
-}
+// impl Expr {
+//   #[allow(float_cmp, match_same_arms)]
+//   pub fn equals(self, other: Expr) -> bool {
+//     match (self, other) {
+//       (Nil, Nil) => true,
+//       (BoolLiteral(a), BoolLiteral(b)) => a == b,
+//       (IntLiteral(a), IntLiteral(b)) => a == b,
+//       (FloatLiteral(a), FloatLiteral(b)) => a == b,
+//       (StringLiteral(a), StringLiteral(b)) => a == b,
+//       (ArrayLiteral(a1), ArrayLiteral(a2)) => a1.equals(a2),
+//       (TupleLiteral(a), TupleLiteral(b)) => a.equals(b),
+//       (Closure(c1), Closure(c2)) => c1.equals(c2),
+//       (Declare(m1, var1, val1), Declare(m2, var2, val2)) => {
+//         m1 == m2 && var1 == var2 && val1.equals(val2.*)
+//       },
+//       (Identifier(a), Identifier(b)) | (CapturedIdent(a), CapturedIdent(b)) => {
+//         a == b
+//       },
+//       (Assign(a1, a2), Assign(b1, b2)) |
+//       (AssignCapture(a1, a2), AssignCapture(b1, b2)) => {
+//         a1 == b1 && a2.equals(b2.*)
+//       },
+//       (Binding(m1, a), Binding(m2, b)) => m1 == m2 && a.equals(b.*),
+//       (Call(a), Call(b)) => a.equals(b),
+//       (If(a), If(b)) => a.equals(b),
+//       (While(c1), While(c2)) => c1.equals(c2),
+//       (For(f1), For(f2)) => f1.equals(f2),
+//       (Block(b1), Block(b2)) => b1.equals(b2),
+//       (Return(None), Return(None)) => true,
+//       (Return(Some(a)), Return(Some(b))) => a.equals(b.*),
+//       (Break(None), Break(None)) => true,
+//       (Break(Some(a)), Break(Some(b))) => a.equals(b.*),
+//       (Continue, Continue) => true,
+//       // (FieldAccess(a1, i1), FieldAccess(a2, i2)) => a1 == a2 && i1 == i2,
+//       (BareConstructor(s1, a1), BareConstructor(s2, a2)) => s1 == s2 &&
+//       a1.equals(a2),
+//       (StructConstructor(t1, a1), StructConstructor(t2, a2)) => t1.equals(t2) &&
+//       a1.equals(a2),
+//       (EnumConstructor(v1, a1), EnumConstructor(v2, a2)) => v1.equals(v2) &&
+//       a1.equals(a2),
+//       (Extern, Extern) => true,
+//       (Nil, _) |
+//       (BoolLiteral(_), _) |
+//       (IntLiteral(_), _) |
+//       (FloatLiteral(_), _) |
+//       (StringLiteral(_), _) |
+//       (ArrayLiteral(_), _) |
+//       (TupleLiteral(_), _) |
+//       (Closure(_), _) |
+//       (Declare(_, _, _), _) |
+//       (Identifier(_), _) |
+//       (CapturedIdent(_), _) |
+//       (Assign(_, _), _) |
+//       (AssignCapture(_, _), _) |
+//       (Binding(_, _), _) |
+//       (Call(_), _) |
+//       (If(_), _) |
+//       (While(_), _) |
+//       (For(_), _) |
+//       (Block(_), _) |
+//       (Return(_), _) |
+//       (Break(_), _) |
+//       (Continue, _) |
+//       // (FieldAccess(_, _), _) |
+//       (BareConstructor(_, _), _) |
+//       (StructConstructor(_, _), _) |
+//       (EnumConstructor(_, _), _) |
+//       (Extern, _) => false,
+//     }
+//   }
+// }
 
-impl TypeDef {
-  pub fn equals(self, other: TypeDef) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.type_parameters.equals(other.type_parameters) &&
-    self.kind.equals(other.kind)
-  }
-}
+// impl TypeDef {
+//   pub fn equals(self, other: TypeDef) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.type_parameters.equals(other.type_parameters) &&
+//     self.kind.equals(other.kind)
+//   }
+// }
 
-impl TypeParameter {
-  pub fn equals(self, other: TypeParameter) -> bool {
-    self.span == other.span && self.name == other.name
-  }
-}
+// impl TypeParameter {
+//   pub fn equals(self, other: TypeParameter) -> bool {
+//     self.span == other.span && self.name == other.name
+//   }
+// }
 
-impl TypeKind {
-  pub fn equals(self, other: TypeKind) -> bool {
-    match (self, other) {
-      (TypeKind.Struct(a), TypeKind.Struct(b)) => a.equals(b),
-      (TypeKind.Enum(a), TypeKind.Enum(b)) => a.equals(b),
-      _ => false,
-    }
-  }
-}
+// impl TypeKind {
+//   pub fn equals(self, other: TypeKind) -> bool {
+//     match (self, other) {
+//       (TypeKind.Struct(a), TypeKind.Struct(b)) => a.equals(b),
+//       (TypeKind.Enum(a), TypeKind.Enum(b)) => a.equals(b),
+//       _ => false,
+//     }
+//   }
+// }
 
-impl Field {
-  pub fn equals(self, other: Field) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.typ.equals(other.typ)
-  }
-}
+// impl Field {
+//   pub fn equals(self, other: Field) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.typ.equals(other.typ)
+//   }
+// }
 
-impl Variant {
-  pub fn equals(self, other: Variant) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.fields.equals(other.fields)
-  }
-}
+// impl Variant {
+//   pub fn equals(self, other: Variant) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.fields.equals(other.fields)
+//   }
+// }
 
-impl Type {
-  pub fn equals(self, other: Type) -> bool {
-    match (self, other) {
-      (Any, Any) |
-      (Never, Never) |
-      (Bool, Bool) |
-      (Nat, Nat) |
-      (Int, Int) |
-      (Float, Float) |
-      (String, String) => true,
-      (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
-      (Slice(a), Slice(b)) => a.equals(b.*),
-      (Tuple(a), Tuple(b)) => a.equals(b),
-      (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
-      (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),
-      (Var(a), Var(b)) => a == b,
-      (Any, _) |
-      (Never, _) |
-      (Bool, _) |
-      (Nat, _) |
-      (Int, _) |
-      (Float, _) |
-      (String, _) |
-      (Array(_), _) |
-      (Slice(_), _) |
-      (Pointer(_), _) |
-      (Tuple(_), _) |
-      (Fn(_, _), _) |
-      (Adt(_, _), _) |
-      (Var(_), _) => false,
-    }
-  }
-}
+// impl Type {
+//   pub fn equals(self, other: Type) -> bool {
+//     match (self, other) {
+//       (Any, Any) |
+//       (Never, Never) |
+//       (Bool, Bool) |
+//       (Nat, Nat) |
+//       (Int, Int) |
+//       (Float, Float) |
+//       (String, String) => true,
+//       (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
+//       (Slice(a), Slice(b)) => a.equals(b.*),
+//       (Tuple(a), Tuple(b)) => a.equals(b),
+//       (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
+//       (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),
+//       (Var(a), Var(b)) => a == b,
+//       (Any, _) |
+//       (Never, _) |
+//       (Bool, _) |
+//       (Nat, _) |
+//       (Int, _) |
+//       (Float, _) |
+//       (String, _) |
+//       (Array(_), _) |
+//       (Slice(_), _) |
+//       (Pointer(_), _) |
+//       (Tuple(_), _) |
+//       (Fn(_, _), _) |
+//       (Adt(_, _), _) |
+//       (Var(_), _) => false,
+//     }
+//   }
+// }
 
-impl ParamType {
-  pub fn equals(self, other: ParamType) -> bool {
-    self.mode == other.mode && self.typ.equals(other.typ)
-  }
-}
+// impl ParamType {
+//   pub fn equals(self, other: ParamType) -> bool {
+//     self.mode == other.mode && self.typ.equals(other.typ)
+//   }
+// }
 
-impl Parameter {
-  pub fn equals(self, other: Parameter) -> bool {
-    self.span == other.span && self.mode == other.mode &&
-    self.name == other.name &&
-    self.typ.equals(other.typ)
-  }
-}
+// impl Parameter {
+//   pub fn equals(self, other: Parameter) -> bool {
+//     self.span == other.span && self.mode == other.mode &&
+//     self.name == other.name &&
+//     self.typ.equals(other.typ)
+//   }
+// }
 
-impl FunctionDef {
-  pub fn equals(self, other: FunctionDef) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.type_parameters.equals(other.type_parameters) &&
-    self.parameters.equals(other.parameters) &&
-    self.return_type.equals(other.return_type) &&
-    self.body.equals(other.body)
-  }
-}
+// impl FunctionDef {
+//   pub fn equals(self, other: FunctionDef) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.type_parameters.equals(other.type_parameters) &&
+//     self.parameters.equals(other.parameters) &&
+//     self.return_type.equals(other.return_type) &&
+//     self.body.equals(other.body)
+//   }
+// }
 
-impl Block {
-  pub fn equals(self, other: Block) -> bool {
-    self.statements.equals(other.statements) && self.typ.equals(other.typ)
-  }
-}
+// impl Block {
+//   pub fn equals(self, other: Block) -> bool {
+//     self.statements.equals(other.statements) && self.typ.equals(other.typ)
+//   }
+// }

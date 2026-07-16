@@ -2,20 +2,21 @@ import "ast"
 import "cst"
 import dx "diagnostics"
 import "mode"
+import "ty"
 import "span"
 import "utils/slice"
 
-type Type = ast.Type
+type Type = ty.Type
 
 /// Generic context that bundles a Registry with type parameters
 /// for evaluating types
-struct TypeContext {
+pub struct TypeContext {
   env: Ref<ast.Registry>,
-  type_params: Slice<ast.TypeParameter>,
+  type_params: Slice<ty.TypeParameter>,
 }
 
 impl TypeContext {
-  fn new(env: Ref<ast.Registry>, type_params: Slice<ast.TypeParameter>) -> TypeContext {
+  fn new(env: Ref<ast.Registry>, type_params: Slice<ty.TypeParameter>) -> TypeContext {
     TypeContext { env, type_params }
   }
 
@@ -23,8 +24,8 @@ impl TypeContext {
     TypeContext.new(&ast.Registry.new(), [])
   }
 
-  fn eval_field(self, field: cst.Field) -> ast.Field {
-    ast.Field { 
+  fn eval_field(self, field: cst.Field) -> ty.Field {
+    ty.Field {
       span: field.span,
       name: field.name,
       typ: self
@@ -36,8 +37,8 @@ impl TypeContext {
     }
   }
 
-  fn eval_variant(self, variant: cst.Variant) -> ast.Variant {
-    ast.Variant { 
+  fn eval_variant(self, variant: cst.Variant) -> ty.Variant {
+    ty.Variant {
       span: variant.span,
       name: variant.name,
       fields: variant.payload.map(|typ| {
@@ -121,7 +122,7 @@ impl TypeContext {
     let primitive = match name {
       "Any" => Type.Any,
       "Never" => Type.Never,
-      "Nil" => Type.Tuple([]),
+      "Nil" => ty.nil(),
       "Bool" => Type.Bool,
       "Nat" => Type.Nat,
       "Int" => Type.Int,
@@ -147,10 +148,10 @@ impl TypeContext {
     Some(check_arity(span, name, type_args.length(), 0).map(|_| primitive))
   }
 
-  fn eval_param(self, param: cst.Parameter) -> Result<ast.Parameter, dx.ResolveError> {
+  fn eval_param(self, param: cst.Parameter) -> Result<ty.Parameter, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
     Ok(
-      ast.Parameter { 
+      ty.Parameter {
         span: param.span,
         mode: param.mode.unwrap_or(mode.Mode.Let),
         name: param.name,
@@ -159,9 +160,9 @@ impl TypeContext {
     )
   }
 
-  fn eval_param_type(self, param: cst.ParamType) -> Result<ast.ParamType, dx.ResolveError> {
+  fn eval_param_type(self, param: cst.ParamType) -> Result<ty.ParamType, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
-    Ok(ast.ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
+    Ok(ty.ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
   }
 }
 

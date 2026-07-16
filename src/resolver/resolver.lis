@@ -2,6 +2,7 @@ import "ast"
 import "cst"
 import dx "diagnostics"
 import "mode"
+import "ty"
 import "operator"
 import "span"
 import "utils/slice"
@@ -26,14 +27,14 @@ impl Resolver {
   fn new_blank() -> Resolver {
     Resolver.new(
       &ast.Registry.new(),
-      &ast.FunctionDef.mock("dummy", [], [], Type.nil()),
+      &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
     )
   }
 
   fn with_mock_prelude() -> Resolver {
     Resolver.new(
       ast.Registry.with_mock_prelude(),
-      &ast.FunctionDef.mock("dummy", [], [], Type.nil()),
+      &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
     )
   }
 
@@ -158,7 +159,7 @@ impl Resolver {
     Ok(ast.Block.new(expressions))
   }
 
-  fn append_params(self, params: Slice<ast.Parameter>) -> Slice<Ref<ast.Variable>> {
+  fn append_params(self, params: Slice<ty.Parameter>) -> Slice<Ref<ast.Variable>> {
     params.fold(
       self.scope.bindings,
       |vars, param| vars.append(&ast.Variable.from_param(param)),
@@ -178,7 +179,7 @@ impl Resolver {
     env
   }
 
-  fn closure(self, params: Slice<ast.Parameter>, body: cst.Block) -> Result<Expr, dx.ResolveError> {
+  fn closure(self, params: Slice<ty.Parameter>, body: cst.Block) -> Result<Expr, dx.ResolveError> {
     let self = &self
     let ret_type = Type.Never
     self.push_closure_env()
@@ -340,7 +341,7 @@ impl Resolver {
       Ok(td) => td,
       Err(e) => return Err(e),
     }
-    let ast.TypeKind.Enum(variants) = type_def.kind else {
+    let ty.TypeKind.Enum(variants) = type_def.kind else {
       return Err(dx.InvalidPatternError.new(expr.span, expr.kind))
     }
     let variant = match variants.filter(|v| v.name == name) {
@@ -401,7 +402,7 @@ impl Resolver {
     panic("not implemented yet")
   }
 
-  fn get_type_def(self, type_path: cst.Path, span: span.Span) -> Result<Ref<ast.TypeDef>, dx.ResolveError> {
+  fn get_type_def(self, type_path: cst.Path, span: span.Span) -> Result<Ref<ty.TypeDef>, dx.ResolveError> {
     self.ctx.env.get_module(span, type_path)?.type_defs
       .get(type_path.name)
       .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)
@@ -420,9 +421,11 @@ impl Resolver {
     }
     let global_candidates = module.type_defs
       .get(type_path.name)
-      .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)?.signatures
+      .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)?
+      .signatures
       .get(call.fn_name.name)
       .ok_or_else(|| dx.MissingNameError.new(call.fn_name.name, span) as dx.ResolveError)?
+      .map(|i| module.function_defs[i])
     if global_candidates.is_empty() {
       return Err(
         dx.MissingNameError.new(call.fn_name.name, span) as dx.ResolveError,
@@ -535,7 +538,7 @@ impl CaptureSet {
 pub struct Scope { bindings: Slice<Ref<ast.Variable>> }
 
 impl Scope {
-  fn from_params(params: Slice<ast.Parameter>) -> Scope {
+  fn from_params(params: Slice<ty.Parameter>) -> Scope {
     Scope { bindings: params.map(|p| &ast.Variable.from_param(p)) }
   }
 

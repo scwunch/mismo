@@ -1,7 +1,11 @@
 import "ast"
 import "cst"
 import "mode"
+import types_module "ty"
 import "span"
+
+type ParamType = types_module.ParamType
+type Parameter = types_module.Parameter
 
 #[test("resolver/type_context: eval type primitives")]
 fn test_eval_type_primitives(t) -> Result<(), error> {
@@ -9,7 +13,7 @@ fn test_eval_type_primitives(t) -> Result<(), error> {
   let assert Ok(ty) = ctx.eval_type(cst.typ(0, 5, "Never", []))
   assert ty.equals(Type.Never)
   let assert Ok(ty) = ctx.eval_type(cst.typ(0, 3, "Nil", []))
-  assert ty.equals(Type.nil())
+  assert ty.equals(Type.Tuple([]))
   let assert Ok(ty) = ctx.eval_type(cst.typ(0, 4, "Bool", []))
   assert ty.equals(Type.Bool)
   let assert Ok(ty) = ctx.eval_type(cst.typ(0, 3, "Nat", []))
@@ -45,7 +49,7 @@ fn test_eval_type_compound(t) -> Result<(), error> {
     &cst.typ(10, 16, "String", []),
   ))
   assert ty.equals(Type.Fn(
-    [ast.ParamType { mode: mode.Mode.Let, typ: Type.Int }],
+    [ParamType { mode: mode.Mode.Let, typ: Type.Int }],
     &Type.String,
   ))
 
@@ -60,8 +64,8 @@ fn test_eval_type_compound(t) -> Result<(), error> {
   ))
   assert ty.equals(Type.Fn(
     [
-      ast.ParamType { mode: mode.Mode.Let, typ: Type.String },
-      ast.ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
+      ParamType { mode: mode.Mode.Let, typ: Type.String },
+      ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
     ],
     &Type.Bool,
   ))
@@ -165,7 +169,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Int",
     [],
   )))
-  assert pt.equals(ast.ParamType { mode: mode.Mode.Let, typ: Type.Int })
+  assert pt.equals(ParamType { mode: mode.Mode.Let, typ: Type.Int })
 
   // let mode
   let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.let_(cst.typ(
@@ -174,7 +178,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Bool",
     [],
   )))
-  assert pt.equals(ast.ParamType { mode: mode.Mode.Let, typ: Type.Bool })
+  assert pt.equals(ParamType { mode: mode.Mode.Let, typ: Type.Bool })
 
   // mut! mode
   let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.mut_bang(cst.typ(
@@ -183,7 +187,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Int",
     [],
   )))
-  assert pt.equals(ast.ParamType { mode: mode.Mode.MutBang, typ: Type.Int })
+  assert pt.equals(ParamType { mode: mode.Mode.MutBang, typ: Type.Int })
 
   Ok(())
 }
@@ -200,7 +204,7 @@ fn test_eval_param(t) -> Result<(), error> {
     "x",
     cst.typ(6, 9, "Int", []),
   ))
-  assert param.equals(ast.Parameter.let_("x", Type.Int))
+  assert param.equals(types_module.Parameter.let_("x", Type.Int))
 
   // let mode
   let assert Ok(param) = ctx.eval_param(cst.param(
@@ -210,7 +214,7 @@ fn test_eval_param(t) -> Result<(), error> {
     "s",
     cst.typ(10, 14, "String", []),
   ))
-  assert param.equals(ast.Parameter.let_("s", Type.String))
+  assert param.equals(types_module.Parameter.let_("s", Type.String))
 
   // var mode
   let assert Ok(param) = ctx.eval_param(cst.param(
@@ -220,7 +224,7 @@ fn test_eval_param(t) -> Result<(), error> {
     "y",
     cst.typ(8, 11, "Int", []),
   ))
-  assert param.equals(ast.Parameter.var_("y", Type.Int))
+  assert param.equals(types_module.Parameter.var_("y", Type.Int))
 
   Ok(())
 }

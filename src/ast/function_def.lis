@@ -1,0 +1,77 @@
+import "mode"
+import "span"
+import "ty"
+import "utils/slice"
+
+#[json]
+#[equality]
+pub struct FunctionDef {
+  pub span: span.Span,
+  pub id: int,
+  pub name: string,
+  pub type_parameters: Slice<ty.TypeParameter>,
+  pub parameters: Slice<ty.Parameter>,
+  pub return_type: ty.Type,
+  pub body: Block,
+}
+
+impl FunctionDef {
+  pub fn new(
+    span: span.Span,
+    id: int,
+    name: string,
+      type_parameters: Slice<ty.TypeParameter>,
+    parameters: Slice<ty.Parameter>,
+    return_type: ty.Type,
+    body: Block,
+  ) -> FunctionDef {
+    FunctionDef {
+      span,
+      id,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body,
+    }
+  }
+
+  pub fn mock(
+    name: string,
+    type_parameters: Slice<ty.TypeParameter>,
+    parameters: Slice<ty.Parameter>,
+    return_type: ty.Type,
+  ) -> FunctionDef {
+    FunctionDef {
+      span: span.new(0, 0),
+      id: -1,
+      name,
+      type_parameters,
+      parameters,
+      return_type,
+      body: Block { statements: [], typ: ty.Type.Never },
+    }
+  }
+
+  pub fn signature(self) -> string {
+    let type_params = type_params_to_string(self.type_parameters)
+    let params = self.parameters
+      .map(|p| f"{p.mode} {p.name} {p.typ}")
+      .join(", ")
+    f"fn {self.name}{type_params}({params}) {self.return_type}"
+  }
+
+  pub fn better_than(self, other: FunctionDef) -> bool {
+    let pairs = slice.zip(self.parameters, other.parameters)
+    pairs.all(|p| p.0.typ.specificity_ge(p.1.typ)) &&
+    pairs.any(|p| p.0.typ.specificity_gt(p.1.typ))
+  }
+
+  pub fn is_extern(self) -> bool {
+    self.body.is_extern()
+  }
+}
+
+fn type_params_to_string(type_params: Slice<ty.TypeParameter>) -> string {
+  if type_params.is_empty() { "" } else { f"{type_params.map(|tp| tp.name)}" }
+}

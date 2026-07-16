@@ -4,6 +4,7 @@ import "ast"
 import "cst"
 import dx "diagnostics"
 import "mode"
+import "ty"
 import "span"
 
 #[test("resolver/registry: register and fill struct")]
@@ -25,7 +26,7 @@ fn test_register_and_fill_struct(t) -> Result<(), error> {
   let assert Some(def) = ctx.env.type_defs.get("Point")
   assert def.name == "Point"
   assert def.type_parameters.is_empty()
-  let assert ast.TypeKind.Struct(fields) = def.kind
+  let assert ty.TypeKind.Struct(fields) = def.kind
   assert fields.length() == 2
   assert fields[0].name == "x"
   assert fields[0].typ.equals(Type.Int)
@@ -53,7 +54,7 @@ fn test_register_and_fill_enum(t) -> Result<(), error> {
   let assert Some(def) = ctx.env.type_defs.get("Color")
   assert def.name == "Color"
   assert def.type_parameters.is_empty()
-  let assert ast.TypeKind.Enum(variants) = def.kind
+  let assert ty.TypeKind.Enum(variants) = def.kind
   assert variants.length() == 2
   assert variants[0].name == "Red"
   assert variants[0].fields.is_empty()
@@ -103,7 +104,10 @@ fn test_eval_function(t) -> Result<(), error> {
   // let func = try_eval_function(ctx.env, decl).map_err(dx2err)?
   let func = match try_eval_function(ctx.env, decl) {
     Ok(f) => f,
-    Err(e) => fail(t, e.message())?,
+    Err(e) => {
+      assert "" == e.message()
+      panic("unreachable")
+    },
   }
   assert func.name == "foo"
   assert func.parameters.is_empty()
@@ -130,12 +134,15 @@ fn test_eval_function(t) -> Result<(), error> {
   // let assert Ok(func) = try_eval_function(ctx.env, add_decl)
   let func = match try_eval_function(ctx.env, add_decl) {
     Ok(f) => f,
-    Err(e) => fail(t, e.message())?,
+    Err(e) => {
+      assert "" == e.message()
+      panic("unreachable")
+    },
   }
   assert func.name == "add"
   assert func.parameters.length() == 2
-  assert func.parameters[0].equals(ast.Parameter.let_("a", Type.Int))
-  assert func.parameters[1].equals(ast.Parameter.let_("b", Type.Int))
+  assert func.parameters[0].equals(ty.Parameter.let_("a", Type.Int))
+  assert func.parameters[1].equals(ty.Parameter.let_("b", Type.Int))
   assert func.return_type.equals(Type.Int)
 
   // fn bad() Wobble => Error: unknown return type Wobble
@@ -153,12 +160,14 @@ fn test_eval_function(t) -> Result<(), error> {
   )
 
   match try_eval_function(ctx.env, bad_decl) {
-    Ok(_) => fail(t, "expected error for unknown return type"),
+    Ok(_) => {
+      assert "" == "expected error for unknown return type"
+    },
     Err(e) => {
       assert e.code() == 2002
-      Ok(())
     },
   }
+  Ok(())
 }
 
 #[test("resolver/registry: register functions")]

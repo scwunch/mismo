@@ -4,6 +4,7 @@ import "ast"
 import "cst"
 import dx "diagnostics"
 import "mode"
+import "ty"
 import "operator"
 import "parser"
 import "span"
@@ -56,7 +57,7 @@ fn test_closure(t) -> Result<(), error> {
   let assert [cap] = closure.env
   assert cap == ast.Capture.new(bar1)
   let assert [param] = closure.params
-  assert param.equals(ast.Parameter.new(
+  assert param.equals(ty.Parameter.new(
     span.new(34, 41),
     mode.Mode.Let,
     "arg",
@@ -161,7 +162,7 @@ fn test_classic_call(t) -> Result<(), error> {
   // MissingNameError
   assert e.code() == 2002
 
-  let foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   res.ctx.env.add_function(foo)
   let block = res.block(cst_node).map_err(dx2err)?
   let assert [ast.Expr.Call(call)] = block.statements.map(|s| s.kind)
@@ -176,8 +177,8 @@ fn test_classic_call(t) -> Result<(), error> {
   ] = call.args.map(|a| a.kind)
 
   // add more overloads and resolve again
-  let foo2 = &ast.FunctionDef.mock("foo", [], [], Type.nil())
-  let foo3 = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let foo2 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let foo3 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   res.ctx.env.add_function(foo2)
   res.ctx.env.add_function(foo3)
   let block = res.block(cst_node).map_err(dx2err)?
@@ -215,8 +216,8 @@ fn test_namespaced_call(t) -> Result<(), error> {
   // MissingNameError
   assert e.code() == 2002
 
-  let mod_foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
-  let this_foo = &ast.FunctionDef.mock("foo", [], [], Type.nil())
+  let mod_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let this_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   let mut mod = ast.Registry.new()
   mod.add_function(mod_foo)
   res.ctx.env.add_function(this_foo)
@@ -262,7 +263,7 @@ fn test_dotname_call(t) -> Result<(), error> {
   // MissingNameError
   assert e.code() == 2002
 
-  let global_bar = &ast.FunctionDef.mock("bar", [], [], Type.nil())
+  let global_bar = &ast.FunctionDef.mock("bar", [], [], ty.nil())
   res.ctx.env.add_function(global_bar)
   let block = res.block(cst_node).map_err(dx2err)?
   let assert [
@@ -377,8 +378,8 @@ fn dx2err<E: dx.Diagnostic>(e: E) -> error {
   fmt.Errorf("%v", e.message())
 }
 
-fn fail(t: TestContext, message: string) -> Result<Never, error> {
-  t.log(message)
-  assert false
-  Err(fmt.Errorf("%s", message))
-}
+// fn fail(t: TestContext, message: string) -> Result<Never, error> {
+//   t.log(message)
+//   assert false
+//   Err(fmt.Errorf("%s", message))
+// }

@@ -1,12 +1,13 @@
 import "cst"
 import dx "diagnostics"
 import "mode"
+import "ty"
 import "span"
 
 #[json]
 pub struct Registry {
   pub imports: Map<string, Registry>,
-  pub type_defs: Map<string, Ref<TypeDef>>,
+  pub type_defs: Map<string, Ref<ty.TypeDef>>,
   pub function_defs: Slice<Ref<FunctionDef>>,
   pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
   pub errors: Slice<dx.TypeError>,
@@ -20,7 +21,7 @@ impl Registry {
   pub fn with_mock_prelude() -> Ref<Registry> {
     let self = &Registry{..}
     for fn_name in ["==", "+", "-", "*", "/", "print"] {
-      self.add_function(&FunctionDef.mock(fn_name, [], [], Type.nil()))
+      self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
     }
     self
   }
@@ -48,7 +49,7 @@ impl Registry {
       .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))
   }
 
-  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Result<Type, dx.ResolveError> {
+  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<ty.Type>) -> Result<ty.Type, dx.ResolveError> {
     match self.type_defs.get(name) {
       None => {
         Err(dx.MissingNameError.new(name, span))
@@ -62,7 +63,7 @@ impl Registry {
             def.type_parameters.length(),
           ))
         } else {
-          Ok(Type.Adt(def, type_args))
+          Ok(ty.Type.Adt(def, type_args))
         }
       },
     }

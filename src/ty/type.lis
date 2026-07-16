@@ -20,6 +20,7 @@ pub enum Type {
 }
 
 #[json]
+#[equality]
 pub struct ParamType {
   pub mode: mode.Mode,
   pub typ: Type,
@@ -39,11 +40,11 @@ impl ParamType {
   }
 }
 
-impl Type {
-  pub fn nil() -> Type {
-    Type.Tuple([])
-  }
+pub fn nil() -> Type {
+  Type.Tuple([])
+}
 
+impl Type {
   pub fn string(self) -> string {
     match self {
       Any => "Any",
@@ -167,6 +168,38 @@ impl Type {
         slice.zip(a_args, b_args).all(|pair| pair.0.specificity_ge(pair.1)) &&
         slice.zip(a_args, b_args).any(|pair| pair.0.specificity_gt(pair.1))
       },
+    }
+  }
+
+  pub fn equals(self, other: Type) -> bool {
+    match (self, other) {
+      (Any, Any) |
+      (Never, Never) |
+      (Bool, Bool) |
+      (Nat, Nat) |
+      (Int, Int) |
+      (Float, Float) |
+      (String, String) => true,
+      (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
+      (Slice(a), Slice(b)) => a.equals(b.*),
+      (Tuple(a), Tuple(b)) => a.equals(b),
+      (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
+      (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),
+      (Var(a), Var(b)) => a == b,
+      (Any, _) |
+      (Never, _) |
+      (Bool, _) |
+      (Nat, _) |
+      (Int, _) |
+      (Float, _) |
+      (String, _) |
+      (Array(_), _) |
+      (Slice(_), _) |
+      (Pointer(_), _) |
+      (Tuple(_), _) |
+      (Fn(_, _), _) |
+      (Adt(_, _), _) |
+      (Var(_), _) => false,
     }
   }
 }

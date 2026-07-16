@@ -1,0 +1,113 @@
+import "mode"
+import "span"
+
+#[json]
+#[equality]
+pub struct TypeDef {
+  pub span: span.Span,
+  pub name: string,
+  pub type_parameters: Slice<TypeParameter>,
+  pub kind: TypeKind,
+  pub signatures: Map<string, Slice<int>>,
+}
+
+#[json]
+#[equality]
+pub enum TypeKind {
+  Struct(Slice<Field>),
+  Enum(Slice<Variant>),
+}
+
+#[json]
+#[equality]
+pub struct TypeParameter {
+  pub span: span.Span,
+  pub name: string,
+}
+
+impl TypeDef {
+  pub fn new(
+    span: span.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    kind: TypeKind,
+  ) -> TypeDef {
+    TypeDef { span, name, type_parameters, kind, signatures: Map.new() }
+  }
+}
+
+impl TypeParameter {
+  pub fn new(span: span.Span, name: string) -> TypeParameter {
+    TypeParameter { span, name }
+  }
+
+  pub fn mock(name: string) -> TypeParameter {
+    TypeParameter { name, .. }
+  }
+}
+
+#[json]
+#[equality]
+pub struct Field {
+  pub span: span.Span,
+  pub name: string,
+  pub typ: Type,
+}
+
+#[json]
+#[equality]
+pub struct Variant {
+  pub span: span.Span,
+  pub name: string,
+  pub fields: Slice<Type>,
+}
+
+#[json]
+#[equality]
+pub struct Parameter {
+  pub span: span.Span,
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+}
+
+impl Parameter {
+  pub fn new(span: span.Span, mode: mode.Mode, name: string, typ: Type) -> Parameter {
+    Parameter { span, mode, name, typ }
+  }
+
+  pub fn let_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Let, name, typ }
+  }
+
+  pub fn mut_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Mut, name, typ }
+  }
+
+  pub fn mutbang(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.MutBang, name, typ }
+  }
+
+  pub fn var_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
+  }
+
+  pub fn param_type(self) -> ParamType {
+    ParamType { mode: self.mode, typ: self.typ }
+  }
+
+  pub fn substitute(self, type_args: Slice<Type>) -> Parameter {
+    Parameter.new(
+      self.span,
+      self.mode,
+      self.name,
+      self.typ.substitute(type_args),
+    )
+  }
+}
+
+impl Field {
+  pub fn to_param(self) -> Parameter {
+    Parameter.new(self.span, mode.Mode.Var, self.name, self.typ)
+  }
+}
