@@ -1,9 +1,7 @@
 import "ast"
 import "ir"
 import dx "diagnostics"
-import "mode"
 import "ty"
-import "operator"
 import "span"
 import "utils/slice"
 
@@ -28,17 +26,39 @@ impl TypeCheck {
 }
 
 impl TypeCheck {
-  fn check(self, expr: ast.Expression, expected: ty.Type, src_span: span.Span) -> Result<ir.Expression, dx.TypeError> {
-    let actual = self.infer(expr)?
-    if !actual.typ().assignable_to(expected) {
-      return Err(dx.TypeMismatchError.new(
-        src_span,
-        expected.string(),
-        actual.typ().string(),
-        actual.span,
-      ))
+  fn check(self, node: ast.Expression, expected: ty.Type, src_span: span.Span) -> Result<ir.Expression, dx.TypeError> {
+    let expr: ir.Expr = match node.kind {
+      ArrayLiteral(elems) => self.check_array(node.span, elems, expected, src_span)?,
+      TupleLiteral(elems) => self.check_tuple(node.span, elems, expected, src_span)?,
+      If(cond) => ir.Expr.If(self.check_if(cond, expected, src_span)?, expected),
+      _ => {
+        let actual = self.infer(node)?
+        if !actual.typ().assignable_to(expected) {
+          return Err(dx.TypeMismatchError.new(
+            src_span,
+            expected.string(),
+            actual.typ().string(),
+            actual.span,
+          ))
+        }
+        return Ok(actual)
+      },
     }
-    Ok(actual)
+    Ok(ir.Expression{span: node.span, kind: expr})
+  }
+
+  fn check_tuple(self, tuple_span: span.Span, elems: Slice<ast.Expression>, expected: ty.Type, type_span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+    let ty.Type.Tuple(expected_types) = expected else {
+      return Err(dx.TypeMismatchError.new(type_span, f"{expected}", "Tuple", tuple_span))
+    }
+    if elems.length() != expected_types.length() {
+      return Err(dx.TypeMismatchError.new(type_span, f"{expected}", f"{elems.length()}-tuple", tuple_span))
+    }
+    let elems = slice.map_result(
+      slice.zip(elems, expected_types),
+      |(expr, typ)| self.check(expr, typ, type_span)
+    )?
+    Ok(ir.Expr.TupleLiteral(elems))
   }
 
   fn infer(self, node: ast.Expression) -> Result<ir.Expression, dx.TypeError> {
@@ -67,7 +87,7 @@ impl TypeCheck {
         ir.Expr.Binding(m, &e)
       },
       Call(call) => self.infer_call(call, node.span)?,
-      If(cond) => self.infer_if_node(cond, node.span)?,
+      If(cond) => self.infer_if_node(cond)?,
       While(cond) => self.while_expr(cond, node.span)?,
       For(for_loop) => self.for_expr(for_loop, node.span)?,
       Block(block) => self.infer_block_node(block)?,
@@ -154,7 +174,7 @@ impl TypeCheck {
     Ok(ir.Block.new(statements))
   }
 
-  fn infer_array(self, elems: Slice<ast.Expression>, span: span.Span) -> Result<Expr, dx.TypeError> {
+  fn infer_array(self, elems: Slice<ast.Expression>, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
     if elems.is_empty() { return Err(dx.EmptyArrayLiteralError.new(span)) }
     let inferred = slice.map_result(elems, self.infer)?
     let mut lub = LUB.new()
@@ -219,60 +239,63 @@ impl TypeCheck {
     // Ok(Expression.new(span, Expr.Closure(closure)))
   }
 
-  fn assign(self, target: Ref<ast.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
+  fn assign(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
     let value = self.check(value.*, target.typ, span.new(target.init, target.init))?
     Ok(ir.Expr.Assign(target, &value))
   }
 
-  fn assign_cap(self, target: Ref<ast.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
+  fn assign_cap(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
     let value = self.check(value.*, target.typ, span.new(target.init, target.init))?
     Ok(ir.Expr.AssignCapture(target, &value))
   }
 
-  fn check_if(self, cond: ast.If, expected: ty.Type) -> Result<ir.If, dx.TypeError> {
-    let checks = slice.map_result(cond.checks, |chk| self.check_check(chk, expected))?
+  fn check_if(self, cond: ast.If, expected: ty.Type, type_span: span.Span) -> Result<ir.If, dx.TypeError> {
+    let checks = slice.map_result(cond.checks, |chk| self.check_check(chk, expected, type_span))?
     let default = match cond.default {
       None if !expected.equals(ty.nil()) => {
         panic("raise a 'MissingElseBlock' error")
       },
       None => None,
-      Some(block) => Some(self.check_block(block, expected)?),
+      Some(block) => Some(self.check_block(block, expected, type_span)?),
     }
     Ok(ir.If.new(checks, default, expected))
   }
 
-  fn check_check(self, check: ast.Check, expected: ty.Type) -> Result<ir.Check, dx.TypeError> {
+  fn check_check(self, check: ast.Check, expected: ty.Type, type_span: span.Span) -> Result<ir.Check, dx.TypeError> {
     match check {
       Test(expr, blk) => {
-        let test = self.check(expr, ty.Type.Bool)?
-        let blk = self.check_block(blk, expected)?
+        let test = self.infer(expr)?
+        if !test.typ().equals(ty.Type.Bool) {
+          panic("TypeError: condition should be boolean")
+        }
+        let blk = self.check_block(blk, expected, type_span)?
         Ok(ir.Check.Test(test, blk))
       },
       Match(subj, arms) => {
         let subj = self.infer(subj)?
-        let arms = slice.map_result(arms, |arm| self.check_arm(arm, expected))?
+        let arms = slice.map_result(arms, |arm| self.check_arm(arm, expected, type_span))?
         Ok(ir.Check.Match(subj, arms))
       }
     }
   }
 
-  fn check_arm(self, arm: ast.Arm, expected: ty.Type) -> Result<ir.Arm, dx.TypeError> {
+  fn check_arm(self, arm: ast.Arm, expected: ty.Type, type_span: span.Span) -> Result<ir.Arm, dx.TypeError> {
     // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
     let pattern = self.infer(arm.pattern)?
     let then = match arm.then {
-      Block(blk) => ir.Then.Block(self.check_block(blk, expected)?),
-      If(cond) => ir.Then.If(self.check_if(cond, expected)?),
+      Block(blk) => ir.Then.Block(self.check_block(blk, expected, type_span)?),
+      If(cond) => ir.Then.If(self.check_if(cond, expected, type_span)?),
     }
     Ok(ir.Arm{pattern, then})
   }
 
-  fn infer_if_node(self, cond: ast.If, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
-    let lub = LUB.new()
+  fn infer_if_node(self, cond: ast.If) -> Result<ir.Expr, dx.TypeError> {
+    let lub = &LUB.new()
     let cond = self.infer_if(cond, lub)?
-    Ok(ir.Expr.If(cond, lub.ty.*))
+    Ok(ir.Expr.If(cond, lub.ty))
   }
 
-  fn infer_if(self, cond: ast.If, lub: LUB) -> Result<ir.If, dx.TypeError> {
+  fn infer_if(self, cond: ast.If, lub: Ref<LUB>) -> Result<ir.If, dx.TypeError> {
     let checks = slice.map_result(cond.checks, |chk| self.infer_check(chk, lub))?
     match cond.default {
       None => match lub.ty {
@@ -282,15 +305,18 @@ impl TypeCheck {
       },
       Some(blk) => {
         let blk = self.infer_block(blk, lub)?
-        Ok(ir.If.new(checks, Some(blk), lub.ty.*))
+        Ok(ir.If.new(checks, Some(blk), lub.ty))
       }
     }
   }
 
-  fn infer_check(self, check: ast.Check, lub: LUB) -> Result<ir.Check, dx.TypeError> {
+  fn infer_check(self, check: ast.Check, lub: Ref<LUB>) -> Result<ir.Check, dx.TypeError> {
     match check {
       Test(expr, blk) => {
-        let test = self.check(expr, ty.Type.Bool)?
+        let test = self.infer(expr)?
+        if !test.typ().equals(ty.Type.Bool) {
+          panic("TypeError: condition should be boolean")
+        }
         let blk = self.infer_block(blk, lub)?
         Ok(ir.Check.Test(test, blk))
       },
@@ -302,7 +328,7 @@ impl TypeCheck {
     }
   }
 
-  fn infer_arm(self, arm: ast.Arm, lub: LUB) -> Result<ir.Arm, dx.TypeError> {
+  fn infer_arm(self, arm: ast.Arm, lub: Ref<LUB>) -> Result<ir.Arm, dx.TypeError> {
     // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
     let pattern = self.infer(arm.pattern)?
     let then = match arm.then {
@@ -312,234 +338,266 @@ impl TypeCheck {
     Ok(ir.Arm{pattern, then})
   }
 
-  fn infer_checks(self, checks: Slice<ast.Check>, default: Option<ast.Block>) -> Result<ir.Check, dx.TypeError> {
-    match checks {
-      [] => match default {
-        None => Ok(ir.Decision.Fail),
-        Some(block) => Ok(ir.Decision.Leaf(self.infer_block(block)?))
-      },
-      [Test(expr, block), ..rest] => Ok(ir.Decision.Guard{
-        cond: expr,
-        then: ir.Decision.Leaf(block),
-        else_: self.infer_check(rest, default)?,
-      }),
-      [Match(expr, arms), ..rest] => {
-        let scrutinee = self.infer(expr)?
-        let default = self.infer_check(rest, default)
-        let typ: ty.Type = scrutinee.typ()
-        match typ {
-          Adt(def, _) => match def.kind {
-            Enum(variants) => Ok(ir.Decision.Switch{
-              scrutinee,
-              cases: self.infer_cases(arms)?,
-              else_: default?
-            }),
-            Struct(fields) => panic("TODO: record pattern matching not yet supported.")
-          },
-          _ => panic("TODO: only enum pattern matching supported so far")
-        }
-      },
-    }
-  }
+  // fn infer_checks(self, checks: Slice<ast.Check>, default: Option<ast.Block>) -> Result<ir.Check, dx.TypeError> {
+  //   match checks {
+  //     [] => match default {
+  //       None => Ok(ir.Decision.Fail),
+  //       Some(block) => Ok(ir.Decision.Leaf(self.infer_block(block)?))
+  //     },
+  //     [Test(expr, block), ..rest] => Ok(ir.Decision.Guard{
+  //       cond: expr,
+  //       then: ir.Decision.Leaf(block),
+  //       else_: self.infer_check(rest, default)?,
+  //     }),
+  //     [Match(expr, arms), ..rest] => {
+  //       let scrutinee = self.infer(expr)?
+  //       let default = self.infer_check(rest, default)
+  //       let typ: ty.Type = scrutinee.typ()
+  //       match typ {
+  //         Adt(def, _) => match def.kind {
+  //           Enum(variants) => Ok(ir.Decision.Switch{
+  //             scrutinee,
+  //             cases: self.infer_cases(arms)?,
+  //             else_: default?
+  //           }),
+  //           Struct(fields) => panic("TODO: record pattern matching not yet supported.")
+  //         },
+  //         _ => panic("TODO: only enum pattern matching supported so far")
+  //       }
+  //     },
+  //   }
+  // }
 
-  fn while_expr(self, cond: ast.If, span: span.Span) -> Result<Expr, dx.TypeError> {
+  fn while_expr(self, cond: ast.If, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
     let _ = cond
     let _ = span
     panic("not implemented yet")
   }
 
-  fn for_expr(self, for_loop: ast.ForLoop, span: span.Span) -> Result<Expr, dx.TypeError> {
+  fn for_expr(self, for_loop: ast.ForLoop, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
     let _ = for_loop
     let _ = span
     panic("not implemented yet")
   }
 
-  fn dot_name(self, expr: Expression, name: string, span: span.Span) -> Result<Expr, dx.TypeError> {
-    let typ = expr.typ()
-    if let Type.Adt(def, args) = typ {
-      if let TypeKind.Struct(fields) = def.kind {
-        for (i, field) in fields.enumerate() {
-          if field.name == name { return Ok(Expr.FieldAccess(&expr, i)) }
-        }
-      }
-    }
-    self.call(ast.Path.name_(name), [], [expr], span)
-  }
+  // fn dot_name(self, expr: ast.Expression, name: string, span: span.Span) -> Result<Expr, dx.TypeError> {
+  //   let typ = expr.typ()
+  //   if let Type.Adt(def, args) = typ {
+  //     if let TypeKind.Struct(fields) = def.kind {
+  //       for (i, field) in fields.enumerate() {
+  //         if field.name == name { return Ok(Expr.FieldAccess(&expr, i)) }
+  //       }
+  //     }
+  //   }
+  //   self.call(ast.Path.name_(name), [], [expr], span)
+  // }
 
-  fn type_dot_call(
-    self,
-    type_path: ast.Path,
-    type_args: Slice<Type>,
-    call: ast.Call,
-    span: span.Span,
-  ) -> Result<ir.Expr, dx.TypeError> {
-    let type_args = match call.type_args {
-      Some(extra_type_args) => {
-        let extra = slice.map_result(extra_type_args, self.env.eval_type)?
-        type_args.append(extra...)
-      },
-      None => type_args,
-    }
-    let args = slice.map_result(call.args, self.infer)?
-    // TODO: add module resolution here too
-    let Some(type_def) = self.env.env.type_defs.get(type_path.name) else {
-      return Err(dx.MissingNameError.new(type_path.name, span))
-    }
-    resolve_overload(
-      type_def.signatures,
-      call.fn_name.name,
-      type_args,
-      args,
-      span,
-    )
-  }
+  // fn type_dot_call(
+  //   self,
+  //   type_path: ast.Path,
+  //   type_args: Slice<Type>,
+  //   call: ast.Call,
+  //   span: span.Span,
+  // ) -> Result<ir.Expr, dx.TypeError> {
+  //   let type_args = match call.type_args {
+  //     Some(extra_type_args) => {
+  //       let extra = slice.map_result(extra_type_args, self.env.eval_type)?
+  //       type_args.append(extra...)
+  //     },
+  //     None => type_args,
+  //   }
+  //   let args = slice.map_result(call.args, self.infer)?
+  //   // TODO: add module resolution here too
+  //   let Some(type_def) = self.env.env.type_defs.get(type_path.name) else {
+  //     return Err(dx.MissingNameError.new(type_path.name, span))
+  //   }
+  //   resolve_overload(
+  //     type_def.signatures,
+  //     call.fn_name.name,
+  //     type_args,
+  //     args,
+  //     span,
+  //   )
+  // }
 
   fn infer_call(self, call: ast.Call, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
-    if type_args.is_empty() && fname.namespace.is_empty() {
-      let local_funs = self.get_local_functions(fname.name)
-      for fun in local_funs {
-        if let Type.Fn(params, _) = fun.typ {
-          if args.length() != params.length() { break }
-          if slice
-            .zip(args, params)
-            .all(|arg_param| {
-              !arg_param.0.typ().assignable_to(arg_param.1.typ)
-            }) {
-            break
-          }
-          panic(
-            f"Found local function match, but I don't know what to do with it: {fun}",
-          )
-        }
+    if let Some(field) = call.field {
+      match (call.args, call.type_args) {
+        ([obj], None) => if let Some(expr) = self.field_access(self.infer(obj)?, field) {
+          return Ok(expr)
+        },
+        _ => panic("invalid `dotname` Call"),
       }
     }
-    if !type_args.is_empty() { panic("TODO: handle explicit type args yet") }
-    let mut module = self.env.env.*
-    if !fname.namespace.is_empty() { module = module.get_module(span, fname)? }
-    resolve_overload(module.signatures, fname.name, type_args, args, span)
+    let args = slice.map_result(call.args, self.infer)?
+    let call = match call.type_args {
+      Some(type_args) => panic("explicit type args not handled yet"),
+      None => resolve_overload(call.local_candidates, call.global_candidates, args, span)?,
+    }
+    Ok(ir.Expr.Call(call))
   }
 
-  fn get_local_functions(self, fname: string) -> Slice<Ref<Variable>> {
-    let mut funs = []
-    let mut scope = self.bindings.*
-    while let List.Cons(varid, rest) = scope {
-      if varid.name == fname {
-        if let Type.Fn(_, _) = varid.typ { funs = funs.append(varid) }
-      }
-      scope = rest.*
+  fn field_access(self, obj: ir.Expression, field_name: string) -> Option<ir.Expr> {
+    let ty.Type.Adt(type_def, _) = obj.typ() else {
+      return None
     }
-    funs
+    let ty.TypeKind.Struct(fields) = type_def.kind else {
+      return None
+    }
+    for (i, field) in fields.enumerate() {
+      if field.name == field_name {
+        return Some(ir.Expr.FieldAccess(&obj, i))
+      }
+    }
+    None
+  }
+
+  // fn infer_call_old(self, call: ast.Call, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  //   if type_args.is_empty() && fname.namespace.is_empty() {
+  //     let local_funs = self.get_local_functions(fname.name)
+  //     for fun in local_funs {
+  //       if let Type.Fn(params, _) = fun.typ {
+  //         if args.length() != params.length() { break }
+  //         if slice
+  //           .zip(args, params)
+  //           .all(|arg_param| {
+  //             !arg_param.0.typ().assignable_to(arg_param.1.typ)
+  //           }) {
+  //           break
+  //         }
+  //         panic(
+  //           f"Found local function match, but I don't know what to do with it: {fun}",
+  //         )
+  //       }
+  //     }
+  //   }
+  //   if !type_args.is_empty() { panic("TODO: handle explicit type args yet") }
+  //   let mut module = self.env.env.*
+  //   if !fname.namespace.is_empty() { module = module.get_module(span, fname)? }
+  //   resolve_overload(module.signatures, fname.name, type_args, args, span)
+  //   Ok(ir.Expr.Nil(span))
+  // }
+
+  // fn get_local_functions(self, fname: string) -> Slice<Ref<Variable>> {
+  //   let mut funs = []
+  //   let mut scope = self.bindings.*
+  //   while let List.Cons(varid, rest) = scope {
+  //     if varid.name == fname {
+  //       if let Type.Fn(_, _) = varid.typ { funs = funs.append(varid) }
+  //     }
+  //     scope = rest.*
+  //   }
+  //   funs
+  // }
+}
+
+fn resolve_overload(
+  local_candidates: Slice<Ref<ty.Variable>>,
+  global_candidates: Slice<Ref<ast.FunctionDef>>,
+  args: Slice<ir.Expression>,
+  span: span.Span,
+) -> Result<ir.Call, dx.TypeError> {
+  if !local_candidates.is_empty() {
+    panic("local_candidates not handled yet in overload resolution")
+  }
+  // TODO: if type_args present, use them!
+  let candidates = global_candidates.map(|fun| try_match_candidate(fun, args, span))
+  let mut matches = []
+  for cand in candidates {
+    if let OverloadCandidate.Ok(call) = cand { matches = matches.append(call) }
+  }
+  let maximal = matches.filter(|call| {
+    !matches.any(|other| other.fun.better_than(call.fun.*))
+  })
+  match maximal {
+    [call] => Ok(call),
+    _ => if matches.is_empty() {
+      Err(dx.NoMatchError.new(
+        span,
+        candidates.map(|fun| match fun {
+          Err(def, e) => (def.signature(), e),
+          Ok(_) => panic("unreachable"),
+        }),
+      ))
+    } else {
+      Err(dx.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
+    },
   }
 }
 
-// enum OverloadCandidate {
-//   Ok(FnCall),
-//   Err(Ref<FunctionDef>, dx.TypeError),
-// }
-
-// fn try_match_candidate(
-//   fun: Ref<FunctionDef>,
-//   args: Slice<Expression>,
-//   span: span.Span,
-// ) -> OverloadCandidate {
-//   if fun.parameters.length() != args.length() {
-//     return OverloadCandidate.Err(
-//       fun,
-//       dx.ArgArityError.new(
-//         span,
-//         fun.name,
-//         fun.parameters.length(),
-//         args.length(),
-//       ),
-//     )
-//   }
-//   let mut bindings = fun.type_parameters.map(|_| Type.Var(-1))
-//   for (param, arg) in slice.zip(fun.parameters, args) {
-//     if let Err(e) = match_types(param.typ, arg.typ(), bindings, span) {
-//       return OverloadCandidate.Err(fun, e)
-//     }
-//   }
-//   for (i, t) in bindings.enumerate() {
-//     if let Type.Var(-1) = t {
-//       return OverloadCandidate.Err(
-//         fun,
-//         dx.UnboundTypeParamError.new(span, fun.type_parameters[i].name),
-//       )
-//     }
-//   }
-//   OverloadCandidate.Ok(FnCall { fun, type_args: bindings, args })
-// }
-
-// /// Updates bindings and returns Ok if the arg type matches the param type, Err if no match
-// fn match_types(
-//   param: Type,
-//   arg: Type,
-//   mut bindings: Slice<Type>,
-//   span: span.Span,
-// ) -> Result<(), dx.TypeError> {
-//   if let Type.Var(idx) = param {
-//     match bindings[idx] {
-//       Type.Var(-1) => {
-//         bindings[idx] = arg
-//         Ok(())
-//       },
-//       existing => if existing.equals(arg) {
-//         Ok(())
-//       } else {
-//         Err(dx.DoubleTypeArgBoundError.new(span, idx, f"{existing}", f"{arg}"))
-//       },
-//     }
-//   } else {
-//     if param.constructor_and_arity_eq(arg) {
-//       for (p, a) in slice.zip(param.type_args(), arg.type_args()) {
-//         match_types(p, a, bindings, span)?
-//       }
-//       Ok(())
-//     } else {
-//       Err(dx.TypeMismatchError.new(span, f"{param}", f"{arg}"))
-//     }
-//   }
-// }
-
-// fn resolve_overload(
-//   signatures: Map<string, Slice<Ref<FunctionDef>>>,
-//   fname: string,
-//   type_args: Slice<Type>,
-//   args: Slice<Expression>,
-//   span: span.Span,
-// ) -> Result<Expr, dx.TypeError> {
-//   let _ = type_args
-//   // TODO: if type_args present, use them!
-//   let candidates = match signatures.get(fname) {
-//     None => return Err(dx.MissingNameError.new(fname, span)),
-//     Some(funs) => funs.map(|fun| try_match_candidate(fun, args, span)),
-//   }
-//   let mut matches = []
-//   for cand in candidates {
-//     if let OverloadCandidate.Ok(call) = cand { matches = matches.append(call) }
-//   }
-//   let maximal = matches.filter(|call| {
-//     !matches.any(|other| other.fun.better_than(call.fun.*))
-//   })
-//   match maximal {
-//     [call] => Ok(Expr.Call(call)),
-//     _ => if matches.is_empty() {
-//       Err(dx.NoMatchError.new(
-//         span,
-//         candidates.map(|fun| match fun {
-//           Err(def, e) => (def.signature(), e),
-//           Ok(_) => panic("unreachable"),
-//         }),
-//       ))
-//     } else {
-//       Err(dx.AmbiguousFunctionCallError.new(span, maximal.map(|m| f"{m}")))
-//     },
-//   }
-// }
-
-interface Folder<A,T> {
-  fn fold(self, accumulator: A, f: fn(A, T)->A) -> A
+enum OverloadCandidate {
+  Ok(ir.Call),
+  Err(Ref<ast.FunctionDef>, dx.TypeError),
 }
+
+fn try_match_candidate(
+  fun: Ref<ast.FunctionDef>,
+  args: Slice<ir.Expression>,
+  span: span.Span,
+) -> OverloadCandidate {
+  if fun.parameters.length() != args.length() {
+    return OverloadCandidate.Err(
+      fun,
+      dx.ArgArityError.new(
+        span,
+        fun.name,
+        fun.parameters.length(),
+        args.length(),
+      ),
+    )
+  }
+  let mut bindings = fun.type_parameters.map(|_| ty.Type.Var(-1))
+  for (param, arg) in slice.zip(fun.parameters, args) {
+    if let Err(e) = match_types(param.typ, arg.typ(), bindings, span) {
+      return OverloadCandidate.Err(fun, e)
+    }
+  }
+  for (i, t) in bindings.enumerate() {
+    if let ty.Type.Var(-1) = t {
+      return OverloadCandidate.Err(
+        fun,
+        dx.UnboundTypeParamError.new(span, fun.type_parameters[i].name),
+      )
+    }
+  }
+  OverloadCandidate.Ok(ir.Call { fun, type_args: bindings, args })
+}
+
+/// Updates bindings and returns Ok if the arg type matches the param type, Err if no match
+fn match_types(
+  param: ty.Type,
+  arg: ty.Type,
+  mut bindings: Slice<ty.Type>,
+  span: span.Span,
+) -> Result<(), dx.TypeError> {
+  if let ty.Type.Var(idx) = param {
+    match bindings[idx] {
+      ty.Type.Var(-1) => {
+        bindings[idx] = arg
+        Ok(())
+      },
+      existing => if existing.equals(arg) {
+        Ok(())
+      } else {
+        Err(dx.DoubleTypeArgBoundError.new(span, idx, f"{existing}", f"{arg}"))
+      },
+    }
+  } else {
+    if param.constructor_and_arity_eq(arg) {
+      for (p, a) in slice.zip(param.type_args(), arg.type_args()) {
+        match_types(p, a, bindings, span)?
+      }
+      Ok(())
+    } else {
+      // TODO: the second span should be the span of the parameter
+      Err(dx.TypeMismatchError.new(span, f"{param}", f"{arg}", span))
+    }
+  }
+}
+
+// interface Folder<A,T> {
+//   fn fold(self, accumulator: A, f: fn(A, T)->A) -> A
+// }
 
 /// Least Upper Bound
 struct LUB {
