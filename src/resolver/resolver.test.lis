@@ -168,7 +168,7 @@ fn test_classic_call(t) -> Result<(), error> {
   let assert [ast.Expr.Call(call)] = block.statements.map(|s| s.kind)
   let assert [] = call.local_candidates
   assert call.global_candidates.equals([foo])
-  assert !call.is_dotname
+  let assert None = call.field
   let assert None = call.type_args
   let assert [
     ast.Expr.IntLiteral(1),
@@ -230,7 +230,7 @@ fn test_namespaced_call(t) -> Result<(), error> {
   ] = block.statements.map(|s| s.kind)
   let assert [] = call1.local_candidates
   assert call1.global_candidates.equals([mod_foo])
-  assert !call1.is_dotname
+  let assert None = call1.field
   let assert None = call1.type_args
   let assert [
     ast.Expr.IntLiteral(1),
@@ -240,7 +240,7 @@ fn test_namespaced_call(t) -> Result<(), error> {
 
   let assert [] = call2.local_candidates
   assert call2.global_candidates.equals([mod_foo])
-  assert !call2.is_dotname
+  let assert None = call2.field
   let assert None = call1.type_args
   let assert [
     ast.Expr.StringLiteral("first argument"),
@@ -274,8 +274,8 @@ fn test_dotname_call(t) -> Result<(), error> {
   ] = block.statements.map(|s| s.kind)
   assert call.local_candidates.equals([local_bar])
   assert call.global_candidates.equals([global_bar])
-  assert call.is_dotname
-  assert !call2.is_dotname
+  let assert Some("bar") = call.field
+  let assert None = call2.field
   assert call2.local_candidates.equals(call.local_candidates)
   assert call2.global_candidates.equals(call.global_candidates)
   Ok(())

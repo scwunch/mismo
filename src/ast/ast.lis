@@ -22,11 +22,11 @@ pub enum Expr {
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
   Closure(Closure),
-  Declare(mode.Mode, Ref<Variable>, Ref<Expression>),
-  Identifier(Ref<Variable>),
-  CapturedIdent(Ref<Variable>),
-  Assign(Ref<Variable>, Ref<Expression>),
-  AssignCapture(Ref<Variable>, Ref<Expression>),
+  Declare(mode.Mode, Ref<ty.Variable>, Ref<Expression>),
+  Identifier(Ref<ty.Variable>),
+  CapturedIdent(Ref<ty.Variable>),
+  Assign(Ref<ty.Variable>, Ref<Expression>),
+  AssignCapture(Ref<ty.Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(Call),
   If(If),
@@ -78,50 +78,26 @@ impl Block {
   }
 }
 
-pub struct Variable {
-  pub mode: mode.Mode,
-  pub name: string,
-  pub typ: ty.Type,
-  pub init: uint32,
-  pub consumed: Option<uint32>,
-}
-
-impl Variable {
-  pub fn from_param(param: ty.Parameter) -> Variable {
-    Variable {
-      mode: param.mode,
-      name: param.name,
-      typ: param.typ,
-      init: param.span.start,
-      consumed: None,
-    }
-  }
-
-  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
-    Variable { mode, name, typ: ty.Type.Never, init, consumed: None }
-  }
-}
-
 /// all the info required to resolve function overload in type checking phase
 #[display]
 #[json]
 pub struct Call {
-  pub local_candidates: Slice<Ref<Variable>>,
+  pub local_candidates: Slice<Ref<ty.Variable>>,
   pub global_candidates: Slice<Ref<FunctionDef>>,
   pub type_args: Option<Slice<ty.Type>>,
   pub args: Slice<Expression>,
-  pub is_dotname: bool,
+  pub field: Option<string>,
 }
 
 impl Call {
   pub fn new(
-    local_candidates: Slice<Ref<Variable>>,
+    local_candidates: Slice<Ref<ty.Variable>>,
     global_candidates: Slice<Ref<FunctionDef>>,
     type_args: Option<Slice<ty.Type>>,
     args: Slice<Expression>,
-    is_dotname: bool,
+    field: Option<string>,
   ) -> Call {
-    Call { local_candidates, global_candidates, type_args, args, is_dotname }
+    Call { local_candidates, global_candidates, type_args, args, field }
   }
 
   pub fn equals(self, other: Call) -> bool {
@@ -148,11 +124,11 @@ pub struct Closure {
 #[json]
 pub struct Capture {
   pub mode: mode.Mode,
-  pub variable: Ref<Variable>,
+  pub variable: Ref<ty.Variable>,
 }
 
 impl Capture {
-  pub fn new(varid: Ref<Variable>) -> Capture {
+  pub fn new(varid: Ref<ty.Variable>) -> Capture {
     Capture { mode: mode.Mode.Let, variable: varid }
   }
 }
@@ -257,7 +233,7 @@ impl Arm {
 #[json]
 #[equality]
 pub struct ForLoop {
-  pub binding: Ref<Variable>,
+  pub binding: Ref<ty.Variable>,
   pub iter: Ref<Expression>,
   pub body: Block,
 }

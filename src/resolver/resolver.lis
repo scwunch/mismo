@@ -131,7 +131,7 @@ impl Resolver {
 
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
-  fn capture(self, varid: Ref<ast.Variable>, index: int) -> bool {
+  fn capture(self, varid: Ref<ty.Variable>, index: int) -> bool {
     // let mut self = &self
     let mut is_capture = false
     for i in 0..self.capture_set_stack.length() {
@@ -159,10 +159,10 @@ impl Resolver {
     Ok(ast.Block.new(expressions))
   }
 
-  fn append_params(self, params: Slice<ty.Parameter>) -> Slice<Ref<ast.Variable>> {
+  fn append_params(self, params: Slice<ty.Parameter>) -> Slice<Ref<ty.Variable>> {
     params.fold(
       self.scope.bindings,
-      |vars, param| vars.append(&ast.Variable.from_param(param)),
+      |vars, param| vars.append(&ty.Variable.from_param(param)),
     )
   }
 
@@ -209,7 +209,7 @@ impl Resolver {
         Identifier(path) if path.namespace.is_empty() => {
           return Ok(Expr.Declare(
             mode,
-            &ast.Variable.new(mode, path.name, lhs.span.start),
+            &ty.Variable.new(mode, path.name, lhs.span.start),
             value,
           ))
         },
@@ -273,7 +273,7 @@ impl Resolver {
   fn resolve_pattern(self: Ref<Resolver>, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Identifier(cst.Path { namespace: [], name }) => {
-        let varid = &ast.Variable.new(mode.Mode.MutBang, name, node.span.start)
+        let varid = &ty.Variable.new(mode.Mode.MutBang, name, node.span.start)
         self.scope.bindings = self.scope.bindings.append(varid)
         ast.Expr.Identifier(varid)
       },
@@ -443,7 +443,7 @@ impl Resolver {
         global_candidates,
         type_args,
         args,
-        is_dotname: false,
+        field: None,
       },
     ))
   }
@@ -479,7 +479,7 @@ impl Resolver {
         global_candidates,
         type_args,
         args,
-        is_dotname: false,
+        field: None,
       },
     ))
   }
@@ -505,13 +505,14 @@ impl Resolver {
     if let (false, [], []) = (is_dotname, global_candidates, local_candidates) {
       return Err(dx.MissingNameError.new(fname, span) as dx.ResolveError)
     }
+    let field = if is_dotname {Some(fname)} else {None}
     Ok(ast.Expr.Call(
       ast.Call {
         local_candidates,
         global_candidates,
         type_args: None,
         args,
-        is_dotname,
+        field,
       },
     ))
   }
@@ -524,7 +525,7 @@ impl Resolver {
 
 /// index: the boundary in the stack of variables at which the closure scope opens
 /// captures: the set of variables outside the scope of the closure
-struct CaptureSet { index: int, captures: Slice<Ref<ast.Variable>> }
+struct CaptureSet { index: int, captures: Slice<Ref<ty.Variable>> }
 
 impl CaptureSet {
   fn string(self) -> string {
@@ -535,16 +536,16 @@ impl CaptureSet {
 /// an immutable stack of bindings
 /// scope is *shallow-copied* on every function call, so the length only ever increases with Go's call stack depth
 /// this naturally mirrors the scoping rules of Mismo's tree-shaped CST.
-pub struct Scope { bindings: Slice<Ref<ast.Variable>> }
+pub struct Scope { bindings: Slice<Ref<ty.Variable>> }
 
 impl Scope {
   fn from_params(params: Slice<ty.Parameter>) -> Scope {
-    Scope { bindings: params.map(|p| &ast.Variable.from_param(p)) }
+    Scope { bindings: params.map(|p| &ty.Variable.from_param(p)) }
   }
 
   // if name in scope, return variable and whether it is captured or not
   // search start from top (most recent) of stack
-  fn get(self, name: string) -> Option<(int, Ref<ast.Variable>)> {
+  fn get(self, name: string) -> Option<(int, Ref<ty.Variable>)> {
     let mut i = self.bindings.length()
     while i > 0 {
       i -= 1

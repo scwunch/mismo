@@ -1,4 +1,5 @@
 import "mode"
+import "ty"
 import "span"
 
 pub fn nil_expr() -> Expression {
@@ -34,11 +35,11 @@ pub fn declare_expr(mode: mode.Mode, name: string, init: Ref<Expression>) -> Exp
   Expression { span: span.new(0, 0), kind: Expr.Declare(mode, varid, init) }
 }
 
-pub fn ident_expr(var_: Ref<Variable>) -> Expression {
+pub fn ident_expr(var_: Ref<ty.Variable>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Identifier(var_) }
 }
 
-pub fn assign_expr(var_: Ref<Variable>, expr: Ref<Expression>) -> Expression {
+pub fn assign_expr(var_: Ref<ty.Variable>, expr: Ref<Expression>) -> Expression {
   Expression { span: span.new(0, 0), kind: Expr.Assign(var_, expr) }
 }
 
@@ -104,22 +105,22 @@ pub fn extern_expr() -> Expression {
 //   MatchArm.new(pattern, expr)
 // }
 
-pub fn _var(mode: mode.Mode, name: string) -> Ref<Variable> {
-  &Variable.new(mode, name, 0)
+pub fn _var(mode: mode.Mode, name: string) -> Ref<ty.Variable> {
+  &ty.Variable.new(mode, name, 0)
 }
 
-pub fn let_var(name: string) -> Ref<Variable> {
-  &Variable.new(mode.Mode.Let, name, 0)
+pub fn let_var(name: string) -> Ref<ty.Variable> {
+  &ty.Variable.new(mode.Mode.Let, name, 0)
 }
 
-pub fn mut_var(name: string) -> Ref<Variable> {
-  &Variable.new(mode.Mode.Mut, name, 0)
+pub fn mut_var(name: string) -> Ref<ty.Variable> {
+  &ty.Variable.new(mode.Mode.Mut, name, 0)
 }
 
-pub fn mut_bang_var(name: string) -> Ref<Variable> {
-  &Variable.new(mode.Mode.MutBang, name, 0)
+pub fn mut_bang_var(name: string) -> Ref<ty.Variable> {
+  &ty.Variable.new(mode.Mode.MutBang, name, 0)
 }
 
-pub fn var_var(name: string) -> Ref<Variable> {
-  &Variable.new(mode.Mode.Var, name, 0)
+pub fn var_var(name: string) -> Ref<ty.Variable> {
+  &ty.Variable.new(mode.Mode.Var, name, 0)
 }

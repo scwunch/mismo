@@ -1,0 +1,70 @@
+import "span"
+import "mode"
+
+pub struct Variable {
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+  pub init: uint32,
+  pub consumed: Option<uint32>,
+}
+
+impl Variable {
+  pub fn from_param(param: Parameter) -> Variable {
+    Variable {
+      mode: param.mode,
+      name: param.name,
+      typ: param.typ,
+      init: param.span.start,
+      consumed: None,
+    }
+  }
+
+  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
+    Variable { mode, name, typ: Type.Never, init, consumed: None }
+  }
+}
+
+#[json]
+#[equality]
+pub struct Parameter {
+  pub span: span.Span,
+  pub mode: mode.Mode,
+  pub name: string,
+  pub typ: Type,
+}
+
+impl Parameter {
+  pub fn new(span: span.Span, mode: mode.Mode, name: string, typ: Type) -> Parameter {
+    Parameter { span, mode, name, typ }
+  }
+
+  pub fn let_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Let, name, typ }
+  }
+
+  pub fn mut_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Mut, name, typ }
+  }
+
+  pub fn mutbang(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.MutBang, name, typ }
+  }
+
+  pub fn var_(name: string, typ: Type) -> Parameter {
+    Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
+  }
+
+  pub fn param_type(self) -> ParamType {
+    ParamType { mode: self.mode, typ: self.typ }
+  }
+
+  pub fn substitute(self, type_args: Slice<Type>) -> Parameter {
+    Parameter.new(
+      self.span,
+      self.mode,
+      self.name,
+      self.typ.substitute(type_args),
+    )
+  }
+}

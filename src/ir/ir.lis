@@ -23,11 +23,11 @@ pub enum Expr {
   ArrayLiteral(Slice<Expression>, ty.Type),
   TupleLiteral(Slice<Expression>),
   Closure(Closure),
-  Declare(mode.Mode, Ref<ast.Variable>, Ref<Expression>),
-  Identifier(Ref<ast.Variable>),
-  CapturedIdent(Ref<ast.Variable>),
-  Assign(Ref<ast.Variable>, Ref<Expression>),
-  AssignCapture(Ref<ast.Variable>, Ref<Expression>),
+  Declare(mode.Mode, Ref<ty.Variable>, Ref<Expression>),
+  Identifier(Ref<ty.Variable>),
+  CapturedIdent(Ref<ty.Variable>),
+  Assign(Ref<ty.Variable>, Ref<Expression>),
+  AssignCapture(Ref<ty.Variable>, Ref<Expression>),
   Binding(mode.Mode, Ref<Expression>),
   Call(Call),
   ConcreteCall(int, Slice<Expression>),
@@ -81,51 +81,27 @@ impl Block {
 #[equality]
 pub struct Call {
   pub fun: Ref<ast.FunctionDef>,
-  pub type_args: Option<Slice<ty.Type>>,
+  pub type_args: Slice<ty.Type>,
   pub args: Slice<Expression>,
 }
 
 impl Call {
   pub fn new(
     fun: Ref<ast.FunctionDef>,
-    type_args: Option<Slice<ty.Type>>,
+    type_args: Slice<ty.Type>,
     args: Slice<Expression>,
   ) -> Call {
     Call { fun, type_args, args }
-  }
-
-  pub fn equals(self, other: Call) -> bool {
-    if self.fun != other.fun || !self.args.equals(other.args) {
-      return false
-    }
-    match (self.type_args, other.type_args) {
-      (None, None) => true,
-      (Some(ta1), Some(ta2)) => ta1.equals(ta2),
-      _ => false,
-    }
   }
 }
 
 #[json]
 #[equality]
 pub struct Closure {
-  pub env: Slice<Capture>,
+  pub env: Slice<ast.Capture>,
   pub params: Slice<ty.Parameter>,
   pub ret_type: ty.Type,
   pub body: Block,
-}
-
-#[json]
-#[equality]
-pub struct Capture {
-  pub mode: mode.Mode,
-  pub variable: Ref<ast.Variable>,
-}
-
-impl Capture {
-  pub fn new(varid: Ref<ast.Variable>) -> Capture {
-    Capture { mode: mode.Mode.Let, variable: varid }
-  }
 }
 
 impl Closure {
@@ -157,7 +133,7 @@ pub struct Case {
 }
 
 pub struct Place {
-  varid: Ref<ast.Variable>,
+  varid: Ref<ty.Variable>,
   path: Slice<int>,
 }
 
@@ -287,8 +263,8 @@ impl Arm {
 //   Array(Slice<Pattern>),
 //   String(string),
 //   Struct(ty.TypeDef, Slice<Pattern>),
-//   Splat(Ref<ast.Variable>),
-//   Bind(Ref<ast.Variable>),
+//   Splat(Ref<ty.Variable>),
+//   Bind(Ref<ty.Variable>),
 //   Wildcard,
 // }
 

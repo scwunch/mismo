@@ -5,7 +5,6 @@ import types_module "ty"
 import "span"
 
 type ParamType = types_module.ParamType
-type Parameter = types_module.Parameter
 
 #[test("resolver/type_context: eval type primitives")]
 fn test_eval_type_primitives(t) -> Result<(), error> {
