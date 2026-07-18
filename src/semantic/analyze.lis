@@ -1,3 +1,4 @@
+import "ty"
 import "ast"
 import "ir"
 import dx "diagnostics"
@@ -6,7 +7,7 @@ pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
   let mut reg = ir.Registry.new()
   reg.type_defs = env.type_defs
   reg.function_defs = env.function_defs.map(|fun| {
-    let (new_fun, err) = lower(fun, env)
+    let (new_fun, err) = lower(fun)
     if let Some(e) = err {
       env.error(e)
     }
@@ -15,7 +16,7 @@ pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
   reg
 }
 
-fn lower(fun: Ref<ast.FunctionDef>, env: Ref<ast.Registry>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
+fn lower(fun: Ref<ast.FunctionDef>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
   let new_fun = &ir.FunctionDef.new(
     fun.span,
     fun.id,
@@ -23,9 +24,9 @@ fn lower(fun: Ref<ast.FunctionDef>, env: Ref<ast.Registry>) -> (Ref<ir.FunctionD
     fun.type_parameters,
     fun.parameters,
     fun.return_type,
-    ir.Block.new([]),
+    ir.Block.new([], ty.Type.Never),
   )
-  match TypeCheck.new(env, fun).check_block(fun.body, fun.return_type, fun.span) {
+  match TypeCheck.new(fun).check_block(fun.body, fun.return_type, fun.span) {
     Ok(blk) => {
       new_fun.body = blk
       (new_fun, None)

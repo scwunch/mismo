@@ -1,3 +1,724 @@
+import "ast"
+import "ir"
+import dx "diagnostics"
+import "ty"
+import "mode"
+import "span"
 
-#[test("typecheck/")]
-fn test_type_check(t) {}
+#[test("semantic/type_check/infer: infer literals")]
+fn test_infer_literals(t) {
+  let tc = TypeCheck.new_blank()
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 3), ast.Expr.Nil))
+  let assert ir.Expr.Nil = expr.kind
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 4), ast.Expr.BoolLiteral(true)))
+  let assert ir.Expr.BoolLiteral(true) = expr.kind
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 5), ast.Expr.BoolLiteral(false)))
+  let assert ir.Expr.BoolLiteral(false) = expr.kind
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 2), ast.Expr.IntLiteral(42)))
+  let assert ir.Expr.IntLiteral(42) = expr.kind
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 3), ast.Expr.FloatLiteral(1.0)))
+  let assert ir.Expr.FloatLiteral(f) = expr.kind
+  assert (f - 1.0) * (f - 1.0) < 0.0000001
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 5), ast.Expr.StringLiteral("hello")))
+  let assert ir.Expr.StringLiteral("hello") = expr.kind
+
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 2), ast.Expr.StringLiteral("")))
+  let assert ir.Expr.StringLiteral("") = expr.kind
+}
+
+#[test("semantic/type_check/infer: infer identifier")]
+fn test_infer_identifier(t) {
+  let tc = TypeCheck.new_blank()
+
+  let v = &ty.Variable.new(mode.Mode.Let, "a", 0)
+  v.typ = ty.Type.Int
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 1), ast.Expr.Identifier(v)))
+  let assert ir.Expr.Identifier(v2) = expr.kind
+  assert v == v2
+}
+
+#[test("semantic/type_check/infer: infer tuple")]
+fn test_infer_tuple(t) {
+  let tc = TypeCheck.new_blank()
+
+  // Empty tuple: ()
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 2), ast.Expr.TupleLiteral([])))
+  let assert ir.Expr.TupleLiteral(elems) = expr.kind
+  assert elems.is_empty()
+
+  // Non-empty tuple: (1, true)
+  let tuple = ast.Expression.new(
+    span.new(0, 8),
+    ast.Expr.TupleLiteral([
+      ast.Expression.new(span.new(1, 2), ast.Expr.IntLiteral(1)),
+      ast.Expression.new(span.new(4, 8), ast.Expr.BoolLiteral(true)),
+    ]),
+  )
+  let assert Ok(expr) = tc.infer(tuple)
+  let assert ir.Expr.TupleLiteral(elems) = expr.kind
+  assert elems.length() == 2
+  assert elems[0].typ().equals(ty.Type.Int)
+  assert elems[1].typ().equals(ty.Type.Bool)
+  assert expr.typ().equals(ty.Type.Tuple([ty.Type.Int, ty.Type.Bool]))
+}
+
+#[test("semantic/type_check/infer: infer array")]
+fn test_infer_array(t) {
+  let tc = TypeCheck.new_blank()
+
+  // Homogeneous array: [1, 2, 3]
+  let arr = ast.Expression.new(
+    span.new(0, 9),
+    ast.Expr.ArrayLiteral([
+      ast.Expression.new(span.new(1, 2), ast.Expr.IntLiteral(1)),
+      ast.Expression.new(span.new(4, 5), ast.Expr.IntLiteral(2)),
+      ast.Expression.new(span.new(7, 8), ast.Expr.IntLiteral(3)),
+    ]),
+  )
+  let assert Ok(expr) = tc.infer(arr)
+  let assert ir.Expr.ArrayLiteral(_, typ) = expr.kind
+  assert typ.equals(ty.Type.Int)
+
+  // Empty array: [] => EmptyArrayLiteralError (2005)
+  let assert Err(e) = tc.infer(ast.Expression.new(span.new(0, 2), ast.Expr.ArrayLiteral([])))
+  assert e.code() == 2005
+
+  // Heterogeneous array: [1, true] => TypeMismatchError (2010) via LUB
+  let mixed = ast.Expression.new(
+    span.new(0, 8),
+    ast.Expr.ArrayLiteral([
+      ast.Expression.new(span.new(1, 2), ast.Expr.IntLiteral(1)),
+      ast.Expression.new(span.new(4, 8), ast.Expr.BoolLiteral(true)),
+    ]),
+  )
+  let assert Err(e) = tc.infer(mixed)
+  assert e.code() == 2010
+}
+
+#[test("semantic/type_check/infer: infer block")]
+fn test_infer_block(t) {
+  let tc = TypeCheck.new_blank()
+
+  // Block with expressions: { 1; 2 }
+  let block = ast.Expression.new(
+    span.new(0, 7),
+    ast.Expr.Block(ast.Block.new([
+      ast.Expression.new(span.new(2, 3), ast.Expr.IntLiteral(1)),
+      ast.Expression.new(span.new(5, 6), ast.Expr.IntLiteral(2)),
+    ])),
+  )
+  let assert Ok(expr) = tc.infer(block)
+  let assert ir.Expr.Block(blk) = expr.kind
+  assert blk.statements.length() == 2
+  let assert ty.Type.Int = blk.typ
+}
+
+#[test("semantic/type_check/infer: infer binding and assign")]
+fn test_infer_binding_and_assign(t) {
+  let tc = TypeCheck.new_blank()
+
+  // Binding: let y = 5
+  let let_binding = ast.Expression.new(
+    span.new(0, 8),
+    ast.Expr.Binding(mode.Mode.Let, &ast.Expression.new(span.new(4, 5), ast.Expr.IntLiteral(5))),
+  )
+  let assert Ok(expr) = tc.infer(let_binding)
+  let assert ir.Expr.Binding(m, _) = expr.kind
+  let assert mode.Mode.Let = m
+
+  // Binding: var z = 10
+  let var_binding = ast.Expression.new(
+    span.new(0, 9),
+    ast.Expr.Binding(mode.Mode.Var, &ast.Expression.new(span.new(5, 7), ast.Expr.IntLiteral(10))),
+  )
+  let assert Ok(expr) = tc.infer(var_binding)
+  let assert ir.Expr.Binding(m, _) = expr.kind
+  let assert mode.Mode.Var = m
+
+  // Assignment: x = 42  (where x is an existing variable of type Int)
+  let x = &ty.Variable.new(mode.Mode.Let, "x", 0)
+  x.typ = ty.Type.Int
+  let assign = ast.Expression.new(
+    span.new(0, 6),
+    ast.Expr.Assign(x, &ast.Expression.new(span.new(5, 6), ast.Expr.IntLiteral(42))),
+  )
+  let assert Ok(expr) = tc.infer(assign)
+  let assert ir.Expr.Assign(var_ref, _) = expr.kind
+  assert var_ref.name == "x"
+}
+
+#[test("semantic/type_check/infer: infer return/break/continue")]
+fn test_infer_return_break_continue(t) {
+  let tc = TypeCheck.new_blank()
+
+  // return (no value)
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 6), ast.Expr.Return(None)))
+  let assert ir.Expr.Return(None) = expr.kind
+
+  // return 42
+  let ret_val = ast.Expression.new(span.new(7, 9), ast.Expr.IntLiteral(42))
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 9), ast.Expr.Return(Some(&ret_val))))
+  let assert ir.Expr.Return(Some(e)) = expr.kind
+  assert e.typ().equals(ty.Type.Int)
+
+  // break
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 5), ast.Expr.Break(None)))
+  let assert ir.Expr.Break(None) = expr.kind
+
+  // break 1
+  let break_val = ast.Expression.new(span.new(6, 7), ast.Expr.IntLiteral(1))
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 7), ast.Expr.Break(Some(&break_val))))
+  let assert ir.Expr.Break(Some(e)) = expr.kind
+  assert e.typ().equals(ty.Type.Int)
+
+  // continue
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 8), ast.Expr.Continue))
+  let assert ir.Expr.Continue = expr.kind
+}
+
+#[test("semantic/type_check/check: check")]
+fn test_check(t) {
+  let tc = TypeCheck.new_blank()
+
+  // check 42 against Int — should succeed
+  let assert Ok(expr) = tc.check(ast.Expression.new(span.new(0, 2), ast.Expr.IntLiteral(42)), ty.Type.Int, span.new(0, 2))
+  let assert ir.Expr.IntLiteral(42) = expr.kind
+
+  // check true against Bool — should succeed
+  let assert Ok(expr) = tc.check(ast.Expression.new(span.new(0, 4), ast.Expr.BoolLiteral(true)), ty.Type.Bool, span.new(0, 4))
+  let assert ir.Expr.BoolLiteral(true) = expr.kind
+
+  // check 42 against Bool — should fail with TypeMismatchError (2010)
+  let assert Err(e) = tc.check(ast.Expression.new(span.new(0, 2), ast.Expr.IntLiteral(42)), ty.Type.Bool, span.new(0, 2))
+  assert e.code() == 2010
+
+  // TODO: we need a lot more complex examples here involving tuples, arrays, closures, etc
+}
+
+#[test("semantic/type_check: dot_name field access")]
+fn test_dot_name(t) {
+  let tc = TypeCheck.new_blank()
+
+  // Point struct with fields x, y of type Int
+  let point_def = &ty.TypeDef.new(
+    span.new(0, 0),
+    "Point",
+    [],
+    ty.TypeKind.Struct([
+      ty.Field { span: span.new(0, 0), name: "x", typ: ty.Type.Int },
+      ty.Field { span: span.new(0, 0), name: "y", typ: ty.Type.Int },
+    ]),
+  )
+
+  // A variable `p` of type Point
+  let p = &ty.Variable.new(mode.Mode.Let, "p", 0)
+  p.typ = ty.Type.Adt(point_def, [])
+
+  // Access field "x" via a Call with a `field` — should be FieldAccess(_, 0)
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [],
+    type_args: None,
+    args: [ast.Expression.new(span.new(0, 1), ast.Expr.Identifier(p))],
+    field: Some("x"),
+  }
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 3), ast.Expr.Call(call)))
+  let assert ir.Expr.FieldAccess(_, idx) = expr.kind
+  assert idx == 0
+}
+
+#[test("semantic/type_check: call simple overload resolution")]
+fn test_call_simple(t) {
+  // fn foo(s: String), fn foo(i: Int)
+  let foo1 = &ast.FunctionDef.mock("foo", [], [ty.Parameter.let_("s", ty.Type.String)], ty.nil())
+  let foo2 = &ast.FunctionDef.mock("foo", [], [ty.Parameter.let_("i", ty.Type.Int)], ty.nil())
+
+  let tc = TypeCheck.new_blank()
+
+  // foo("hi") => selects overload 0 (String)
+  let arg_str = ast.Expression.new(span.new(0, 4), ast.Expr.StringLiteral("hi"))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [arg_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 4), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.parameters[0].typ.equals(ty.Type.String)
+
+  // foo(4) => selects overload 1 (Int)
+  let arg_int = ast.Expression.new(span.new(0, 1), ast.Expr.IntLiteral(4))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [arg_int],
+    field: None,
+  }
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 1), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.parameters[0].typ.equals(ty.Type.Int)
+
+  // foo(true) => NoMatchError (2102)
+  let arg_bool = ast.Expression.new(span.new(0, 4), ast.Expr.BoolLiteral(true))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [arg_bool],
+    field: None,
+  }
+  let assert Err(e) = tc.infer(ast.Expression.new(span.new(0, 4), ast.Expr.Call(call)))
+  assert e.code() == 2102
+
+  // foo() => NoMatchError (2102, arity mismatch)
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [],
+    field: None,
+  }
+  let assert Err(e) = tc.infer(ast.Expression.new(span.new(0, 3), ast.Expr.Call(call)))
+  assert e.code() == 2102
+}
+
+#[test("semantic/type_check: call specificity")]
+fn test_call_specificity(t) {
+  // Example 3: fn foo[T](a: T), fn foo(i: Int)
+  let foo1 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("a", ty.Type.Var(0))],
+    ty.nil(),
+  )
+  let foo2 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [ty.Parameter.let_("i", ty.Type.Int)],
+    ty.nil(),
+  )
+
+  let tc = TypeCheck.new_blank()
+
+  // foo(63) => selects overload 1 (concrete Int beats type var)
+  let arg_int = ast.Expression.new(span.new(0, 2), ast.Expr.IntLiteral(63))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [arg_int],
+    field: None,
+  }
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 2), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.is_empty()
+
+  // foo("hi") => selects overload 0 (only type var matches String)
+  let arg_str = ast.Expression.new(span.new(0, 4), ast.Expr.StringLiteral("hi"))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo1, foo2],
+    type_args: None,
+    args: [arg_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc.infer(ast.Expression.new(span.new(0, 4), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 1
+
+  // Example 8: fn foo[T](a: Array[Array[T]]), fn foo(a: Array[Array[Int]])
+  let foo8_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("a", ty.Type.Array(&ty.Type.Array(&ty.Type.Var(0))))],
+    ty.nil(),
+  )
+  let foo8_1 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [ty.Parameter.let_("a", ty.Type.Array(&ty.Type.Array(&ty.Type.Int)))],
+    ty.nil(),
+  )
+
+  let tc8 = TypeCheck.new_blank()
+
+  // foo([[1, 2], [3, 4]]) => selects overload 1 (concrete nested array)
+  let arr_arr_int = &ty.Variable.new(mode.Mode.Let, "a", 0)
+  arr_arr_int.typ = ty.Type.Array(&ty.Type.Array(&ty.Type.Int))
+  let arg_arr = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(arr_arr_int))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo8_0, foo8_1],
+    type_args: None,
+    args: [arg_arr],
+    field: None,
+  }
+  let assert Ok(expr) = tc8.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.is_empty()
+
+  // foo([["a", "b"]]) => selects overload 0 (only generic matches String)
+  let arr_arr_str = &ty.Variable.new(mode.Mode.Let, "a", 0)
+  arr_arr_str.typ = ty.Type.Array(&ty.Type.Array(&ty.Type.String))
+  let arg_arr_str = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(arr_arr_str))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo8_0, foo8_1],
+    type_args: None,
+    args: [arg_arr_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc8.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 1
+
+  // Example 10: fn foo[T](f: Fn(T) -> T), fn foo(f: Fn(Int) -> Int)
+  let foo10_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("f", ty.Type.Fn([ty.ParamType { mode: mode.Mode.Let, typ: ty.Type.Var(0) }], &ty.Type.Var(0)))],
+    ty.nil(),
+  )
+  let foo10_1 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [ty.Parameter.let_("f", ty.Type.Fn([ty.ParamType { mode: mode.Mode.Let, typ: ty.Type.Int }], &ty.Type.Int))],
+    ty.nil(),
+  )
+
+  let tc10 = TypeCheck.new_blank()
+
+  // foo(fn(x: Int) => x + 1) => selects overload 1 (more specific)
+  let fn_int = &ty.Variable.new(mode.Mode.Let, "f", 0)
+  fn_int.typ = ty.Type.Fn([ty.ParamType { mode: mode.Mode.Let, typ: ty.Type.Int }], &ty.Type.Int)
+  let arg_fn_int = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(fn_int))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo10_0, foo10_1],
+    type_args: None,
+    args: [arg_fn_int],
+    field: None,
+  }
+  let assert Ok(expr) = tc10.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.is_empty()
+
+  // foo(fn(x: String) => x) => selects overload 0 (only generic matches)
+  let fn_str = &ty.Variable.new(mode.Mode.Let, "f", 0)
+  fn_str.typ = ty.Type.Fn([ty.ParamType { mode: mode.Mode.Let, typ: ty.Type.String }], &ty.Type.String)
+  let arg_fn_str = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(fn_str))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo10_0, foo10_1],
+    type_args: None,
+    args: [arg_fn_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc10.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 1
+
+  // Example 11: fn foo[T](t: (T, Int)), fn foo(t: (String, Int))
+  let foo11_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("t", ty.Type.Tuple([ty.Type.Var(0), ty.Type.Int]))],
+    ty.nil(),
+  )
+  let foo11_1 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [ty.Parameter.let_("t", ty.Type.Tuple([ty.Type.String, ty.Type.Int]))],
+    ty.nil(),
+  )
+
+  let tc11 = TypeCheck.new_blank()
+
+  // foo(("hi", 5)) => selects overload 1 (concrete)
+  let tup_str = &ty.Variable.new(mode.Mode.Let, "t", 0)
+  tup_str.typ = ty.Type.Tuple([ty.Type.String, ty.Type.Int])
+  let arg_tup_str = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(tup_str))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo11_0, foo11_1],
+    type_args: None,
+    args: [arg_tup_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc11.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.is_empty()
+
+  // foo((true, 5)) => selects overload 0 (only generic matches (Bool, Int))
+  let tup_bool = &ty.Variable.new(mode.Mode.Let, "t", 0)
+  tup_bool.typ = ty.Type.Tuple([ty.Type.Bool, ty.Type.Int])
+  let arg_tup_bool = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(tup_bool))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo11_0, foo11_1],
+    type_args: None,
+    args: [arg_tup_bool],
+    field: None,
+  }
+  let assert Ok(expr) = tc11.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 1
+}
+
+#[test("semantic/type_check: call type variable binding")]
+fn test_call_type_vars(t) {
+  // Example 4: fn foo[T](opt: Option[T], t: T), fn foo(opt: Option[Int], i: Int), fn foo(s: String)
+  let option_def = &ty.TypeDef.new(
+    span.new(0, 0),
+    "Option",
+    [ty.TypeParameter.mock("T")],
+    ty.TypeKind.Enum([]),
+  )
+
+  let foo4_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [
+      ty.Parameter.let_("opt", ty.Type.Adt(option_def, [ty.Type.Var(0)])),
+      ty.Parameter.let_("t", ty.Type.Var(0)),
+    ],
+    ty.nil(),
+  )
+  let foo4_1 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [
+      ty.Parameter.let_("opt", ty.Type.Adt(option_def, [ty.Type.Int])),
+      ty.Parameter.let_("i", ty.Type.Int),
+    ],
+    ty.nil(),
+  )
+  let foo4_2 = &ast.FunctionDef.mock(
+    "foo",
+    [],
+    [ty.Parameter.let_("s", ty.Type.String)],
+    ty.nil(),
+  )
+
+  let tc4 = TypeCheck.new_blank()
+
+  // foo(Option.Some("hello"), "world") => selects overload 0 (T = String)
+  let opt_str = &ty.Variable.new(mode.Mode.Let, "opt", 0)
+  opt_str.typ = ty.Type.Adt(option_def, [ty.Type.String])
+  let arg_opt_str = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(opt_str))
+  let arg_world = ast.Expression.new(span.new(0, 0), ast.Expr.StringLiteral("world"))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo4_0, foo4_1, foo4_2],
+    type_args: None,
+    args: [arg_opt_str, arg_world],
+    field: None,
+  }
+  let assert Ok(expr) = tc4.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 1
+
+  // foo(Option.Some("hello"), 55) => DoubleTypeArgBoundError (T = String and Int)
+  let arg_55 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(55))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo4_0, foo4_1, foo4_2],
+    type_args: None,
+    args: [arg_opt_str, arg_55],
+    field: None,
+  }
+  let assert Err(e) = tc4.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  assert no_match_has(e, 2100)
+
+  // foo(Option.Some(55), 0) => selects overload 1 (concrete Option[Int], Int)
+  let opt_int = &ty.Variable.new(mode.Mode.Let, "opt", 0)
+  opt_int.typ = ty.Type.Adt(option_def, [ty.Type.Int])
+  let arg_opt_int = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(opt_int))
+  let arg_0 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(0))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo4_0, foo4_1, foo4_2],
+    type_args: None,
+    args: [arg_opt_int, arg_0],
+    field: None,
+  }
+  let assert Ok(expr) = tc4.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.is_empty()
+
+  // Example 5: fn foo[T](t: T, i: Int), fn foo[T](i: Int, t: T)
+  let foo5_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("t", ty.Type.Var(0)), ty.Parameter.let_("i", ty.Type.Int)],
+    ty.nil(),
+  )
+  let foo5_1 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("i", ty.Type.Int), ty.Parameter.let_("t", ty.Type.Var(0))],
+    ty.nil(),
+  )
+
+  let tc5 = TypeCheck.new_blank()
+
+  // foo(3, 5) => AmbiguousFnCallError (2103)
+  let arg_3 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(3))
+  let arg_5 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(5))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo5_0, foo5_1],
+    type_args: None,
+    args: [arg_3, arg_5],
+    field: None,
+  }
+  let assert Err(e) = tc5.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  assert e.code() == 2103
+
+  // foo("hi", 1) => selects overload 0 (T = String matches first param)
+  let arg_hi = ast.Expression.new(span.new(0, 0), ast.Expr.StringLiteral("hi"))
+  let arg_1 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(1))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo5_0, foo5_1],
+    type_args: None,
+    args: [arg_hi, arg_1],
+    field: None,
+  }
+  let assert Ok(expr) = tc5.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  let assert ty.Type.Var(_) = fncall.fun.parameters[0].typ
+
+  // foo(0, "hi") => selects overload 1 (T = String matches second param)
+  let arg_0b = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(0))
+  let arg_hib = ast.Expression.new(span.new(0, 0), ast.Expr.StringLiteral("hi"))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo5_0, foo5_1],
+    type_args: None,
+    args: [arg_0b, arg_hib],
+    field: None,
+  }
+  let assert Ok(expr) = tc5.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  let assert ty.Type.Var(_) = fncall.fun.parameters[1].typ
+
+  // Example 6: fn foo[T]() -> T
+  let foo6_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [],
+    ty.Type.Var(0),
+  )
+  let tc6 = TypeCheck.new_blank()
+
+  // foo() => UnboundTypeParamError (T only appears in return type)
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo6_0],
+    type_args: None,
+    args: [],
+    field: None,
+  }
+  let assert Err(e) = tc6.infer(ast.Expression.new(span.new(0, 3), ast.Expr.Call(call)))
+  assert no_match_has(e, 2101)
+
+  // Example 9: fn foo[T, U](a: T, b: U), fn foo[T](a: T, b: T)
+  let foo9_0 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T"), ty.TypeParameter.mock("U")],
+    [ty.Parameter.let_("a", ty.Type.Var(0)), ty.Parameter.let_("b", ty.Type.Var(1))],
+    ty.nil(),
+  )
+  let foo9_1 = &ast.FunctionDef.mock(
+    "foo",
+    [ty.TypeParameter.mock("T")],
+    [ty.Parameter.let_("a", ty.Type.Var(0)), ty.Parameter.let_("b", ty.Type.Var(0))],
+    ty.nil(),
+  )
+
+  let tc9 = TypeCheck.new_blank()
+
+  // foo(1, 2) => AmbiguousFnCallError (2103)
+  let arg9_1 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(1))
+  let arg9_2 = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(2))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo9_0, foo9_1],
+    type_args: None,
+    args: [arg9_1, arg9_2],
+    field: None,
+  }
+  let assert Err(e) = tc9.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  assert e.code() == 2103
+
+  // foo(1, "hi") => selects overload 0 (two params: T=Int, U=String)
+  let arg9_int = ast.Expression.new(span.new(0, 0), ast.Expr.IntLiteral(1))
+  let arg9_str = ast.Expression.new(span.new(0, 0), ast.Expr.StringLiteral("hi"))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo9_0, foo9_1],
+    type_args: None,
+    args: [arg9_int, arg9_str],
+    field: None,
+  }
+  let assert Ok(expr) = tc9.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  let assert ir.Expr.Call(fncall) = expr.kind
+  assert fncall.fun.type_parameters.length() == 2
+}
+
+#[test("semantic/type_check: call edge cases")]
+fn test_call_edge(t) {
+  // Example 7: Never argument — fn foo(a: Int), fn foo(a: String)
+  let foo7_0 = &ast.FunctionDef.mock("foo", [], [ty.Parameter.let_("a", ty.Type.Int)], ty.nil())
+  let foo7_1 = &ast.FunctionDef.mock("foo", [], [ty.Parameter.let_("a", ty.Type.String)], ty.nil())
+
+  let tc7 = TypeCheck.new_blank()
+
+  // foo(never) => NoMatchError (Never != Int, Never != String)
+  let never_var = &ty.Variable.new(mode.Mode.Let, "n", 0)
+  never_var.typ = ty.Type.Never
+  let arg_never = ast.Expression.new(span.new(0, 0), ast.Expr.Identifier(never_var))
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo7_0, foo7_1],
+    type_args: None,
+    args: [arg_never],
+    field: None,
+  }
+  let assert Err(e) = tc7.infer(ast.Expression.new(span.new(0, 0), ast.Expr.Call(call)))
+  assert e.code() == 2102
+
+  // Example 12: fn foo() -> Int, fn foo() -> String
+  let foo12_0 = &ast.FunctionDef.mock("foo", [], [], ty.Type.Int)
+  let foo12_1 = &ast.FunctionDef.mock("foo", [], [], ty.Type.String)
+
+  let tc12 = TypeCheck.new_blank()
+
+  // foo() => AmbiguousFnCallError (2103, identical params)
+  let call = ast.Call {
+    local_candidates: [],
+    global_candidates: [foo12_0, foo12_1],
+    type_args: None,
+    args: [],
+    field: None,
+  }
+  let assert Err(e) = tc12.infer(ast.Expression.new(span.new(0, 3), ast.Expr.Call(call)))
+  assert e.code() == 2103
+}
+
+fn no_match_has(e: dx.TypeError, code: int) -> bool {
+  match e {
+    dx.NoMatchError { errs, .. } => errs.any(|fn_err| fn_err.1.code() == code),
+    _ => false,
+  }
+}

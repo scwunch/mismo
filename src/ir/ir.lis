@@ -50,9 +50,9 @@ pub struct Block {
 }
 
 impl Block {
-  pub fn new(statements: Slice<Expression>) -> Block {
+  pub fn new(statements: Slice<Expression>, typ: ty.Type) -> Block {
     if statements.is_empty() { panic("Block must have at least one statement") }
-    Block { statements, typ: ty.Type.Never }
+    Block { statements, typ }
   }
 
   pub fn kinds(self) -> Slice<Expr> {
