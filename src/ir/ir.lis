@@ -119,28 +119,38 @@ impl Closure {
   }
 }
 
+#[equality]
 pub enum Decision {
   Leaf(Block),
-  Guard{cond: Expression, then: Ref<Decision>, else_: Ref<Decision>},
-  Switch{scrutinee: Place, cases: Slice<Case>, else_: Ref<Decision>},
-  Bind{name: string, place: Place, then: Ref<Decision>},
   Fail,
+  Guard{cond: Expression, then: Ref<Decision>, else_: Ref<Decision>},
+  Assign{expr: Expression, place: Place, next: Ref<Decision>},
+  Switch{scrutinee: Place, cases: Slice<Case>, default: Ref<Decision>},
+  Bind{name: string, place: Place, next: Ref<Decision>},
 }
 
+#[equality]
 pub struct Case {
-  tag: int,
-  then: Decision,
+  pub tag: string,
+  pub then: Ref<Decision>,
 }
 
+#[equality]
 pub struct Place {
-  varid: Ref<ty.Variable>,
-  path: Slice<int>,
+  pub varid: Ref<ty.Variable>,
+  pub path: Slice<int>,
+}
+
+impl Place {
+  pub fn extend(self, i: int) -> Place {
+    Place { path: self.path.append(i), varid: self.varid }
+  }
 }
 
 pub struct If {
   pub checks: Slice<Check>,
   pub default: Option<Block>,
-  pub decision: Decision,
+  pub decision: Ref<Decision>,
   pub typ: ty.Type,
 }
 
@@ -168,7 +178,7 @@ pub enum Then {
 
 impl If {
   pub fn new(checks: Slice<Check>, default: Option<Block>, typ: ty.Type) -> If {
-    If{checks, default, decision: Decision.Fail, typ}
+    If{checks, default, decision: &Decision.Fail, typ}
   }
 
   pub fn span(self) -> span.Span {

@@ -17,28 +17,28 @@ pub struct Resolver {
 }
 
 impl Resolver {
-  fn new(env: Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
+  pub fn new(env: Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
     let scope = Scope.from_params(func.parameters)
     let ctx = TypeContext.new(env, func.type_parameters)
     let capture_set_stack = &Slice.new()
     Resolver { ctx, scope, capture_set_stack }
   }
 
-  fn new_blank() -> Resolver {
+  pub fn new_blank() -> Resolver {
     Resolver.new(
       &ast.Registry.new(),
       &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
     )
   }
 
-  fn with_mock_prelude() -> Resolver {
+  pub fn with_mock_prelude() -> Resolver {
     Resolver.new(
       ast.Registry.with_mock_prelude(),
       &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
     )
   }
 
-  fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+  pub fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
@@ -144,7 +144,7 @@ impl Resolver {
     is_capture
   }
 
-  fn block(self, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
+  pub fn block(self, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
     let self = &self
     let expressions = slice.map_result(
       block.statements,

@@ -202,4 +202,14 @@ impl Type {
       (Var(_), _) => false,
     }
   }
+
+  pub fn variants(self) -> Slice<Variant> {
+    let Type.Adt(def, _) = self else {
+      panic("expected enum")
+    }
+    let TypeKind.Enum(variants) = def.kind else {
+      panic("expected enum")
+    }
+    variants
+  }
 }

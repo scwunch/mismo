@@ -1,0 +1,36 @@
+import "go:fmt"
+
+import "cst"
+import "parser"
+import "resolver"
+import "ast"
+import "ir"
+import dx "diagnostics"
+
+
+fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
+  parser.Parser
+    .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))
+    .parse_colon_and_block()
+    .map_err(dx2err)
+}
+
+fn dx2err<E: dx.Diagnostic>(e: E) -> error {
+  fmt.Errorf("%v", e.message())
+}
+
+fn resolve(lines: Slice<string>) -> Result<ast.Block, error> {
+  let cst = parse(lines)?
+  resolver.Resolver
+    .with_mock_prelude()
+    .block(cst)
+    .map_err(dx2err)
+}
+
+fn type_check(lines: Slice<string>) -> Result<ir.Expr, error> {
+  let ast = resolve(lines)?
+  TypeCheck
+    .new_blank()
+    .infer_block_node(ast)
+    .map_err(dx2err)
+}

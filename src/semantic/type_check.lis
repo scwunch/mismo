@@ -10,7 +10,7 @@ pub struct TypeCheck {
 }
 
 impl TypeCheck {
-  fn new(function: Ref<ast.FunctionDef>) -> TypeCheck {
+  pub fn new(function: Ref<ast.FunctionDef>) -> TypeCheck {
     TypeCheck { function }
   }
 
@@ -21,7 +21,7 @@ impl TypeCheck {
 }
 
 impl TypeCheck {
-  fn check(self, node: ast.Expression, expected: ty.Type, src_span: span.Span) -> Result<ir.Expression, dx.TypeError> {
+  pub fn check(self, node: ast.Expression, expected: ty.Type, src_span: span.Span) -> Result<ir.Expression, dx.TypeError> {
     let expr: ir.Expr = match node.kind {
       ArrayLiteral(elems) => self.check_array(node.span, elems, expected, src_span)?,
       TupleLiteral(elems) => self.check_tuple(node.span, elems, expected, src_span)?,
@@ -56,7 +56,7 @@ impl TypeCheck {
     Ok(ir.Expr.TupleLiteral(elems))
   }
 
-  fn infer(self, node: ast.Expression) -> Result<ir.Expression, dx.TypeError> {
+  pub fn infer(self, node: ast.Expression) -> Result<ir.Expression, dx.TypeError> {
     let expr: ir.Expr = match node.kind {
       Nil => ir.Expr.Nil,
       BoolLiteral(b) => ir.Expr.BoolLiteral(b),
@@ -112,13 +112,13 @@ impl TypeCheck {
     }
   }
 
-  fn infer_block_node(self, block: ast.Block) -> Result<ir.Expr, dx.TypeError> {
+  pub fn infer_block_node(self, block: ast.Block) -> Result<ir.Expr, dx.TypeError> {
     let lub = &LUB.new()
     let blk = self.infer_block(block, lub)?
     Ok(ir.Expr.Block(blk))
   }
 
-  fn infer_block(self, block: ast.Block, lub: Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
+  pub fn infer_block(self, block: ast.Block, lub: Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
     let statements = slice.map_result(block.statements, |node| self.infer(node))?
     lub.unify(statements[statements.length() - 1])?
     Ok(ir.Block.new(statements, lub.ty))
