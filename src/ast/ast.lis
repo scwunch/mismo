@@ -38,7 +38,7 @@ pub enum Expr {
   Continue,
   BareConstructor(string, Slice<Expression>),
   StructConstructor(ty.Type, Slice<Expression>),
-  EnumConstructor(ty.Variant, Slice<Expression>),
+  EnumConstructor(Ref<ty.TypeDef>, ty.Variant, Slice<Expression>),
   Extern,
 }
 

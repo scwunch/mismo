@@ -349,7 +349,7 @@ impl Resolver {
       _ => return Err(dx.MissingNameError.new(name, expr.span)),
     }
     let args = slice.map_result(args, self.resolve_pattern)?
-    Ok(Expr.EnumConstructor(variant, args))
+    Ok(Expr.EnumConstructor(type_def, variant, args))
   }
 
   fn while_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {

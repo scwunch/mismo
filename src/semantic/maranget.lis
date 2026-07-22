@@ -4,98 +4,51 @@ import "mode"
 import "utils/slice"
 
 pub fn compile_match(cond: Ref<ir.If>) {
-  match cond.checks {
-    [Test(expr, blk)] => cond.decision = &ir.Decision.Guard{
+  let default = cond.default.map_or(&ir.Decision.Fail, |blk| &ir.Decision.Leaf(blk))  // TODO: this isn't quite right; a missing else block shouldn't always be a fail
+  cond.decision = compile_checks(cond.checks, default)
+}
+
+pub fn compile_checks(checks: Slice<ir.Check>, default: Ref<ir.Decision>) -> Ref<ir.Decision> {
+  match checks {
+    [] => default,
+    [Test(expr, blk), ..rest] => &ir.Decision.Guard{
       cond: expr,
       then: &ir.Decision.Leaf(blk),
-      else_: cond.default.map_or(&ir.Decision.Fail, |blk| &ir.Decision.Leaf(blk)), // TODO: this isn't quite right; a missing else block shouldn't always be a fail
+      else_: compile_checks(rest, default)
     },
-    [Match(expr, arms)] => {
-        let matrix = PatternMatrix.new(expr, arms)
-        cond.decision = matrix.decide()
+    [Match(expr, arms), ..rest] => {
+        let matrix = PatternMatrix.new(expr, arms, rest, default)
+        matrix.decide()
     },
-    _ => panic("unhandled: multiple checks in conditional"),
   }
 }
 
 struct PatternMatrix {
   scrutinee: Slice<ir.Place>,
-  rows: Slice<Row>,
+  rows: Slice<ir.Row>,
+  checks: Slice<ir.Check>, // represents remaining checks yet to be compiled to matrices
+  default: Ref<ir.Decision>,
 }
 
-struct Row {
-  patterns: Slice<Pattern>,
-  action: ir.Block,
-}
-
-enum Pattern {
-  Wildcard,
-  Binding(Ref<ty.Variable>),
-  Constructor(string, Slice<Pattern>),
-}
-
-impl Pattern {
-  fn new(pattern: ir.Expression) -> Pattern {
-    match pattern.kind {
-      Identifier(varid) if varid.name == "_" => Pattern.Wildcard,
-      Identifier(varid) => Pattern.Binding(varid),
-      EnumConstructor(variant, args) => {
-        Pattern.Constructor(variant.name, args.map(Pattern.new))
-      },
-      _ => panic(f"{pattern.kind} not supported pattern")
-    }
-  }
-  fn irrefutable(self) -> bool {
-    match self {
-      Wildcard | Binding(_) => true,
-      Constructor(_, _) => false,
-    }
-  }
-}
-
-impl Row {
-  fn new(arm: ir.Arm) -> Row {
-    let block = match arm.then {
-      Block(blk) => blk,
-      If(_cond) => panic("embedded if statemetns not yet supported"),
-    }
-    let patterns = match arm.pattern.kind {
-      TupleLiteral(exprs) => exprs.map(Pattern.new),
-      node => [Pattern.new(arm.pattern)],
-    }
-    Row{patterns, action: block}
-  }
-
-  fn replace(self, col: int, patt: Slice<Pattern>) -> Row {
-    let len = self.patterns.length() + patt.length() - 1
-    let mut patterns = [].reserve(len)
-    patterns = patterns.append(self.patterns[0..col]...)
-    patterns = patterns.append(patt...)
-    patterns = patterns.append(self.patterns[col+1..]...)
-    Row{patterns, ..self}
-  }
-
-  pub fn irrefutable(self) -> bool {
-    self.patterns.all(|patt| patt.irrefutable())
-  }
-
-  fn to_decision(self, place: ir.Place) -> Ref<ir.Decision> {
-    let mut dec = &ir.Decision.Leaf(self.action)
-    let mut i = self.patterns.length()
-    loop {
-      if i == 0 { break dec }
-      i -= 1
-      match self.patterns[i] {
-        Binding(varid) => dec = &ir.Decision.Bind{name: varid.name, place: place.extend(i), next: dec},
-        Wildcard => (),
-        Constructor(_, _) => panic("constructor pattern irrefutable"),
-      }
-    }
-  }
-}
+// fn decide_row(self: ir.Row, place: ir.Place) -> Ref<ir.Decision> {
+//   let mut dec = match self.then {
+//     Block(blk) => &ir.Decision.Leaf(blk),
+//     If(cond) => compile_checks(cond.checks, cond.default),
+//   }
+//   let mut i = self.patterns.length()
+//   loop {
+//     if i == 0 { break dec }
+//     i -= 1
+//     match self.patterns[i] {
+//       Binding(varid) => dec = &ir.Decision.Bind{name: varid.name, place: place.extend(i), next: dec},
+//       Wildcard => (),
+//       Constructor(_, _) => panic("constructor pattern not irrefutable"),
+//     }
+//   }
+// }
 
 impl PatternMatrix {
-  fn new(scrutinee: ir.Expression, arms: Slice<ir.Arm>) -> PatternMatrix {
+  fn new(scrutinee: ir.Expression, rows: Slice<ir.Row>, checks: Slice<ir.Check>, default: Ref<ir.Decision>) -> PatternMatrix {
     let varid = match scrutinee.kind {
       Identifier(varid) => varid,
       _ => {
@@ -111,20 +64,18 @@ impl PatternMatrix {
       _ => [ir.Place{varid, path: []}]
     }
 
-    let mut rows = [].reserve(arms.length() + 1)
-    for arm in arms {
-      rows = rows.append(Row.new(arm))
-    }
-    PatternMatrix {scrutinee, rows}
+    PatternMatrix {scrutinee, rows, checks, default }
   }
 
+  #[allow(manual_map_or)]
   fn decide(self) -> Ref<ir.Decision> {
     match self.rows {
-      [] => &ir.Decision.Fail,
-      [first, ..rest] if first.irrefutable() => if rest.is_empty() {
-        first.to_decision(self.scrutinee[0])
-      } else {
-        panic(f"REDUNDANT patterns found: {rest}")
+      [] => compile_checks(self.checks, self.default),
+      [first, ..rest] if first.irrefutable() => {
+        match slice.index_of(first.patterns, is_binding) {
+          Some(i) => self.default_decision(i),
+          None => self.action(first.then, rest)
+        }
       },
       rows => {
         let (i, constructors) = self.select_column()
@@ -134,6 +85,32 @@ impl PatternMatrix {
         })
         let default = self.default_decision(i)
         &ir.Decision.Switch{scrutinee, cases, default}
+      },
+    }
+  }
+
+  #[allow(manual_map_or)]
+  fn action(self, action: ir.Then, rest: Slice<ir.Row>) -> Ref<ir.Decision> {
+    match action {
+      Block(blk) if rest.is_empty() => &ir.Decision.Leaf(blk),
+      Block(_) => panic("issue redundancy warning: {rest} is subsumed"),
+      If(cond) => {
+        match cond.default {
+          None => compile_checks(cond.checks, PatternMatrix{rows: rest, ..self}.decide()),
+          Some(blk) => {
+            if rest.length() > 0 {
+              panic("unreachable rows due to default on intermediate cond: {rest}")
+            }
+            if self.checks.length() > 0 {
+              panic("unreachable additional checks")
+            }
+            if let ir.Decision.Fail = self.default.* {
+              compile_checks(cond.checks, &ir.Decision.Leaf(blk))
+            } else {
+              panic("multiple defaults found")
+            }
+          },
+        }
       },
     }
   }
@@ -158,27 +135,37 @@ impl PatternMatrix {
     for j in 0..len {
       scrutinee = scrutinee.append(self.scrutinee[i].extend(j))
     }
-    PatternMatrix {scrutinee, rows}
+    PatternMatrix {scrutinee, rows, ..self}
   }
 
   fn default_decision(self, i: int) -> Ref<ir.Decision> {
     for row in self.rows {
       match row.patterns[i] {
-        Wildcard => return self.default(i).decide(),
+        Wildcard => return self.default_matrix(i).decide(),
         Binding(varid) => return &ir.Decision.Bind{
           name: varid.name,
           place: self.scrutinee[i],
-          next: self.default(i).decide()
+          next: self.default_matrix(i).decide()
         },
         Constructor(_, _) => (),
       }
     }
-    &ir.Decision.Fail
+    compile_checks(self.checks, self.default)
   }
 
-  fn default(self, i: int) -> PatternMatrix {
+  fn default_matrix(self, i: int) -> PatternMatrix {
     let rows = self.rows.filter(|row| row.patterns[i].irrefutable())
     let rows = rows.map(|row| row.replace(i, []))
-    PatternMatrix {scrutinee: self.scrutinee, rows}
+    let mut scrutinee = [].reserve(self.scrutinee.length() - 1)
+    scrutinee = scrutinee.append(self.scrutinee[..i]...)
+    scrutinee = scrutinee.append(self.scrutinee[i + 1..]...)
+    PatternMatrix {scrutinee, rows, ..self}
+  }
+}
+
+fn is_binding(p: ir.Pattern) -> bool {
+  match p {
+    Binding(_) => true,
+    _ => false,
   }
 }

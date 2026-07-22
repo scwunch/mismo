@@ -23,6 +23,11 @@ impl Registry {
     for fn_name in ["==", "+", "-", "*", "/", "print"] {
       self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
     }
+    let span = span.new(0,0)
+    self.type_defs["Option"] = &ty.TypeDef.new(span, "Option", [], ty.TypeKind.Enum([
+      ty.Variant{span, name: "Some", fields: [ty.Type.Bool]},
+      ty.Variant{span, name: "None", fields: []},
+    ]))
     self
   }
 

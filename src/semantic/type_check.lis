@@ -93,9 +93,9 @@ impl TypeCheck {
         ir.Expr.Break(Some(&e))
       },
       Continue => ir.Expr.Continue,
-      BareConstructor(str, args) => panic("TODO"),
-      StructConstructor(typ, args) => panic("TODO"),
-      EnumConstructor(variant, args) => panic("TODO"),
+      BareConstructor(str, args) => panic("TODO: infer BareConstructor without context"),
+      StructConstructor(typ, args) => panic("TODO: infer StructConstructor without context"),
+      EnumConstructor(ty, variant, args) => panic("TODO: infer EnumConstructor without context"),
       Extern => ir.Expr.Extern,
     }
     Ok(ir.Expression { span: node.span, kind: expr })
@@ -268,20 +268,20 @@ impl TypeCheck {
       },
       Match(subj, arms) => {
         let subj = self.infer(subj)?
-        let arms = slice.map_result(arms, |arm| self.check_arm(arm, expected, type_span))?
+        let arms = slice.map_result(arms, |arm| self.check_arm(arm, subj.typ(), expected, type_span))?
         Ok(ir.Check.Match(subj, arms))
       }
     }
   }
 
-  fn check_arm(self, arm: ast.Arm, expected: ty.Type, type_span: span.Span) -> Result<ir.Arm, dx.TypeError> {
-    // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
-    let pattern = self.infer(arm.pattern)?
+  fn check_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, expected: ty.Type, type_span: span.Span) -> Result<ir.Row, dx.TypeError> {
+    let patterns = self.row_pattern(arm.pattern, scrutinee_type)?
     let then = match arm.then {
       Block(blk) => ir.Then.Block(self.check_block(blk, expected, type_span)?),
       If(cond) => ir.Then.If(self.check_if(cond, expected, type_span)?),
     }
-    Ok(ir.Arm{pattern, then})
+    let span = arm.span()
+    Ok(ir.Row{span, patterns, then})
   }
 
   fn infer_if_node(self, cond: ast.If) -> Result<ir.Expr, dx.TypeError> {
@@ -296,7 +296,7 @@ impl TypeCheck {
       None => match lub.ty {
         Tuple([]) |
         Never => Ok(ir.If.new(checks, None, ty.nil())),
-        _ => panic("raise 'missing `else` block' error"),
+        _ => panic("raise 'missing `else` block' type error"),
       },
       Some(blk) => {
         let blk = self.infer_block(blk, lub)?
@@ -317,20 +317,21 @@ impl TypeCheck {
       },
       Match(subj, arms) => {
         let subj = self.infer(subj)?
-        let arms = slice.map_result(arms, |arm| self.infer_arm(arm, lub))?
+        let arms = slice.map_result(arms, |arm| self.infer_arm(arm, subj.typ(), lub))?
         Ok(ir.Check.Match(subj, arms))
       }
     }
   }
 
-  fn infer_arm(self, arm: ast.Arm, lub: Ref<LUB>) -> Result<ir.Arm, dx.TypeError> {
+  fn infer_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, lub: Ref<LUB>) -> Result<ir.Row, dx.TypeError> {
     // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
-    let pattern = self.infer(arm.pattern)?
+    let patterns = self.row_pattern(arm.pattern, scrutinee_type)?
     let then = match arm.then {
       Block(blk) => ir.Then.Block(self.infer_block(blk, lub)?),
       If(cond) => ir.Then.If(self.infer_if(cond, lub)?),
     }
-    Ok(ir.Arm{pattern, then})
+    let span = arm.span()
+    Ok(ir.Row{span, patterns, then})
   }
 
   // fn infer_checks(self, checks: Slice<ast.Check>, default: Option<ast.Block>) -> Result<ir.Check, dx.TypeError> {
@@ -362,6 +363,65 @@ impl TypeCheck {
   //     },
   //   }
   // }
+
+  fn row_pattern(self, patt: ast.Expression, patt_type: ty.Type) -> Result<Slice<ir.Pattern>, dx.TypeError> {
+    match (patt.kind, patt_type) {
+      (TupleLiteral(elements), Tuple(types)) => self.tuple_pattern(elements, types),
+      _ => Ok([self.pattern(patt, patt_type)?])
+    }
+  }
+
+  fn pattern(self, patt: ast.Expression, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
+    match patt.kind {
+      Identifier(varid) if varid.name == "_" => Ok(ir.Pattern.Wildcard),
+      Identifier(varid) => Ok(ir.Pattern.Binding(varid)),
+      CapturedIdent(varid) => panic("Compiler bug: `CapturedIdent` in pattern position; the resolver should have caught this captured identifier and turned it into a fresh variable at this point."),
+      BareConstructor(variant, args) => self.bare_constructor_pattern(variant, args, patt_type),
+      EnumConstructor(def, variant, args) => match patt_type {
+        Adt(expected_def, _) if def == expected_def => self.constructor_pattern(variant, args),
+        _ => panic("type mismatch 'ty' shuld be 'patt_type'"),
+      },
+      TupleLiteral(elements) => match patt_type {
+        Tuple(_) => panic("tuple pattern not supported in this position; assign to a variable first then match on that variable"),
+        _ => panic("type-pattern mismatch")
+      },
+      _ => panic("Unsupported pattern shape: {patt.kind}")
+    }
+  }
+
+  fn tuple_pattern(self, elements: Slice<ast.Expression>, types: Slice<ty.Type>) -> Result<Slice<ir.Pattern>, dx.TypeError> {
+    if types.length() != elements.length() {
+      panic("raise type error for arity mismatch")
+    }
+    slice.map_result(
+      slice.zip(elements, types),
+      |(el, ty)| self.pattern(el, ty)
+    )
+  }
+
+  fn bare_constructor_pattern(self, variant: string, args: Slice<ast.Expression>, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
+    let ty.Adt(def, _type_args) = patt_type else {
+      panic(f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'")
+    }
+    let ty.TypeKind.Enum(variants) = def.kind else {
+      panic(f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'")
+    }
+    match variants.find(|v| v.name == variant) {
+      Some(variant) => self.constructor_pattern(variant, args),
+      None => panic(f"raise dx.TypeError for '`{variant}` is not a variant of `{patt_type}`'"),
+    }
+  }
+
+  fn constructor_pattern(self, variant: ty.Variant, args: Slice<ast.Expression>) -> Result<ir.Pattern, dx.TypeError> {
+    if args.length() != variant.fields.length() {
+      panic("arity error")
+    }
+    let fields = slice.map_result(
+      slice.zip(args, variant.fields),
+      |(el, ty)| self.pattern(el, ty)
+    )?
+    Ok(ir.Pattern.Constructor(variant.name, fields))
+  }
 
   fn while_expr(self, cond: ast.If, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
     let _ = cond

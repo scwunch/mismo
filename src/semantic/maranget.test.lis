@@ -7,6 +7,16 @@ import "ast"
 import "ir"
 import dx "diagnostics"
 
+#[test("maranget")]
+fn test_maranget(t) {
+  let assert Ok(ir.Expr.Block(blk)) = type_check([
+    "let a = Option.Some(1)            ",
+    "if a is              ",
+    "   Some(b): b        ",
+    "   None: a           ",
+  ])
+  let _ = blk
+}
 
 fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
   parser.Parser

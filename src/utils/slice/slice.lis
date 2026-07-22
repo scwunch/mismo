@@ -39,3 +39,12 @@ pub fn pop_front<T>(s: Ref<Slice<T>>) -> Option<T> {
     None => None,
   }
 }
+
+pub fn index_of<T>(s: Slice<T>, predicate: fn(T) -> bool) -> Option<int> {
+  for (i, v) in s.enumerate() {
+    if predicate(v) {
+      return Some(i)
+    }
+  }
+  None
+}

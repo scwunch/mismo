@@ -154,19 +154,41 @@ pub struct If {
   pub typ: ty.Type,
 }
 
+pub struct Checks {
+  pub checks: Slice<Check>,
+  pub default: Option<Block>,
+}
+
 #[json]
 #[display]
 #[equality]
 pub enum Check {
   Test(Expression, Block),
-  Match(Expression, Slice<Arm>),
+  Match(Expression, Slice<Row>),
 }
 
 #[json]
 #[equality]
-pub struct Arm {
-  pub pattern: Expression,
+pub struct Row {
+  pub span: span.Span,
+  pub patterns: Slice<Pattern>,
   pub then: Then,
+}
+
+#[json]
+#[equality]
+pub enum Pattern {
+  Wildcard,
+  Binding(Ref<ty.Variable>),
+  Constructor(string, Slice<Pattern>),
+}
+impl Pattern {
+  pub fn irrefutable(self) -> bool {
+    match self {
+      Wildcard | Binding(_) => true,
+      Constructor(_, _) => false,
+    }
+  }
 }
 
 #[json]
@@ -238,16 +260,25 @@ impl Check {
   }
 }
 
-impl Arm {
-  pub fn span(self) -> span.Span {
-    self.pattern.span.merge(self.end_span())
-  }
-
+impl Row {
   pub fn end_span(self) -> span.Span {
     match self.then {
       Block(block) => block.last().span,
       If(cond) => cond.end_span(),
     }
+  }
+
+  pub fn replace(self, col: int, patt: Slice<Pattern>) -> Row {
+    let len = self.patterns.length() + patt.length() - 1
+    let mut patterns = [].reserve(len)
+    patterns = patterns.append(self.patterns[..col]...)
+    patterns = patterns.append(patt...)
+    patterns = patterns.append(self.patterns[col+1..]...)
+    Row{patterns, ..self}
+  }
+
+  pub fn irrefutable(self) -> bool {
+    self.patterns.all(|patt| patt.irrefutable())
   }
 }
 
@@ -258,10 +289,10 @@ impl Arm {
 
 // pub struct Match {
 //   pub subject: Expression,
-//   pub arms: Slice<Arm>,
+//   pub arms: Slice<Row>,
 // }
 
-// pub struct Arm {
+// pub struct Row {
 //   pub pattern: Pattern,
 //   pub then: Then,
 // }
