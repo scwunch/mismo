@@ -114,21 +114,21 @@ fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
   // empty list
   parser = Parser.new(" ]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Ok(type_params) => t.should_eq_repr(type_params, Slice.new<cst.TypeParameter>())?,
     Err(err) => t.fail(err.message())?,
   }
 
   // empty list with newline (indent>0)
   parser = Parser.new(" \n  ]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Ok(type_params) => t.should_eq_repr(type_params, Slice.new<cst.TypeParameter>())?,
     Err(err) => t.fail(err.message())?,
   }
 
   // empty list with newline (indent=0)
   parser = Parser.new("  \n]")
   match parser.parse_type_params() {
-    Ok(type_params) => t.should_eq_repr(type_params, [])?,
+    Ok(type_params) => t.should_eq_repr(type_params, Slice.new<cst.TypeParameter>())?,
     Err(err) => t.fail(err.message())?,
   }
 
@@ -469,7 +469,7 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(main.body.span(), span.new(11, 31))?
       t.should_eq(
         call,
-        cst.Call { 
+        cst.Call {
           fn_name: cst.Path.name_("print"),
           type_args: None,
           args: [cst.string_lit(span.new(17, 30), "hello world")],
@@ -484,7 +484,7 @@ fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
     main.body.last(),
     cst.call_expr(
       span.new(11, 31),
-      cst.Call { 
+      cst.Call {
         fn_name: cst.Path.name_("print"),
         type_args: None,
         args: [cst.string_lit(span.new(17, 30), "hello world")],

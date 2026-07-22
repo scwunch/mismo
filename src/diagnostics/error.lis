@@ -8,9 +8,9 @@ pub type Span = span.Span
 
 pub interface Diagnostic {
   // impl error
-  fn code(self) -> int // eg E0132
-  fn span(self) -> Span
-  fn message(self) -> string
+  fn code() -> int // eg E0132
+  fn span() -> Span
+  fn message() -> string
 
   // fn labels() -> Slice<Label>    // Secondary highlights (e.g., pointing to the live borrow)
   // fn help() -> Option<string>    // Hints (e.g., "Consider upgrading the mode to mut!")

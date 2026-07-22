@@ -118,7 +118,7 @@ impl TypeCheck {
     Ok(ir.Expr.Block(blk))
   }
 
-  pub fn infer_block(self, block: ast.Block, lub: Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
+  fn infer_block(self, block: ast.Block, lub: Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
     let statements = slice.map_result(block.statements, |node| self.infer(node))?
     lub.unify(statements[statements.length() - 1])?
     Ok(ir.Block.new(statements, lub.ty))

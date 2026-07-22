@@ -120,15 +120,15 @@ impl TestRunner {
 }
 
 pub interface Equatable<Self: Equatable<Self, Other>, Other: Equatable<Other, Self>> {
-  fn equals(self, other: Other) -> bool
+  fn equals(other: Other) -> bool
 }
 
 pub interface Testable<Self> {
-  fn should_eq(self, expected: Self, t: TestRunner) -> Result<(), string>
+  fn should_eq(expected: Self, t: TestRunner) -> Result<(), string>
 }
 
 pub interface Contains<T> {
-  fn contains(self, needle: T) -> bool
+  fn contains(needle: T) -> bool
 }
 
 pub fn debug(msg: string) {
