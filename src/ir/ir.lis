@@ -39,7 +39,7 @@ pub enum Expr {
   Continue,
   FieldAccess(Ref<Expression>, int),
   StructConstructor(ty.Type, Slice<Expression>),
-  EnumConstructor(ty.Variant, Slice<Expression>),
+  EnumConstructor(ty.Type, ty.Variant, Slice<Expression>),
   Extern,
 }
 
@@ -403,7 +403,7 @@ impl Expr {
         "compiler bug 75: concrete call should never have 'type' method called on it",
       ),
       StructConstructor(typ, _) => typ,
-      EnumConstructor(_, _) => panic("TODO: rework this"),
+      EnumConstructor(typ, _, _) => typ,
       Return(_) |
       Break(_) |
       Continue |

@@ -116,7 +116,16 @@ impl PatternMatrix {
   }
 
   fn select_column(self) -> (int, Slice<string>) {
-    (0, [])
+    let i = 0
+    let mut tags = []
+    for row in self.rows {
+      match row.patterns.get(i) {
+        Some(Constructor(tag, _)) => if !tags.contains(tag) {tags = tags.append(tag)},
+        Some(_) => break,
+        _ => (),
+      }
+    }
+    (i, tags)
   }
 
   fn specialize(self, constructor: string, i: int) -> PatternMatrix {

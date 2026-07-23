@@ -95,10 +95,23 @@ impl TypeCheck {
       Continue => ir.Expr.Continue,
       BareConstructor(str, args) => panic("TODO: infer BareConstructor without context"),
       StructConstructor(typ, args) => panic("TODO: infer StructConstructor without context"),
-      EnumConstructor(ty, variant, args) => panic("TODO: infer EnumConstructor without context"),
+      EnumConstructor(def, variant, args) => self.infer_enum_constructor(def, variant, args)?,
       Extern => ir.Expr.Extern,
     }
     Ok(ir.Expression { span: node.span, kind: expr })
+  }
+
+  fn infer_enum_constructor(self, def: Ref<ty.TypeDef>, variant: ty.Variant, args: Slice<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
+    if args.length() != variant.fields.length() {
+      panic("arity error")
+    }
+    let args = slice.map_result(
+      slice.zip(variant.fields, args),
+      |(field, arg)| self.check(arg, field, variant.span)
+    )?
+    // TODO: infer type args
+    let ty = ty.Type.Adt(def, [])
+    Ok(ir.Expr.EnumConstructor(ty, variant, args))
   }
 
   fn infer_return(self, expr: Option<Ref<ast.Expression>>, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
@@ -247,9 +260,9 @@ impl TypeCheck {
   fn check_if(self, cond: ast.If, expected: ty.Type, type_span: span.Span) -> Result<ir.If, dx.TypeError> {
     let checks = slice.map_result(cond.checks, |chk| self.check_check(chk, expected, type_span))?
     let default = match cond.default {
-      None if !expected.equals(ty.nil()) => {
-        panic("raise a 'MissingElseBlock' error")
-      },
+      // None if !expected.equals(ty.nil()) => {
+      //   panic("raise a 'MissingElseBlock' error")
+      // },
       None => None,
       Some(block) => Some(self.check_block(block, expected, type_span)?),
     }
@@ -287,22 +300,19 @@ impl TypeCheck {
   fn infer_if_node(self, cond: ast.If) -> Result<ir.Expr, dx.TypeError> {
     let lub = &LUB.new()
     let cond = self.infer_if(cond, lub)?
+    compile_match(&cond)
     Ok(ir.Expr.If(cond, lub.ty))
   }
 
   fn infer_if(self, cond: ast.If, lub: Ref<LUB>) -> Result<ir.If, dx.TypeError> {
     let checks = slice.map_result(cond.checks, |chk| self.infer_check(chk, lub))?
-    match cond.default {
-      None => match lub.ty {
-        Tuple([]) |
-        Never => Ok(ir.If.new(checks, None, ty.nil())),
-        _ => panic("raise 'missing `else` block' type error"),
-      },
-      Some(blk) => {
-        let blk = self.infer_block(blk, lub)?
-        Ok(ir.If.new(checks, Some(blk), lub.ty))
-      }
+    let default = if let Some(blk) = cond.default {
+      let blk = self.infer_block(blk, lub)?
+      Some(blk)
+    } else {
+      None
     }
+    Ok(ir.If.new(checks, default, lub.ty))
   }
 
   fn infer_check(self, check: ast.Check, lub: Ref<LUB>) -> Result<ir.Check, dx.TypeError> {

@@ -92,12 +92,7 @@ impl Resolver {
         let arg = [self.resolve(expr.*)?]
         self.bare_call(name, arg, true, node.span)?
       },
-      DotCall(expr, call) => self.call(
-        call.fn_name,
-        call.type_args,
-        [self.resolve(expr.*)?].append(slice.map_result(call.args, self.resolve)?...),
-        node.span,
-      )?,
+      DotCall(expr, call) => self.dot_call(expr, call, node.span)?,
       TypeDotCall(path, type_args, call) => self.type_dot_call(
         path,
         slice.map_result(type_args, self.ctx.eval_type)?,
@@ -408,6 +403,28 @@ impl Resolver {
       .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)
   }
 
+  fn dot_call(self, expr: Ref<cst.Expression>, call: cst.Call, span: span.Span) -> Result<Expr, dx.ResolveError> {
+    let receiver = match expr.kind {
+      Identifier(path) => match self.resolve_path(path, expr.span) {
+        Ok(expr) => ast.Expression.new(span, expr),
+        Err(_) => return self.type_dot_call(path, [], call, span)
+      },
+      _ => self.resolve(expr.*)?
+    }
+    let mut args = [].reserve(call.args.length())
+    args = args.append(receiver)
+    for arg in call.args {
+      args = args.append(self.resolve(arg)?)
+    }
+    self.call(
+      call.fn_name,
+      call.type_args,
+      args,
+      // [receiver].append(slice.map_result(call.args, self.resolve)?...),
+      span,
+    )
+  }
+
   fn type_dot_call(
     self,
     type_path: cst.Path,
@@ -419,9 +436,16 @@ impl Resolver {
       [] => self.ctx.env.*,
       path => self.ctx.env.get_module(span, type_path)?,
     }
-    let global_candidates = module.type_defs
+    let type_def = module.type_defs
       .get(type_path.name)
       .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)?
+    if let ty.TypeKind.Enum(variants) = type_def.kind {
+      if let Some(variant) = variants.find(|v| v.name == call.fn_name.name) {
+        let args = slice.map_result(call.args, self.resolve)?
+        return Ok(ast.Expr.EnumConstructor(type_def, variant, args))
+      }
+    }
+    let global_candidates = type_def
       .signatures
       .get(call.fn_name.name)
       .ok_or_else(|| dx.MissingNameError.new(call.fn_name.name, span) as dx.ResolveError)?
@@ -492,6 +516,9 @@ impl Resolver {
     is_dotname: bool,
     span: span.Span,
   ) -> Result<ast.Expr, dx.ResolveError> {
+    if is_pascal_case(fname) {
+      return Ok(ast.Expr.BareConstructor(fname, args))
+    }
     let local_candidates = self.scope.bindings.filter(|v| v.name == fname)
     for v in local_candidates {
       // capture ALL local names that match, just in case they might be used
@@ -554,4 +581,15 @@ impl Scope {
     }
     None
   }
+}
+
+fn is_pascal_case(str: string) -> bool {
+  for c in str.bytes() {
+    match c {
+      '_' => continue,
+      'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' => return true,
+      _ => break,
+    }
+  }
+  false
 }
