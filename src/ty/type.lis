@@ -216,10 +216,10 @@ impl Type {
       (Slice(a), Slice(b)) => a.equals(b.*),
       (Tuple(a), Tuple(b)) => a.equals(b),
       (Record(a), Record(b)) => {
-        a.length() == b.length() && a.all(|f| b.contains(f))
+        a.length() == b.length() && a.all(|f1| b.any(|f2| f1.equals(f2)))
       },
       (Enum(a), Enum(b)) => {
-        a.length() == b.length() && a.all(|ctor| b.contains(ctor))
+        a.length() == b.length() && a.all(|c1| b.any(|c2| c1.equals(c2)))
       },
       (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
       (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),

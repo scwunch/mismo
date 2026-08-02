@@ -48,10 +48,10 @@ impl TypeDecl {
     span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
-    fields: Slice<(uint32, uint32, string, Type)>,
+    fields: Slice<(int, int, string, Type)>,
   ) -> TypeDecl {
     let fields = fields.map(|(start, end, name, typ)|
-      TypeField { span: spn.new(start, end), name, typ }
+      TypeField { span: spn.new(start as uint32, end as uint32), name, typ }
     )
     let body = Type.record(span, fields)
     TypeDecl { span, name, type_parameters, body }
@@ -61,10 +61,10 @@ impl TypeDecl {
     span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
-    variants: Slice<(uint32, uint32, string, Option<Type>)>,
+    variants: Slice<(int, int, string, Option<Type>)>,
   ) -> TypeDecl {
     let variants = variants.map(|(start, end, name, payload)|
-      Variant { span: spn.new(start, end), name, payload }
+      Variant { span: spn.new(start as uint32, end as uint32), name, payload }
     )
     let body = Type.enum_(span, variants)
     TypeDecl { span, name, type_parameters, body }

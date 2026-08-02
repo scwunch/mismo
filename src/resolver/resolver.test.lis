@@ -322,7 +322,7 @@ fn test_conditional_branching(t) {
   // shadowing
   let assert Ok(cst_block) = parse([
     "let x = 1            ",
-    "if x is Some(x):     ",
+    "if x is .Some x:     ",
     "   x                 ",
   ])
   let assert Ok(block) = Resolver.with_mock_prelude().block(cst_block)
@@ -339,15 +339,15 @@ fn test_conditional_branching(t) {
 
   let assert Ok(cst_block) = parse([
     "let a = 1            ",
-    "if a is Some(b) if b is Some(c) if c is Some(d):     ",
+    "if a is .Some b if b is .Some c if c is .Some d:     ",
     "   d                 ",
   ])
   let assert Ok(_block) = Resolver.with_mock_prelude().block(cst_block)
   let assert Ok(cst_block) = parse([
     "let a = 1            ",
     "if a is              ",
-    "   Some(b): b        ",
-    "   None: b           ",
+    "   .Some b: b        ",
+    "   .None: b           ",
   ])
   let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
   assert e.code() == 2002

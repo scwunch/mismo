@@ -186,6 +186,7 @@ impl Resolver {
     Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
   }
 
+  #[allow(verbose_failure_propagation)]
   fn resolve_constructor(self, span: spn.Span, path: cst.Path, type_args: Option<Slice<cst.Type>>, payload: Ref<ast.Expression>) -> Result<Expr, dx.ResolveError> {
     match type_args {
       Some(type_args) => {
@@ -193,7 +194,10 @@ impl Resolver {
         Ok(Expr.Constructor(ast.Constructor.ResolvedStruct(typ), payload))
       },
       None => {
-        let def = self.ctx.env.get_type_def(span, path)?
+        let def = match self.ctx.env.get_type_def(span, path) {
+          Ok(def) => def,
+          Err(e) => return Err(e),
+        }
         let cons = if def.type_parameters.is_empty() {
           let typ = self.ctx.eval_type(cst.Type.new(span, path, []))?
           ast.Constructor.ResolvedStruct(typ)
@@ -205,6 +209,7 @@ impl Resolver {
     }
   }
 
+  #[allow(verbose_failure_propagation)]
   fn resolve_enum_constructor(
     self,
     span: spn.Span,
@@ -222,7 +227,10 @@ impl Resolver {
         Ok(Expr.Constructor(ast.Constructor.ResolvedVariant(typ, variant), payload))
       },
       Some((path, None)) => {
-        let def = self.ctx.env.get_type_def(span, path)?
+        let def = match self.ctx.env.get_type_def(span, path) {
+          Ok(def) => def,
+          Err(e) => return Err(e),
+        }
         let cons = if def.type_parameters.is_empty() {
           let typ = self.ctx.eval_type(cst.Type.new(span, path, []))?
           let variant = match typ.variants().find(|v| v.name == variant) {
