@@ -3,30 +3,30 @@ import "go:fmt"
 import "ast"
 import "cst"
 import dx "diagnostics"
-import "mode"
+import md "mode"
+import spn "span"
 import "ty"
-import "span"
 
 #[test("resolver/registry: register and fill struct")]
 fn test_register_and_fill_struct(t) -> Result<(), error> {
   let ctx = TypeContext.new_blank()
 
   let decl = cst.TypeDecl.new_struct(
-    span.new(0, 22),
+    spn.new(0, 22),
     "Point",
     [],
     [
-      cst.Field.new(8, 14, "x", cst.typ(11, 14, "Int", [])),
-      cst.Field.new(15, 21, "y", cst.typ(18, 21, "Int", [])),
+      (8, 14, "x", cst.typ(11, 14, "Int", [])),
+      (15, 21, "y", cst.typ(18, 21, "Int", [])),
     ],
   )
   register_types(ctx.env, [decl])
   elaborate_types(ctx.env, [decl])
 
   let assert Some(def) = ctx.env.type_defs.get("Point")
-  assert def.name == "Point"
+  assert def.ctor.name == "Point"
   assert def.type_parameters.is_empty()
-  let assert ty.TypeKind.Struct(fields) = def.kind
+  let assert ty.Type.Record(fields) = def.ctor.typ
   assert fields.length() == 2
   assert fields[0].name == "x"
   assert fields[0].typ.equals(Type.Int)
@@ -40,27 +40,26 @@ fn test_register_and_fill_enum(t) -> Result<(), error> {
   let ctx = TypeContext.new_blank()
 
   let decl = cst.TypeDecl.new_enum(
-    span.new(0, 30),
+    spn.new(0, 30),
     "Color",
     [],
     [
-      cst.Variant.new(span.new(13, 16), "Red", []),
-      cst.Variant.new(span.new(19, 25), "Green", [cst.typ(25, 28, "Int", [])]),
+      (13, 16, "Red", None),
+      (19, 25, "Green", Some(cst.typ(25, 28, "Int", []))),
     ],
   )
   register_types(ctx.env, [decl])
   elaborate_types(ctx.env, [decl])
 
   let assert Some(def) = ctx.env.type_defs.get("Color")
-  assert def.name == "Color"
+  assert def.ctor.name == "Color"
   assert def.type_parameters.is_empty()
-  let assert ty.TypeKind.Enum(variants) = def.kind
+  let assert ty.Type.Enum(variants) = def.ctor.typ
   assert variants.length() == 2
   assert variants[0].name == "Red"
-  assert variants[0].fields.is_empty()
+  assert variants[0].typ.equals(ty.nil())
   assert variants[1].name == "Green"
-  assert variants[1].fields.length() == 1
-  assert variants[1].fields[0].equals(Type.Int)
+  assert variants[1].typ.equals(Type.Int)
   Ok(())
 }
 
@@ -71,8 +70,8 @@ fn test_duplicate_name_error(t) -> Result<(), error> {
   register_types(
     ctx.env,
     [
-      cst.TypeDecl.new_struct(span.new(0, 10), "Point", [], []),
-      cst.TypeDecl.new_struct(span.new(10, 20), "Point", [], []),
+      cst.TypeDecl.new_struct(spn.new(0, 10), "Point", [], []),
+      cst.TypeDecl.new_struct(spn.new(10, 20), "Point", [], []),
     ],
   )
 
@@ -88,16 +87,16 @@ fn test_eval_function(t) -> Result<(), error> {
 
   // fn foo() Int
   let sig = cst.Signature.new(
-    span.new(0, 18),
+    spn.new(0, 18),
     "foo",
     [],
     [],
     cst.typ(14, 17, "Int", []),
   )
   let decl = cst.FunctionDecl.new(
-    span.new(0, 0),
+    spn.new(0, 0),
     sig,
-    cst.Block { statements: [cst.int_lit(span.new(20, 22), 42)] },
+    cst.Block { statements: [cst.int_lit(spn.new(20, 22), 42)] },
   )
 
   // let assert Ok(func) = try_eval_function(ctx.env, decl)
@@ -119,16 +118,16 @@ fn test_eval_function(t) -> Result<(), error> {
     cst.param(0, 0, None, "b", cst.typ(17, 20, "Int", [])),
   ]
   let add_sig = cst.Signature.new(
-    span.new(0, 29),
+    spn.new(0, 29),
     "add",
     [],
     params,
     cst.typ(26, 29, "Int", []),
   )
   let add_decl = cst.FunctionDecl.new(
-    span.new(0, 29),
+    spn.new(0, 29),
     add_sig,
-    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+    cst.Block { statements: [cst.nil_lit(spn.new(0, 0))] },
   )
 
   // let assert Ok(func) = try_eval_function(ctx.env, add_decl)
@@ -147,16 +146,16 @@ fn test_eval_function(t) -> Result<(), error> {
 
   // fn bad() Wobble => Error: unknown return type Wobble
   let bad_sig = cst.Signature.new(
-    span.new(0, 20),
+    spn.new(0, 20),
     "bad",
     [],
     [],
     cst.typ(14, 19, "Wobble", []),
   )
   let bad_decl = cst.FunctionDecl.new(
-    span.new(0, 20),
+    spn.new(0, 20),
     bad_sig,
-    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+    cst.Block { statements: [cst.nil_lit(spn.new(0, 0))] },
   )
 
   match try_eval_function(ctx.env, bad_decl) {
@@ -176,16 +175,16 @@ fn test_register_functions(t) -> Result<(), error> {
 
   // Register fn foo() Int: 42
   let foo_sig = cst.Signature.new(
-    span.new(0, 18),
+    spn.new(0, 18),
     "foo",
     [],
     [],
     cst.typ(14, 17, "Int", []),
   )
   let foo_decl = cst.FunctionDecl.new(
-    span.new(0, 22),
+    spn.new(0, 22),
     foo_sig,
-    cst.Block { statements: [cst.int_lit(span.new(20, 22), 42)] },
+    cst.Block { statements: [cst.int_lit(spn.new(20, 22), 42)] },
   )
   register_functions(ctx.env, [foo_decl])
 
@@ -196,16 +195,16 @@ fn test_register_functions(t) -> Result<(), error> {
 
   // Overload: register another fn foo(x Int) Int
   let foo2_sig = cst.Signature.new(
-    span.new(0, 22),
+    spn.new(0, 22),
     "foo",
     [],
     [cst.param(7, 13, None, "x", cst.typ(10, 13, "Int", []))],
     cst.typ(18, 21, "Int", []),
   )
   let foo2_decl = cst.FunctionDecl.new(
-    span.new(0, 22),
+    spn.new(0, 22),
     foo2_sig,
-    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+    cst.Block { statements: [cst.nil_lit(spn.new(0, 0))] },
   )
   register_functions(ctx.env, [foo2_decl])
 
@@ -214,16 +213,16 @@ fn test_register_functions(t) -> Result<(), error> {
 
   // Register a function with error (unknown return type)
   let bad_sig = cst.Signature.new(
-    span.new(0, 16),
+    spn.new(0, 16),
     "bad",
     [],
     [],
     cst.typ(12, 16, "Wobble", []),
   )
   let bad_decl = cst.FunctionDecl.new(
-    span.new(0, 16),
+    spn.new(0, 16),
     bad_sig,
-    cst.Block { statements: [cst.nil_lit(span.new(0, 0))] },
+    cst.Block { statements: [cst.nil_lit(spn.new(0, 0))] },
   )
   register_functions(ctx.env, [bad_decl])
 

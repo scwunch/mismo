@@ -1,7 +1,7 @@
-import "ty"
 import "ast"
 import "cst"
 import dx "diagnostics"
+import "ty"
 import "utils/slice"
 
 pub fn resolve(items: cst.Declarations) -> ast.Registry {
@@ -32,10 +32,6 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
         def.span,
       )),
       None => {
-        let kind = match t.body {
-          cst.TypeBody.Struct(_) => ty.TypeKind.Struct([]),
-          cst.TypeBody.Enum(_) => ty.TypeKind.Enum([]),
-        }
         let type_params = t.type_parameters.map(|param| {
           ty.TypeParameter.new(param.span, param.name)
         })
@@ -43,7 +39,7 @@ pub fn register_types(self: Ref<ast.Registry>, type_defs: Slice<cst.TypeDecl>) {
           t.span,
           t.name,
           type_params,
-          kind,
+          ty.nil(),
         )
       },
     }
@@ -56,35 +52,9 @@ pub fn elaborate_types(self: Ref<ast.Registry>, types: Slice<cst.TypeDecl>) {
       panic(f"type not found: {decl.name}")
     }
     let ctx = TypeContext.new(self, def.type_parameters)
-    match decl.body {
-      cst.TypeBody.Struct(fields) => {
-        let fields = fields.map(ctx.eval_field)
-        def.kind = ty.TypeKind.Struct(fields)
-
-        // constructor
-        let _self_type = Type.Adt(
-          def,
-          def.type_parameters.enumerate().map(|(i, _)| Type.Var(i)),
-        )
-        // self.add_function(
-        //   &ast.new_fn_def(
-        //     def.span,
-        //     -1,
-        //     def.name,
-        //     def.type_parameters,
-        //     fields.map(Field.to_param),
-        //     self_type,
-        //     Expression.new(
-        //       def.span,
-        //       Expr.Constructor(self_type, fields.map(|f| f.name)),
-        //     ),
-        //   ),
-        // )
-      },
-      cst.TypeBody.Enum(variants) => {
-        let variants = variants.map(ctx.eval_variant)
-        def.kind = ty.TypeKind.Enum(variants)
-      },
+    match ctx.eval_type(decl.body) {
+      Ok(typ) => def.ctor.typ = typ,
+      Err(e) => self.error(e),
     }
   }
 }
@@ -100,7 +70,7 @@ pub fn eval_function(self: Ref<ast.Registry>, func: cst.FunctionDecl) -> Ref<ast
   match try_eval_function(self, func) {
     Ok(func) => {
       if let Some(def) = self.type_defs.get(func.name) {
-        self.error(dx.OverloadCanonicalConstructorError.new(def.span, def.name))
+        self.error(dx.OverloadCanonicalConstructorError.new(def.span, def.ctor.name))
       }
       match self.signatures.get(func.name) {
         Some(existing) => {

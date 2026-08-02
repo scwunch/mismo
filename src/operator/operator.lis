@@ -26,6 +26,8 @@ pub enum Operator {
   MutBang,
   Var,
 
+  Juxtaposition,
+
   Assign,
   AddAssign,
   SubAssign,
@@ -80,6 +82,8 @@ impl Operator {
       MutBang => "mut!",
       Var => "var",
 
+      Juxtaposition => "<juxtapose>",
+
       Assign => "=",
       AddAssign => "+=",
       SubAssign => "-=",
@@ -101,6 +105,7 @@ impl Operator {
       Mul | Div | Mod => Prec.Mul,
       Pow => Prec.Pow,
       Not | Neg | Let | Mut | MutBang | Var => Prec.Unary,
+      Juxtaposition => Prec.Juxtaposition,
       // Comma => Prec.Comma,
       // Dot => Prec.Call,
       Assign |
@@ -122,11 +127,14 @@ impl Operator {
       (_, Call) => Bind.Looser,
 
       (Assign, Assign) => Bind.Looser, // right-associative
-      (Unary, Assign) => Bind.Tighter, // comma is the only operator that works in the LHS of an assignment
+      (Unary, Assign) => Bind.Tighter,
       (_, Assign) => Bind.None, // everything else require
       (Assign, _) => Bind.Looser, // and tighter on the right
       (Comma, _) => Bind.Looser, // and comma binds looser than everything else
       (_, Comma) => Bind.Tighter,
+
+      (Juxtaposition, Juxtaposition) => Bind.Tighter, // right-associative
+      (Juxtaposition, _) | (_, Juxtaposition) => Bind.None, // always needs disambiguation
 
       (Or, Or) => Bind.Tighter,
       (Or, Comparison) => Bind.Looser,
@@ -188,6 +196,7 @@ pub enum Prec {
   Pow,
   Unary,
   Call,
+  Juxtaposition,
 }
 
 pub enum Bind {

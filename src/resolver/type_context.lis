@@ -1,9 +1,9 @@
 import "ast"
 import "cst"
 import dx "diagnostics"
-import "mode"
+import md "mode"
+import spn "span"
 import "ty"
-import "span"
 import "utils/slice"
 
 type Type = ty.Type
@@ -24,57 +24,44 @@ impl TypeContext {
     TypeContext.new(&ast.Registry.new(), [])
   }
 
-  fn eval_field(self, field: cst.Field) -> ty.Field {
-    ty.Field {
-      span: field.span,
-      name: field.name,
-      typ: self
-        .eval_type(field.typ)
-        .unwrap_or_else(|e| {
-          self.env.error(e)
-          Type.Never
-        }),
+  fn eval_variant(self, variant: cst.Variant) -> Result<ty.Constructor, dx.ResolveError> {
+    let typ = match variant.payload {
+      None => ty.nil(),
+      Some(typ) => self.eval_type(typ)?
     }
+    Ok(ty.Constructor { name: variant.name, typ })
   }
 
-  fn eval_variant(self, variant: cst.Variant) -> ty.Variant {
-    ty.Variant {
-      span: variant.span,
-      name: variant.name,
-      fields: variant.payload.map(|typ| {
-        self
-          .eval_type(typ)
-          .unwrap_or_else(|e| {
-            self.env.error(e)
-            Type.Never
-          })
-      }),
-    }
+  fn eval_field(self, field: cst.TypeField) -> Result<ty.Field, dx.ResolveError> {
+    Ok(ty.Field {
+      name: field.name,
+      typ: self.eval_type(field.typ)?
+    })
   }
 
   fn eval_type(self, typ: cst.Type) -> Result<Type, dx.ResolveError> {
     match typ.kind {
-      cst.TypeKind.Tuple(types) => {
-        Ok(Type.Tuple(slice.map_result(types, self.eval_type)?))
-      },
-      cst.TypeKind.Fn(params, ret) => {
-        let params = slice.map_result(params, self.eval_param_type)?
-        let ret = self.eval_type(ret.*)?
-        Ok(Type.Fn(params, &ret))
-      },
-      cst.TypeKind.Nominal(name, type_args) => {
+      Nominal(name, type_args) => {
         self.eval_nominal_type(
           typ.span,
           name,
           slice.map_result(type_args, self.eval_type)?,
         )
       },
+      Tuple(types) => Ok(Type.Tuple(slice.map_result(types, self.eval_type)?)),
+      Record(fields) => Ok(Type.Record(slice.map_result(fields, self.eval_field)?)),
+      Enum(ctors) => Ok(Type.Enum(slice.map_result(ctors, self.eval_variant)?)),
+      Fn(params, ret) => {
+        let params = slice.map_result(params, self.eval_param_type)?
+        let ret = self.eval_type(ret.*)?
+        Ok(Type.Fn(params, &ret))
+      },
     }
   }
 
   fn eval_nominal_type(
     self,
-    span: span.Span,
+    span: spn.Span,
     path: cst.Path,
     type_args: Slice<Type>,
   ) -> Result<Type, dx.ResolveError> {
@@ -96,7 +83,7 @@ impl TypeContext {
 
   fn type_of_type_param(
     self,
-    span: span.Span,
+    span: spn.Span,
     name: string,
     type_args: Slice<Type>,
   ) -> Option<Result<Type, dx.ResolveError>> {
@@ -118,7 +105,7 @@ impl TypeContext {
     None
   }
 
-  fn primitive_type(self, span: span.Span, name: string, type_args: Slice<Type>) -> Option<Result<Type, dx.ResolveError>> {
+  fn primitive_type(self, span: spn.Span, name: string, type_args: Slice<Type>) -> Option<Result<Type, dx.ResolveError>> {
     let primitive = match name {
       "Any" => Type.Any,
       "Never" => Type.Never,
@@ -153,7 +140,7 @@ impl TypeContext {
     Ok(
       ty.Parameter {
         span: param.span,
-        mode: param.mode.unwrap_or(mode.Mode.Let),
+        mode: param.mode.unwrap_or(md.Mode.Let),
         name: param.name,
         typ,
       },
@@ -162,11 +149,11 @@ impl TypeContext {
 
   fn eval_param_type(self, param: cst.ParamType) -> Result<ty.ParamType, dx.ResolveError> {
     let typ = self.eval_type(param.typ)?
-    Ok(ty.ParamType { mode: param.mode.unwrap_or(mode.Mode.Let), typ })
+    Ok(ty.ParamType { mode: param.mode.unwrap_or(md.Mode.Let), typ })
   }
 }
 
-fn check_arity(span: span.Span, name: string, type_args: int, type_params: int) -> Result<(), dx.ResolveError> {
+fn check_arity(span: spn.Span, name: string, type_args: int, type_params: int) -> Result<(), dx.ResolveError> {
   if type_args == type_params {
     Ok(())
   } else {

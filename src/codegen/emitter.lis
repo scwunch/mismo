@@ -1,7 +1,7 @@
 import "go:strconv"
 import "go:strings"
 
-import "mode"
+import md "mode"
 import "semantic"
 import "specialization"
 import "utils/slice"
@@ -128,7 +128,7 @@ impl Emitter {
 
   fn declare(
     self: Ref<Emitter>,
-    m: mode.Mode,
+    m: md.Mode,
     name: string,
     value: semantic.Expr,
   ) {
@@ -195,7 +195,7 @@ impl Emitter {
       slice.zip(func.parameters, args),
       |pa| {
         let (param, arg) = pa
-        if arg.mode() == mode.Mode.Var && param.mode != mode.Mode.Var {
+        if arg.mode() == md.Mode.Var && param.mode != md.Mode.Var {
           self.emit("&")
         }
         self.emit_expression(arg)
@@ -419,10 +419,10 @@ impl Emitter {
     self.end_block()
   }
 
-  fn emit_param_type(self: Ref<Emitter>, m: mode.Mode, typ: semantic.Type) {
+  fn emit_param_type(self: Ref<Emitter>, m: md.Mode, typ: semantic.Type) {
     match m {
-      mode.Mode.Let => self.emit("*const "),
-      mode.Mode.Mut | mode.Mode.MutBang => self.emit("*"),
+      md.Mode.Let => self.emit("*const "),
+      md.Mode.Mut | md.Mode.MutBang => self.emit("*"),
       _ => (),
     }
     self.emit_type(typ)

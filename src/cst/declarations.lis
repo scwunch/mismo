@@ -1,6 +1,6 @@
 import dx "diagnostics"
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 
 /// a container for declarations collected from a module
 #[json]
@@ -25,84 +25,62 @@ impl Import {
 
 #[json]
 pub struct TypeParameter {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub name: string,
 }
 
 impl TypeParameter {
-  pub fn new(span: span.Span, name: string) -> TypeParameter {
+  pub fn new(span: spn.Span, name: string) -> TypeParameter {
     TypeParameter { span, name }
   }
 }
 
 #[json]
 pub struct TypeDecl {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
-  pub body: TypeBody,
+  pub body: Type,
 }
 
 impl TypeDecl {
   pub fn new_struct(
-    span: span.Span,
+    span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
-    fields: Slice<Field>,
+    fields: Slice<(uint32, uint32, string, Type)>,
   ) -> TypeDecl {
-    TypeDecl { span, name, type_parameters, body: TypeBody.Struct(fields) }
+    let fields = fields.map(|(start, end, name, typ)|
+      TypeField { span: spn.new(start, end), name, typ }
+    )
+    let body = Type.record(span, fields)
+    TypeDecl { span, name, type_parameters, body }
   }
 
   pub fn new_enum(
-    span: span.Span,
+    span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
-    variants: Slice<Variant>,
+    variants: Slice<(uint32, uint32, string, Option<Type>)>,
   ) -> TypeDecl {
-    TypeDecl { span, name, type_parameters, body: TypeBody.Enum(variants) }
-  }
-}
-
-pub enum TypeBody {
-  Struct(Slice<Field>),
-  Enum(Slice<Variant>),
-}
-
-#[json]
-pub struct Field {
-  pub span: span.Span,
-  pub name: string,
-  pub typ: Type,
-}
-
-impl Field {
-  pub fn new(start: uint32, end: uint32, name: string, typ: Type) -> Field {
-    Field { span: span.Span { start, end }, name, typ }
+    let variants = variants.map(|(start, end, name, payload)|
+      Variant { span: spn.new(start, end), name, payload }
+    )
+    let body = Type.enum_(span, variants)
+    TypeDecl { span, name, type_parameters, body }
   }
 }
 
 #[json]
-pub struct Variant {
-  pub span: span.Span,
-  pub name: string,
-  pub payload: Slice<Type>,
-}
-
-impl Variant {
-  pub fn new(span: span.Span, name: string, payload: Slice<Type>) -> Variant {
-    Variant { span, name, payload }
-  }
-}
-
-#[json]
+#[equality]
 pub struct FunctionDecl {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub signature: Signature,
   pub body: Block,
 }
 
 impl FunctionDecl {
-  pub fn new(span: span.Span, signature: Signature, body: Block) -> FunctionDecl {
+  pub fn new(span: spn.Span, signature: Signature, body: Block) -> FunctionDecl {
     FunctionDecl { span, signature, body }
   }
 
@@ -115,8 +93,9 @@ impl FunctionDecl {
 }
 
 #[json]
+#[equality]
 pub struct Signature {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub name: string,
   pub type_parameters: Slice<TypeParameter>,
   pub parameters: Slice<Parameter>,
@@ -125,7 +104,7 @@ pub struct Signature {
 
 impl Signature {
   pub fn new(
-    span: span.Span,
+    span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
     parameters: Slice<Parameter>,
@@ -136,15 +115,16 @@ impl Signature {
 }
 
 #[json]
+#[equality]
 pub struct Parameter {
-  pub span: span.Span,
-  pub mode: Option<mode.Mode>,
+  pub span: spn.Span,
+  pub mode: Option<md.Mode>,
   pub name: string,
   pub typ: Type,
 }
 
 impl Parameter {
-  pub fn new(span: span.Span, mode: Option<mode.Mode>, name: string, typ: Type) -> Parameter {
+  pub fn new(span: spn.Span, mode: Option<md.Mode>, name: string, typ: Type) -> Parameter {
     Parameter { span, mode, name, typ }
   }
 }
@@ -152,11 +132,11 @@ impl Parameter {
 pub fn param(
   start: uint32,
   end: uint32,
-  mode: Option<mode.Mode>,
+  mode: Option<md.Mode>,
   name: string,
   typ: Type,
 ) -> Parameter {
-  Parameter.new(span.new(start, end), mode, name, typ)
+  Parameter.new(spn.new(start, end), mode, name, typ)
 }
 
 impl Declarations {

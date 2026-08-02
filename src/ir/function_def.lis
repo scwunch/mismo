@@ -1,12 +1,12 @@
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 import "ty"
 import "utils/slice"
 
 #[json]
 #[equality]
 pub struct FunctionDef {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub id: int,
   pub name: string,
   pub type_parameters: Slice<ty.TypeParameter>,
@@ -17,10 +17,10 @@ pub struct FunctionDef {
 
 impl FunctionDef {
   pub fn new(
-    span: span.Span,
+    span: spn.Span,
     id: int,
     name: string,
-      type_parameters: Slice<ty.TypeParameter>,
+    type_parameters: Slice<ty.TypeParameter>,
     parameters: Slice<ty.Parameter>,
     return_type: ty.Type,
     body: Block,
@@ -43,7 +43,7 @@ impl FunctionDef {
     return_type: ty.Type,
   ) -> FunctionDef {
     FunctionDef {
-      span: span.new(0, 0),
+      span: spn.new(0, 0),
       id: -1,
       name,
       type_parameters,

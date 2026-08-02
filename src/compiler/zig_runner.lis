@@ -28,7 +28,7 @@ impl IoStreams {
 
 impl Options {
   pub fn new() -> Options {
-    Options {
+    Options { 
       zig_bin: "zig",
       zig_prelude_path: "",
       out_bin: "out",

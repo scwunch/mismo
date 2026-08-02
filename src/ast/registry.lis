@@ -1,8 +1,8 @@
 import "cst"
 import dx "diagnostics"
-import "mode"
+import md "mode"
+import spn "span"
 import "ty"
-import "span"
 
 #[json]
 pub struct Registry {
@@ -19,15 +19,21 @@ impl Registry {
   }
 
   pub fn with_mock_prelude() -> Ref<Registry> {
-    let self = &Registry{..}
+    let self = &Registry { .. }
     for fn_name in ["==", "+", "-", "*", "/", "print"] {
       self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
     }
-    let span = span.new(0,0)
-    self.type_defs["Option"] = &ty.TypeDef.new(span, "Option", [], ty.TypeKind.Enum([
-      ty.Variant{span, name: "Some", fields: [ty.Type.Bool]},
-      ty.Variant{span, name: "None", fields: []},
-    ]))
+    let span = spn.new(0, 0)
+
+    self.type_defs["Option"] = &ty.TypeDef.new_enum(
+      span,
+      "Option",
+      [],
+      ([
+        ("Some", ty.Type.Bool),
+        ("None", ty.nil()),
+      ])
+    )
     self
   }
 
@@ -47,14 +53,26 @@ impl Registry {
     self.errors = self.errors.append(err)
   }
 
-  pub fn get_module(self, span: span.Span, path: cst.Path) -> Result<Registry, dx.ResolveError> {
+  pub fn get_module(self, span: spn.Span, path: cst.Path) -> Result<Registry, dx.ResolveError> {
     if path.namespace.is_empty() { return Ok(self) }
     self.imports
       .get(path.namespace.join("::"))
       .ok_or_else(|| dx.MissingNameError.new(path.namespace.join("::"), span))
   }
 
-  pub fn eval_type(self, span: span.Span, name: string, type_args: Slice<ty.Type>) -> Result<ty.Type, dx.ResolveError> {
+  pub fn get_type_def(self, span: spn.Span, path: cst.Path) -> Result<Ref<ty.TypeDef>, dx.ResolveError> {
+    let module = self.get_module(span, path)?
+    module.type_defs
+      .get(path.name)
+      .ok_or_else(|| dx.MissingNameError.new(path.name, span))
+  }
+
+  pub fn eval_type(
+    self,
+    span: spn.Span,
+    name: string,
+    type_args: Slice<ty.Type>,
+  ) -> Result<ty.Type, dx.ResolveError> {
     match self.type_defs.get(name) {
       None => {
         Err(dx.MissingNameError.new(name, span))

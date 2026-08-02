@@ -2,11 +2,11 @@ import "go:fmt"
 import "go:io"
 import "go:os"
 
-// import "codegen"
 import "cst"
 import dx "diagnostics"
 import "lexer"
-import "parser"
+import pars "parser"
+
 // import "semantic"
 // import "specialization"
 
@@ -21,7 +21,7 @@ pub fn compile_to_tokens(source: string) -> Slice<lexer.Token> {
 }
 
 pub fn compile_to_ast(source: string) -> Result<cst.Declarations, Slice<dx.Diagnostic>> {
-  let mut parser = parser.Parser.new(source)
+  let mut parser = pars.Parser.new(source)
   let decs = parser.parse()
   if decs.errors.is_empty() {
     Ok(decs)

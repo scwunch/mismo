@@ -1,12 +1,12 @@
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 import "ty"
 
 #[display]
 #[json]
 #[equality]
 pub struct Expression {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub kind: Expr,
 }
 
@@ -21,13 +21,14 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
+  RecordLiteral(Slice<Field>),
   Closure(Closure),
-  Declare(mode.Mode, Ref<ty.Variable>, Ref<Expression>),
+  Declare(md.Mode, Ref<ty.Variable>, Ref<Expression>),
   Identifier(Ref<ty.Variable>),
   CapturedIdent(Ref<ty.Variable>),
   Assign(Ref<ty.Variable>, Ref<Expression>),
   AssignCapture(Ref<ty.Variable>, Ref<Expression>),
-  Binding(mode.Mode, Ref<Expression>),
+  Binding(md.Mode, Ref<Expression>),
   Call(Call),
   If(If),
   While(If),
@@ -36,10 +37,27 @@ pub enum Expr {
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
-  BareConstructor(string, Slice<Expression>),
-  StructConstructor(ty.Type, Slice<Expression>),
-  EnumConstructor(Ref<ty.TypeDef>, ty.Variant, Slice<Expression>),
+  Constructor(Constructor, Ref<Expression>),
+  // BareConstructor(string, Slice<Expression>),
+  // StructConstructor(ty.Type, Slice<Expression>),
+  // EnumConstructor(Ref<ty.TypeDef>, ty.Variant, Slice<Expression>),
   Extern,
+}
+
+#[equality]
+pub enum Constructor {
+  ResolvedStruct(ty.Type),
+  GenericStruct(Ref<ty.TypeDef>),
+  ResolvedVariant(ty.Type, ty.Constructor),
+  GenericVariant(Ref<ty.TypeDef>, string),
+  BareVariant(string),
+}
+
+#[equality]
+pub struct Field {
+  pub span: spn.Span,
+  pub name: string,
+  pub expr: Expression,
 }
 
 #[equality]
@@ -62,7 +80,7 @@ impl Block {
     self.statements[self.statements.length() - 1]
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.statements[0].span.merge(self.last().span)
   }
 
@@ -123,13 +141,13 @@ pub struct Closure {
 
 #[json]
 pub struct Capture {
-  pub mode: mode.Mode,
+  pub mode: md.Mode,
   pub variable: Ref<ty.Variable>,
 }
 
 impl Capture {
   pub fn new(varid: Ref<ty.Variable>) -> Capture {
-    Capture { mode: mode.Mode.Let, variable: varid }
+    Capture { mode: md.Mode.Let, variable: varid }
   }
 }
 
@@ -139,12 +157,12 @@ impl Closure {
     ty.Type.Fn(self.params.map(ty.Parameter.param_type), &self.ret_type)
   }
 
-  pub fn call_mode(self) -> mode.Mode {
-    self.env.fold(mode.Mode.Let, |acc, cap| acc.union(cap.mode))
+  pub fn call_mode(self) -> md.Mode {
+    self.env.fold(md.Mode.Let, |acc, cap| acc.union(cap.mode))
   }
 
   pub fn is_movable(self) -> bool {
-    self.env.all(|c| c.mode == mode.Mode.Var)
+    self.env.all(|c| c.mode == md.Mode.Var)
   }
 }
 
@@ -179,12 +197,12 @@ pub enum Then {
 }
 
 impl If {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.checks[0].span().merge(self.end_span())
   }
 
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.default {
       Some(block) => block.last().span,
       None => self.checks[self.checks.length() - 1].end_span(),
@@ -201,7 +219,7 @@ impl If {
 }
 
 impl Check {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     match self {
       Test(expr, block) => expr.span.merge(block.last().span),
       Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
@@ -209,7 +227,7 @@ impl Check {
   }
 
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self {
       Test(_, block) => block.last().span,
       Match(_, arms) => arms[arms.length() - 1].end_span(),
@@ -218,11 +236,11 @@ impl Check {
 }
 
 impl Arm {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.pattern.span.merge(self.end_span())
   }
 
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.then {
       Block(block) => block.last().span,
       If(cond) => cond.end_span(),
@@ -239,12 +257,12 @@ pub struct ForLoop {
 }
 
 impl Expression {
-  pub fn new(span: span.Span, kind: Expr) -> Expression {
+  pub fn new(span: spn.Span, kind: Expr) -> Expression {
     Expression { span, kind }
   }
 
   pub fn blank() -> Expression {
-    Expression.new(span.new(0, 0), Expr.Nil)
+    Expression.new(spn.new(0, 0), Expr.Nil)
   }
 
   // pub fn typ(self) -> ty.Type {

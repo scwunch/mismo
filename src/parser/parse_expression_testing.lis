@@ -1,7 +1,7 @@
 import "cst"
 import "lexer"
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 import "testing"
 
 pub fn test_expression() {
@@ -33,7 +33,7 @@ fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.Binop(b) => {
-      t.should_eq(expr.span, span.new(0, 5))?
+      t.should_eq(expr.span, spn.new(0, 5))?
       t.should_eq(b.op, Operator.Add)?
       t.should_eq(b.left.kind, cst.Expr.IntLiteral(1))?
       t.should_eq(b.right.kind, cst.Expr.IntLiteral(2))?
@@ -158,7 +158,7 @@ fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   match expr.kind {
     cst.Expr.ArrayLiteral(elems) => {
       t.should_be_true(elems.length() == 3, f"Expected 3; got {elems.length()}")?
-      t.should_eq(expr.span, span.new(0, 9))?
+      t.should_eq(expr.span, spn.new(0, 9))?
       t.should_eq(elems[0].kind, cst.Expr.IntLiteral(1))?
       t.should_eq(elems[1].kind, cst.Expr.IntLiteral(2))?
       t.should_eq(elems[2].kind, cst.Expr.IntLiteral(3))?
@@ -190,7 +190,7 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
         elems.length() == 4,
         f"Expected 4 elements; got {elems.length()}",
       )?
-      t.should_eq(expr.span, span.new(0, 12))?
+      t.should_eq(expr.span, spn.new(0, 12))?
       t.should_eq(elems[0].kind, cst.Expr.IntLiteral(1))?
       t.should_eq(elems[1].kind, cst.Expr.IntLiteral(2))?
       t.should_eq(elems[2].kind, cst.Expr.IntLiteral(3))?
@@ -276,8 +276,8 @@ fn test_parse_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
       t.should_eq(
         params[0],
         cst.Parameter.new(
-          span.new(1, 10),
-          Some(mode.Mode.Mut),
+          spn.new(1, 10),
+          Some(md.Mode.Mut),
           "a",
           cst.typ(7, 10, "Int", []),
         ),
@@ -297,7 +297,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
-      t.should_eq(expr.span, span.new(0, 17))?
+      t.should_eq(expr.span, spn.new(0, 17))?
       t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq(call.fn_name, cst.Path.name_("awesome"))?
       t.should_be_true(call.type_args.is_none(), "Expected no type args")?
@@ -317,7 +317,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotCall(receiver, call) => {
-      t.should_eq(expr.span, span.new(0, 24))?
+      t.should_eq(expr.span, spn.new(0, 24))?
       t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq(
         call.fn_name,
@@ -346,7 +346,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   match expr.kind {
     cst.Expr.DotName(receiver, field) => {
-      t.should_eq(expr.span, span.new(0, 8))?
+      t.should_eq(expr.span, spn.new(0, 8))?
       t.should_eq(receiver.kind, cst.Expr.Identifier(cst.Path.name_("self")))?
       t.should_eq_repr(field, "awesome")?
     },
@@ -361,16 +361,16 @@ fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(expr.kind, cst.Expr.IntLiteral(-5))?
-  t.should_eq(expr.span, span.new(0, 2))?
+  t.should_eq(expr.span, spn.new(0, 2))?
 
   parser = Parser.new("-x")
   ep = ExpressionParser.new(&parser, 0)
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(
     expr.kind,
-    cst.Expr.Neg(&cst.identifier(span.new(1, 2), cst.Path.name_("x"))),
+    cst.Expr.Neg(&cst.identifier(spn.new(1, 2), cst.Path.name_("x"))),
   )?
-  t.should_eq(expr.span, span.new(0, 2))?
+  t.should_eq(expr.span, spn.new(0, 2))?
   Ok(())
 }
 
@@ -381,9 +381,9 @@ fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let expr = ep.parse().map_err(|e| e.message())?
   t.should_eq(
     expr.kind,
-    cst.Expr.Not(&cst.identifier(span.new(4, 5), cst.Path.name_("x"))),
+    cst.Expr.Not(&cst.identifier(spn.new(4, 5), cst.Path.name_("x"))),
   )?
-  t.should_eq(expr.span, span.new(0, 5))?
+  t.should_eq(expr.span, spn.new(0, 5))?
   Ok(())
 }
 
@@ -397,9 +397,9 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
     cst.Expr.Binop(b) => {
       t.should_eq(b.op, Operator.Assign)?
       match b.left.kind {
-        cst.Expr.Binding(mode.Mode.Let, id_ref) => {
+        cst.Expr.Binding(md.Mode.Let, id_ref) => {
           t.should_eq(id_ref.kind, cst.Expr.Identifier(cst.Path.name_("x")))?
-          t.should_eq_repr(id_ref.span, span.new(4, 5))?
+          t.should_eq_repr(id_ref.span, spn.new(4, 5))?
         },
         _ => return t.fail("Expected Binding(Let)"),
       }
@@ -417,7 +417,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
       match b.left.kind {
         Binding(Var, id_ref) => {
           t.should_eq(id_ref.kind, cst.Expr.Identifier(cst.Path.name_("y")))?
-          t.should_eq_repr(id_ref.span, span.new(4, 5))?
+          t.should_eq_repr(id_ref.span, spn.new(4, 5))?
         },
         _ => return t.fail("Expected Binding(Var)"),
       }

@@ -1,78 +1,55 @@
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 
-impl Type {
-  pub fn equals(self, other: Type) -> bool {
-    self.span == other.span && self.kind.equals(other.kind)
-  }
-}
+// impl Type {
+//   pub fn equals(self, other: Type) -> bool {
+//     self.span == other.span && self.kind.equals(other.kind)
+//   }
+// }
 
 impl TypeKind {
   pub fn equals(self, other: TypeKind) -> bool {
     match (self, other) {
-      (TypeKind.Nominal(name1, args1), TypeKind.Nominal(name2, args2)) => {
-        name1.equals(name2) && args1.equals(args2)
-      },
-      (TypeKind.Tuple(args1), TypeKind.Tuple(args2)) => {
-        args1.equals(args2)
-      },
-      (TypeKind.Fn(params1, ret1), TypeKind.Fn(params2, ret2)) => {
-        params1.equals(params2) && ret1.equals(ret2.*)
-      },
-      _ => false,
+      (Nominal(a, b), Nominal(c, d)) => a.equals(c) && b.equals(d),
+      (Tuple(args1), Tuple(args2)) => args1.equals(args2),
+      (Record(a), Record(b)) => a.equals(b),
+      (Enum(a), Enum(b)) => a.equals(b),
+      (Fn(p1, r1), Fn(p2, r2)) => p1.equals(p2) && r1.equals(r2.*),
+      (Nominal(_, _), _) |
+      (Tuple(_), _) |
+      (Record(_), _) |
+      (Enum(_), _) |
+      (Fn(_, _), _) => false,
     }
   }
 }
 
-impl ParamType {
-  pub fn equals(self, other: ParamType) -> bool {
-    self.mode == other.mode && self.typ.equals(other.typ)
-  }
-}
+// impl ParamType {
+//   pub fn equals(self, other: ParamType) -> bool {
+//     self.mode == other.mode && self.typ.equals(other.typ)
+//   }
+// }
 
-impl Field {
-  pub fn equals(self, other: Field) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.typ.equals(other.typ)
-  }
-}
+// impl Field {
+//   pub fn equals(self, other: Field) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.typ.equals(other.typ)
+//   }
+// }
 
-impl TypeParameter {
-  pub fn equals(self, other: TypeParameter) -> bool {
-    self.span == other.span && self.name == other.name
-  }
-}
+// impl TypeParameter {
+//   pub fn equals(self, other: TypeParameter) -> bool {
+//     self.span == other.span && self.name == other.name
+//   }
+// }
 
-impl TypeDecl {
-  pub fn equals(self, other: TypeDecl) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.type_parameters.equals(other.type_parameters) &&
-    self.body.equals(other.body)
-  }
-}
-
-impl TypeBody {
-  pub fn equals(self, other: TypeBody) -> bool {
-    match (self, other) {
-      (TypeBody.Struct(s1), TypeBody.Struct(s2)) => s1.equals(s2),
-      (TypeBody.Enum(e1), TypeBody.Enum(e2)) => e1.equals(e2),
-      _ => false,
-    }
-  }
-}
-
-impl Variant {
-  pub fn equals(self, other: Variant) -> bool {
-    self.span == other.span && self.name == other.name &&
-    self.payload.equals(other.payload)
-  }
-}
-
-impl Expression {
-  pub fn equals(self, other: Expression) -> bool {
-    self.span == other.span && self.kind.equals(other.kind)
-  }
-}
+// impl TypeDecl {
+//   pub fn equals(self, other: TypeDecl) -> bool {
+//     self.span == other.span && self.name == other.name &&
+//     self.type_parameters.equals(other.type_parameters) &&
+//     self.body.equals(other.body)
+//   }
+// }
 
 impl Expr {
   #[allow(float_cmp, match_same_arms)]
@@ -113,11 +90,11 @@ impl Expr {
   }
 }
 
-impl Path {
-  pub fn equals(self, other: Path) -> bool {
-    self.name == other.name && self.namespace.equals(other.namespace)
-  }
-}
+// impl Path {
+//   pub fn equals(self, other: Path) -> bool {
+//     self.name == other.name && self.namespace.equals(other.namespace)
+//   }
+// }
 
 impl Call {
   pub fn equals(self, other: Call) -> bool {
@@ -141,32 +118,32 @@ impl If {
   }
 }
 
-impl Check {
-  pub fn equals(self, other: Check) -> bool {
-    match (self, other) {
-      (Test(e1, b1), Test(e2, b2)) => e1.equals(e2) && b1.equals(b2),
-      (Match(e1, a1), Match(e2, a2)) => e1.equals(e2) && a1.equals(a2),
-      _ => false,
-    }
-  }
-}
+// impl Check {
+//   pub fn equals(self, other: Check) -> bool {
+//     match (self, other) {
+//       (Test(e1, b1), Test(e2, b2)) => e1.equals(e2) && b1.equals(b2),
+//       (Match(e1, a1), Match(e2, a2)) => e1.equals(e2) && a1.equals(a2),
+//       _ => false,
+//     }
+//   }
+// }
 
-impl Arm {
-  pub fn equals(self, other: Arm) -> bool {
-    self.pattern.equals(other.pattern) && self.then.equals(other.then)
-  }
-}
+// impl Arm {
+//   pub fn equals(self, other: Arm) -> bool {
+//     self.pattern.equals(other.pattern) && self.then.equals(other.then)
+//   }
+// }
 
-impl Parameter {
-  pub fn equals(self, other: Parameter) -> bool {
-    self.span == other.span && self.mode == other.mode &&
-    self.name == other.name &&
-    self.typ.equals(other.typ)
-  }
-}
+// impl Parameter {
+//   pub fn equals(self, other: Parameter) -> bool {
+//     self.span == other.span && self.mode == other.mode &&
+//     self.name == other.name &&
+//     self.typ.equals(other.typ)
+//   }
+// }
 
-impl Block {
-  pub fn equals(self, other: Block) -> bool {
-    self.statements.equals(other.statements)
-  }
-}
+// impl Block {
+//   pub fn equals(self, other: Block) -> bool {
+//     self.statements.equals(other.statements)
+//   }
+// }

@@ -1,4 +1,4 @@
-import "mode"
+import md "mode"
 import "utils/slice"
 
 #[json]
@@ -14,6 +14,8 @@ pub enum Type {
   Pointer(Ref<Type>),
   Slice(Ref<Type>),
   Tuple(Slice<Type>),
+  Record(Slice<Field>),
+  Enum(Slice<Constructor>),
   Fn(Slice<ParamType>, Ref<Type>),
   Adt(Ref<TypeDef>, Slice<Type>),
   Var(int),
@@ -21,8 +23,22 @@ pub enum Type {
 
 #[json]
 #[equality]
+#[display]
+pub struct Field {
+  pub name: string,
+  pub typ: Type,
+}
+
+impl Field {
+  pub fn substitute(self, args: Slice<Type>) -> Field {
+    Field { name: self.name, typ: self.typ.substitute(args) }
+  }
+}
+
+#[json]
+#[equality]
 pub struct ParamType {
-  pub mode: mode.Mode,
+  pub mode: md.Mode,
   pub typ: Type,
 }
 
@@ -45,6 +61,8 @@ pub fn nil() -> Type {
 }
 
 impl Type {
+  /// NOTE: this uses different unicode characters for the opening and closing braces
+  /// of tuple and record types, because lis currently doesn't support curly braces in f-strings.
   pub fn string(self) -> string {
     match self {
       Any => "Any",
@@ -57,9 +75,11 @@ impl Type {
       Array(t) => f"Array[{t}]",
       Slice(t) => f"Slice[{t}]",
       Pointer(t) => f"Pointer[{t}]",
-      Tuple(fields) => f"({fields.map(Type.string).join(", ")})",
+      Tuple(fields) => f"｛{fields.map(Type.string).join(", ")}｝",
+      Record(fields) => f"｛{fields.map(|field| f"{field}").join(", ")}｝",
+      Enum(variants) => f".｛{variants.map(|ctor| f"{ctor}").join(", ")}｝",
       Fn(params, ret) => f"({params.map(ParamType.string).join(", ")})->{ret}",
-      Adt(def, args) => def.name + f"{args}",
+      Adt(def, args) => def.ctor.name + f"{args}",
       Var(int) => if int >= 0 { f"T{int}" } else { "T_" },
     }
   }
@@ -69,6 +89,8 @@ impl Type {
       Any | Never | Bool | Nat | Int | Float | String | Var(_) => [],
       Array(typ) | Slice(typ) | Pointer(typ) => [typ.*],
       Tuple(fields) => fields,
+      Record(fields) => fields.map(|f| f.typ),
+      Enum(variants) => variants.map(|ctor| ctor.typ),
       Fn(params, ret) => params.map(|p| p.typ).append(ret.*),
       Adt(_, args) => args,
     }
@@ -87,6 +109,12 @@ impl Type {
       (Slice(_), Slice(_)) => true,
       (Pointer(_), Pointer(_)) => true,
       (Tuple(a), Tuple(b)) => a.length() == b.length(),
+      (Record(a), Record(b)) => {
+        a.length() == b.length() && a.all(|f1| b.find(|f2| f1.name == f2.name).is_some())
+      },
+      (Enum(a), Enum(b)) => {
+        a.length() == b.length() && a.all(|c1| b.find(|c2| c1.name == c2.name).is_some())
+      },
       (Fn(a, _), Fn(b, _)) => a.length() == b.length(),
       (Adt(def1, _), Adt(def2, _)) => def1 == def2,
       (Var(a), Var(b)) => a == b,
@@ -101,6 +129,8 @@ impl Type {
       (Slice(_), _) |
       (Pointer(_), _) |
       (Tuple(_), _) |
+      (Record(_), _) |
+      (Enum(_), _) |
       (Fn(_, _), _) |
       (Adt(_, _), _) |
       (Var(_), _) => false,
@@ -120,6 +150,8 @@ impl Type {
       Slice(typ) => Type.Slice(&typ.substitute(args)),
       Pointer(typ) => Type.Pointer(&typ.substitute(args)),
       Tuple(fields) => Type.Tuple(fields.map(|f| f.substitute(args))),
+      Record(fields) => Type.Record(fields.map(|f| f.substitute(args))),
+      Enum(variants) => Type.Enum(variants.map(|ctor| ctor.substitute(args))),
       Fn(params, ret) => Type.Fn(params.map(|p| p.substitute(args)), ret),
       Adt(def, args) => Type.Adt(def, args.map(|a| a.substitute(args))),
       Var(i) => args[i],
@@ -183,6 +215,12 @@ impl Type {
       (Array(a), Array(b)) | (Pointer(a), Pointer(b)) => a.equals(b.*),
       (Slice(a), Slice(b)) => a.equals(b.*),
       (Tuple(a), Tuple(b)) => a.equals(b),
+      (Record(a), Record(b)) => {
+        a.length() == b.length() && a.all(|f| b.contains(f))
+      },
+      (Enum(a), Enum(b)) => {
+        a.length() == b.length() && a.all(|ctor| b.contains(ctor))
+      },
       (Fn(a, b), Fn(c, d)) => a.equals(c) && b.equals(d.*),
       (Adt(a, b), Adt(c, d)) => a == c && b.equals(d),
       (Var(a), Var(b)) => a == b,
@@ -197,19 +235,29 @@ impl Type {
       (Slice(_), _) |
       (Pointer(_), _) |
       (Tuple(_), _) |
+      (Record(_), _) |
+      (Enum(_), _) |
       (Fn(_, _), _) |
       (Adt(_, _), _) |
       (Var(_), _) => false,
     }
   }
 
-  pub fn variants(self) -> Slice<Variant> {
-    let Type.Adt(def, _) = self else {
-      panic("expected enum")
+  pub fn field(self, i: int) -> Type {
+    match self {
+      Tuple(fields) => fields[i],
+      Record(fields) => fields[i].typ,
+      Enum(variants) => variants[0].typ.field(i),
+      Adt(def, args) => def.ctor.typ.substitute(args).field(i),
+      _ => panic(f"unreachable: do not call `field` on {self}")
     }
-    let TypeKind.Enum(variants) = def.kind else {
-      panic("expected enum")
+  }
+
+  pub fn variants(self) -> Slice<Constructor> {
+    match self {
+      Enum(variants) => variants,
+      Adt(def, args) => def.ctor.typ.substitute(args).variants(),
+      _ => panic(f"should not call `variants` on {self}")
     }
-    variants
   }
 }

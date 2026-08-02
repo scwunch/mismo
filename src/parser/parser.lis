@@ -1,30 +1,26 @@
 import "cst"
 import dx "diagnostics"
-import "lexer"
-import "mode"
-import "span"
+import lex "lexer"
+import md "mode"
+import spn "span"
 import t "testing"
 
-type Lexer = lexer.Lexer
+type Span = spn.Span
 
-type Span = span.Span
-
-pub type Token = lexer.Token
-
-pub type TokenKind = lexer.TokenKind
+pub type TokenKind = lex.TokenKind
 
 pub struct Parser {
-  lexer: Lexer,
-  peeked: Token,
+  lexer: lex.Lexer,
+  peeked: lex.Token,
   current_line_indent: uint32,
   pub defs: cst.Declarations,
 }
 
 impl Parser {
   pub fn new(source: string) -> Parser {
-    let mut lexer = Lexer.new(source)
+    let mut lexer = lex.Lexer.new(source)
     let peeked = lexer.next()
-    Parser { 
+    Parser {
       lexer,
       peeked,
       current_line_indent: 0,
@@ -32,7 +28,7 @@ impl Parser {
     }
   }
 
-  pub fn peek(self) -> Token {
+  pub fn peek(self) -> lex.Token {
     self.peeked
   }
 
@@ -42,7 +38,7 @@ impl Parser {
     self.lexer.on_line_start && self.peek_indent() <= reference_indent
   }
 
-  pub fn next(self: Ref<Parser>) -> Token {
+  pub fn next(self: Ref<Parser>) -> lex.Token {
     let tok = self.peeked
     self.current_line_indent = self.lexer.indent
     self.peeked = self.lexer.next()
@@ -53,15 +49,15 @@ impl Parser {
     self.lexer.indent
   }
 
-  fn parse_path(self: Ref<Parser>, mut span_: span.Span, mut name: string) -> Result<(span.Span, cst.Path), dx.ParseError> {
+  fn parse_path(self: Ref<Parser>, mut span: Span, mut name: string) -> Result<(spn.Span, cst.Path), dx.ParseError> {
     let mut path = []
     loop {
       if self.consume(TokenKind.NamespaceSeparator).is_ok() {
-        span_ = span_.merge(self.peek().span)
+        span = span.merge(self.peek().span)
         path = path.append(name)
         name = self.consume_identifier()?
       } else {
-        return Ok((span_, cst.Path { namespace: path, name }))
+        return Ok((span, cst.Path { namespace: path, name }))
       }
     }
   }
@@ -72,18 +68,18 @@ impl Parser {
   // returns an error if the peeked token is not an identifier, keyword, or operator
   fn consume_identifier(self: Ref<Parser>) -> Result<string, dx.ParseError> {
     let ident = match self.peek().kind {
-      TokenKind.Identifier(name) => name,
-      TokenKind.Let => "let",
-      TokenKind.Mut => "mut",
-      TokenKind.MutBang => "mut!",
-      TokenKind.Var => "var",
-      TokenKind.Break => "break",
-      TokenKind.Continue => "continue",
-      TokenKind.Return => "return",
-      TokenKind.If => "if",
-      TokenKind.For => "for",
-      TokenKind.While => "while",
-      TokenKind.Operator(op) => op.sigil(),
+      Identifier(name) => name,
+      Let => "let",
+      Mut => "mut",
+      MutBang => "mut!",
+      Var => "var",
+      Break => "break",
+      Continue => "continue",
+      Return => "return",
+      If => "if",
+      For => "for",
+      While => "while",
+      Operator(op) => op.sigil(),
       tok => return Err(dx.ParseError.new(
         self.peek().span,
         f"Expected identifier.  Got {tok}",
@@ -93,12 +89,12 @@ impl Parser {
     Ok(ident)
   }
 
-  fn consume_mode(self: Ref<Parser>) -> Option<mode.Mode> {
+  fn consume_mode(self: Ref<Parser>) -> Option<md.Mode> {
     let mod = match self.peek().kind {
-      TokenKind.Let => mode.Mode.Let,
-      TokenKind.Mut => mode.Mode.Mut,
-      TokenKind.MutBang => mode.Mode.MutBang,
-      TokenKind.Var => mode.Mode.Var,
+      Let => md.Mode.Let,
+      Mut => md.Mode.Mut,
+      MutBang => md.Mode.MutBang,
+      Var => md.Mode.Var,
       tok => return None,
     }
     let _ = self.next()
@@ -127,6 +123,9 @@ impl Parser {
         (RightParen, ')') |
         (RightBrace, '}') |
         (Pipe, '|') => break,
+        (RightBracket, '\n') |
+        (RightParen, '\n') |
+        (RightBrace, '\n') => break,
         _ if self.newline_follows(indent) => {
           if end == '\n' { break }
           return Err(dx.ParseError.new(
@@ -145,17 +144,28 @@ impl Parser {
   }
 
   fn parse_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
-    let span = self.peek().span
-    let Ok(name) = self.consume_identifier() else {
-      return self.parse_tuple_or_fn_type()
+    match self.peek().kind {
+      Dot => self.parse_enum_type(self.next().span),
+      LeftBrace => self.parse_tuple_or_record_type(self.next().span),
+      LeftParen => self.parse_fn_type(self.next().span),
+      Identifier(_) => self.parse_nominal_type(self.peek().span),
+      k => Err(dx.ParseError.new(self.peek().span, f"expected type; got {k}")),
     }
+  }
+
+  fn parse_nominal_type(self: Ref<Parser>, span: Span) -> Result<cst.Type, dx.ParseError> {
+    let name = self.consume_identifier()?
     let (span, path) = self.parse_path(span, name)?
-    let mut type_args = []
-    if self.consume(TokenKind.LeftBracket).is_ok() {
-      type_args = self.parse_list(']', self.parse_type)?
-      span = span.merge(self.consume(TokenKind.RightBracket)?)
-    }
-    Ok(cst.Type.new(span, path, type_args))
+    let (span, type_args) = self.parse_type_args(span)?
+    Ok(cst.Type.new(span, path, type_args.unwrap_or([])))
+  }
+
+  fn parse_type_args(self: Ref<Parser>, span: Span) -> Result<(Span, Option<Slice<cst.Type>>), dx.ParseError> {
+    if self.peek().kind != TokenKind.LeftBracket { return Ok((span, None)) }
+    let _ = self.next()
+    let types = self.parse_list(']', self.parse_type)?
+    let end = self.consume(TokenKind.RightBracket)?
+    Ok((span.merge(end), Some(types)))
   }
 
   fn parse_param_type(self: Ref<Parser>) -> Result<cst.ParamType, dx.ParseError> {
@@ -164,16 +174,27 @@ impl Parser {
     Ok(cst.ParamType { mode, typ })
   }
 
-  fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
-    let mut span = self.peek().span
-    let _ = self
-      .consume(TokenKind.LeftParen)
-      .map_err(|_| {
-        dx.ParseError.new(
-          span,
-          f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
-        )
-      })?
+  fn parse_enum_type(self: Ref<Parser>, span: Span) -> Result<cst.Type, dx.ParseError> {
+    let _ = self.consume(TokenKind.LeftBrace)?
+    let variants = self.parse_list('}', self.parse_variant)?
+    let _ = self.consume(TokenKind.RightBrace)?
+    Ok(cst.Type { span, kind: cst.TypeKind.Enum(variants) })
+  }
+
+  fn parse_variant(self: Ref<Parser>) -> Result<cst.Variant, dx.ParseError> {
+    let mut span: Span = self.peek().span
+    let name = self.consume_identifier()?
+    let payload = if self.peek().kind == TokenKind.Comma || self.newline_follows(self.current_line_indent) {
+      None
+    } else {
+      let typ = self.parse_type()?
+      span = span.merge(typ.span)
+      Some(typ)
+    }
+    Ok(cst.Variant { span, name, payload })
+  }
+
+  fn parse_fn_type(self: Ref<Parser>, mut span: Span) -> Result<cst.Type, dx.ParseError> {
     let params = self.parse_list(')', self.parse_param_type)?
     span = span.merge(self.consume(TokenKind.RightParen)?)
     if self.consume(TokenKind.Arrow).is_ok() {
@@ -181,10 +202,119 @@ impl Parser {
       span = span.merge(ret_type.span)
       Ok(cst.Type.fn_(span, params, &ret_type))
     } else {
-      let type_pargs = params.map(|p| p.typ)
-      Ok(cst.Type.tuple(span, type_pargs))
+      let ret_type = cst.Type { span: spn.new(span.end, span.end), kind: cst.TypeKind.Tuple([]) }
+      Ok(cst.Type.fn_(span, params, &ret_type))
     }
   }
+
+  // fn parse_tuple_or_record_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
+  //   let Ok(span) = self.consume(TokenKind.LeftBrace) else {
+  //     panic("unreachable")
+  //   }
+  //   if let Ok(end) = self.consume(TokenKind.RightBrace) {
+  //     return Ok(cst.Type.tuple(span.merge(end), []))
+  //   }
+  //   let ident_span = self.peek().span
+  //   match self.consume_identifier() {
+  //     Err(_) => {
+  //       let types = self.parse_list('}', self.parse_type)?
+  //       let span = span.merge(self.consume(TokenKind.RightBrace)?)
+  //       Ok(cst.Type.tuple(span, types))
+  //     },
+  //     Ok(name) => {
+  //       let (path_span, path) = self.parse_path(ident_span, name)?
+  //       if path.namespace.is_empty() && !path.is_type_name() {
+  //         // switch to parsing as record type, with ident as first field name
+  //         self.parse_record_type(span, path.name)
+  //       } else {
+  //         // finish parsing the first nominal type of the tuple, then parse rest
+  //         let (first_span, args) = self.parse_type_args(path_span)?
+  //         let first = cst.Type.new(first_span, path, args.unwrap_or([]))
+  //         let rest = self.parse_list('}', self.parse_type)?
+  //         let types = [first].append(rest...)
+  //         let span = span.merge(self.consume(TokenKind.RightBrace)?)
+  //         Ok(cst.Type.tuple(span, types))
+  //       }
+  //     }
+  //   }
+  // }
+
+  fn parse_tuple_or_record_type(self: Ref<Parser>, span: Span) -> Result<cst.Type, dx.ParseError> {
+    if let Ok(end) = self.consume(TokenKind.RightBrace) {
+      return Ok(cst.Type.tuple(span.merge(end), []))
+    }
+    let open_brace_indent = self.current_line_indent
+    let ident_span = self.peek().span
+    let Ok(name) = self.consume_identifier() else {
+      return self.finish_tuple_type(span, open_brace_indent, self.parse_type()?)
+    }
+    let (path_span, path) = self.parse_path(ident_span, name)?
+    if path.namespace.is_empty() && !path.is_type_name() {
+      self.finish_record_type(span, open_brace_indent, ident_span, path.name)
+    } else {
+      let (first_span, args) = self.parse_type_args(path_span)?
+      let first = cst.Type.new(first_span, path, args.unwrap_or([]))
+      let _ = self.consume(TokenKind.Comma)
+      self.finish_tuple_type(span, open_brace_indent, first)
+    }
+  }
+
+  fn finish_tuple_type(self: Ref<Parser>, open: Span, open_brace_indent: uint32, first: cst.Type) -> Result<cst.Type, dx.ParseError> {
+    self.current_line_indent = open_brace_indent
+    let rest = self.parse_list('}', self.parse_type)?
+    let close = self.consume(TokenKind.RightBrace)?
+    Ok(cst.Type.tuple(open.merge(close), [first].append(rest...)))
+  }
+
+  fn finish_record_type(
+    self: Ref<Parser>,
+    open: Span,
+    open_brace_indent: uint32,
+    first_field_span: Span,
+    first_field_name: string,
+  ) -> Result<cst.Type, dx.ParseError> {
+    let _ = self.consume(TokenKind.Colon)
+    let typ = self.parse_type()?
+    let span = first_field_span.merge(typ.span)
+    let first = cst.TypeField { span, name: first_field_name, typ}
+    let _ = self.consume(TokenKind.Comma)
+    self.current_line_indent = open_brace_indent
+    let fields = self.parse_list('}', self.parse_field)?
+    let fields = [first].append(fields...)
+    let close = self.consume(TokenKind.RightBrace)?
+    Ok(cst.Type.record(open.merge(close), fields))
+  }
+
+  fn parse_field(self: Ref<Parser>) -> Result<cst.TypeField, dx.ParseError> {
+    let span: Span = self.peek().span
+    let name = self.consume_identifier()?
+    let _ = self.consume(TokenKind.Colon)?
+    let typ = self.parse_type()?
+    let span = span.merge(typ.span)
+    Ok(cst.TypeField { span, name, typ })
+  }
+
+  // fn parse_tuple_or_fn_type(self: Ref<Parser>) -> Result<cst.Type, dx.ParseError> {
+  //   let mut span: Span = self.peek().span
+  //   let _ = self
+  //     .consume(TokenKind.LeftParen)
+  //     .map_err(|_| {
+  //       dx.ParseError.new(
+  //         span,
+  //         f"Expected type (eg `Option[Int]` or `(T)->R`); got {self.peek().kind}",
+  //       )
+  //     })?
+  //   let params = self.parse_list(')', self.parse_param_type)?
+  //   span = span.merge(self.consume(TokenKind.RightParen)?)
+  //   if self.consume(TokenKind.Arrow).is_ok() {
+  //     let ret_type = self.parse_type()?
+  //     span = span.merge(ret_type.span)
+  //     Ok(cst.Type.fn_(span, params, &ret_type))
+  //   } else {
+  //     let type_pargs = params.map(|p| p.typ)
+  //     Ok(cst.Type.tuple(span, type_pargs))
+  //   }
+  // }
 
   fn consume(self: Ref<Parser>, kind: TokenKind) -> Result<Span, dx.ParseError> {
     if self.peek().kind == kind {

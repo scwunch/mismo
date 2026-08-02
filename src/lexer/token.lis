@@ -1,9 +1,9 @@
 import "operator"
-import "span"
+import spn "span"
 
 pub type Operator = operator.Operator
 
-pub type Span = span.Span
+pub type Span = spn.Span
 
 pub struct Token {
   pub span: Span,
@@ -194,8 +194,8 @@ impl Token {
     Token.new(Span { start, end: start + 2 }, TokenKind.Arrow)
   }
 
-  pub fn operator(start: uint32, end: uint32, operator: Operator) -> Token {
-    Token.new(Span { start, end }, TokenKind.Operator(operator))
+  pub fn operator(start: uint32, end: uint32, op: Operator) -> Token {
+    Token.new(Span { start, end }, TokenKind.Operator(op))
   }
 
   pub fn plus(start: uint32) -> Token {

@@ -2,9 +2,9 @@ import "go:fmt"
 import "go:os"
 import "go:strings"
 
-import "span"
+import spn "span"
 
-pub type Span = span.Span
+pub type Span = spn.Span
 
 pub interface Diagnostic {
   // impl error
@@ -16,7 +16,7 @@ pub interface Diagnostic {
   // fn help() -> Option<string>    // Hints (e.g., "Consider upgrading the mode to mut!")
 }
 
-pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
+pub fn location(self: Diagnostic, source: Slice<rune>) -> spn.Location {
   let mut line: uint32 = 0
   let mut col: uint32 = 0
   for i in 0..source.length() {
@@ -26,9 +26,9 @@ pub fn location(self: Diagnostic, source: Slice<rune>) -> span.Location {
     } else {
       col += 1
     }
-    if i == self.span().start as int { return span.Location { line, col } }
+    if i == self.span().start as int { return spn.Location { line, col } }
   }
-  span.Location { line, col }
+  spn.Location { line, col }
 }
 
 pub fn report(errs: Slice<Diagnostic>, source: string) {
@@ -148,7 +148,7 @@ impl MissingNameError {
 }
 
 pub struct UnusedValueError {
-  pub _s_: Span
+  pub _s_: Span,
 }
 
 impl UnusedValueError {
@@ -366,7 +366,12 @@ pub struct TypeMismatchError {
 }
 
 impl TypeMismatchError {
-  pub fn new(src_span: Span, expected: string, actual: string, actual_span: Span) -> TypeMismatchError {
+  pub fn new(
+    src_span: Span,
+    expected: string,
+    actual: string,
+    actual_span: Span,
+  ) -> TypeMismatchError {
     TypeMismatchError { src_span, expected, actual, actual_span }
   }
 
@@ -526,7 +531,7 @@ impl NoMainFunctionError {
   }
 
   pub fn span(self) -> Span {
-    span.new(0, 0)
+    spn.new(0, 0)
   }
 }
 

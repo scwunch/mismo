@@ -1,8 +1,8 @@
 import "ast"
 import "cst"
-import "mode"
+import md "mode"
+import spn "span"
 import types_module "ty"
-import "span"
 
 type ParamType = types_module.ParamType
 
@@ -32,29 +32,29 @@ fn test_eval_type_compound(t) -> Result<(), error> {
 
   // Tuple type: (Int, Bool)
   let assert Ok(ty) = ctx.eval_type(cst.Type.tuple(
-    span.new(0, 11),
+    spn.new(0, 11),
     [cst.typ(1, 4, "Int", []), cst.typ(6, 10, "Bool", [])],
   ))
   assert ty.equals(Type.Tuple([Type.Int, Type.Bool]))
 
   // Empty tuple type: ()
-  let assert Ok(ty) = ctx.eval_type(cst.Type.tuple(span.new(0, 2), []))
+  let assert Ok(ty) = ctx.eval_type(cst.Type.tuple(spn.new(0, 2), []))
   assert ty.equals(Type.Tuple([]))
 
   // Function type: (Int) -> String
   let assert Ok(ty) = ctx.eval_type(cst.Type.fn_(
-    span.new(0, 14),
+    spn.new(0, 14),
     [cst.ParamType.none(cst.typ(1, 4, "Int", []))],
     &cst.typ(10, 16, "String", []),
   ))
   assert ty.equals(Type.Fn(
-    [ParamType { mode: mode.Mode.Let, typ: Type.Int }],
+    [ParamType { mode: md.Mode.Let, typ: Type.Int }],
     &Type.String,
   ))
 
   // Function type with let and mut! params
   let assert Ok(ty) = ctx.eval_type(cst.Type.fn_(
-    span.new(0, 26),
+    spn.new(0, 26),
     [
       cst.ParamType.let_(cst.typ(5, 11, "String", [])),
       cst.ParamType.mut_bang(cst.typ(18, 21, "Int", [])),
@@ -63,8 +63,8 @@ fn test_eval_type_compound(t) -> Result<(), error> {
   ))
   assert ty.equals(Type.Fn(
     [
-      ParamType { mode: mode.Mode.Let, typ: Type.String },
-      ParamType { mode: mode.Mode.MutBang, typ: Type.Int },
+      ParamType { mode: md.Mode.Let, typ: Type.String },
+      ParamType { mode: md.Mode.MutBang, typ: Type.Int },
     ],
     &Type.Bool,
   ))
@@ -79,12 +79,12 @@ fn test_eval_type_nominal(t) -> Result<(), error> {
     ctx.env,
     [
       cst.TypeDecl.new_enum(
-        span.new(0, 18),
+        spn.new(0, 18),
         "Option",
-        [cst.TypeParameter.new(span.new(7, 8), "T")],
+        [cst.TypeParameter.new(spn.new(7, 8), "T")],
         [
-          cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
-          cst.Variant.new(span.new(17, 21), "None", []),
+          (10, 14, "Some", Some(cst.typ(15, 16, "T", []))),
+          (17, 21, "None", None),
         ],
       ),
     ],
@@ -134,12 +134,12 @@ fn test_eval_type_errors(t) -> Result<(), error> {
     ctx.env,
     [
       cst.TypeDecl.new_enum(
-        span.new(0, 18),
+        spn.new(0, 18),
         "Option",
-        [cst.TypeParameter.new(span.new(7, 8), "T")],
+        [cst.TypeParameter.new(spn.new(7, 8), "T")],
         [
-          cst.Variant.new(span.new(10, 14), "Some", [cst.typ(15, 16, "T", [])]),
-          cst.Variant.new(span.new(17, 21), "None", []),
+          (10, 14, "Some", Some(cst.typ(15, 16, "T", []))),
+          (17, 21, "None", None),
         ],
       ),
     ],
@@ -168,7 +168,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Int",
     [],
   )))
-  assert pt.equals(ParamType { mode: mode.Mode.Let, typ: Type.Int })
+  assert pt.equals(ParamType { mode: md.Mode.Let, typ: Type.Int })
 
   // let mode
   let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.let_(cst.typ(
@@ -177,7 +177,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Bool",
     [],
   )))
-  assert pt.equals(ParamType { mode: mode.Mode.Let, typ: Type.Bool })
+  assert pt.equals(ParamType { mode: md.Mode.Let, typ: Type.Bool })
 
   // mut! mode
   let assert Ok(pt) = ctx.eval_param_type(cst.ParamType.mut_bang(cst.typ(
@@ -186,7 +186,7 @@ fn test_eval_param_type(t) -> Result<(), error> {
     "Int",
     [],
   )))
-  assert pt.equals(ParamType { mode: mode.Mode.MutBang, typ: Type.Int })
+  assert pt.equals(ParamType { mode: md.Mode.MutBang, typ: Type.Int })
 
   Ok(())
 }
@@ -209,7 +209,7 @@ fn test_eval_param(t) -> Result<(), error> {
   let assert Ok(param) = ctx.eval_param(cst.param(
     0,
     0,
-    Some(mode.Mode.Let),
+    Some(md.Mode.Let),
     "s",
     cst.typ(10, 14, "String", []),
   ))
@@ -219,7 +219,7 @@ fn test_eval_param(t) -> Result<(), error> {
   let assert Ok(param) = ctx.eval_param(cst.param(
     0,
     0,
-    Some(mode.Mode.Var),
+    Some(md.Mode.Var),
     "y",
     cst.typ(8, 11, "Int", []),
   ))

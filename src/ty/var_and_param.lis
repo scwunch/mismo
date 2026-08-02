@@ -1,8 +1,8 @@
-import "span"
-import "mode"
+import md "mode"
+import spn "span"
 
 pub struct Variable {
-  pub mode: mode.Mode,
+  pub mode: md.Mode,
   pub name: string,
   pub typ: Type,
   pub init: uint32,
@@ -20,7 +20,7 @@ impl Variable {
     }
   }
 
-  pub fn new(mode: mode.Mode, name: string, init: uint32) -> Variable {
+  pub fn new(mode: md.Mode, name: string, init: uint32) -> Variable {
     Variable { mode, name, typ: Type.Never, init, consumed: None }
   }
 }
@@ -28,31 +28,31 @@ impl Variable {
 #[json]
 #[equality]
 pub struct Parameter {
-  pub span: span.Span,
-  pub mode: mode.Mode,
+  pub span: spn.Span,
+  pub mode: md.Mode,
   pub name: string,
   pub typ: Type,
 }
 
 impl Parameter {
-  pub fn new(span: span.Span, mode: mode.Mode, name: string, typ: Type) -> Parameter {
+  pub fn new(span: spn.Span, mode: md.Mode, name: string, typ: Type) -> Parameter {
     Parameter { span, mode, name, typ }
   }
 
   pub fn let_(name: string, typ: Type) -> Parameter {
-    Parameter { span: span.new(0, 0), mode: mode.Mode.Let, name, typ }
+    Parameter { span: spn.new(0, 0), mode: md.Mode.Let, name, typ }
   }
 
   pub fn mut_(name: string, typ: Type) -> Parameter {
-    Parameter { span: span.new(0, 0), mode: mode.Mode.Mut, name, typ }
+    Parameter { span: spn.new(0, 0), mode: md.Mode.Mut, name, typ }
   }
 
   pub fn mutbang(name: string, typ: Type) -> Parameter {
-    Parameter { span: span.new(0, 0), mode: mode.Mode.MutBang, name, typ }
+    Parameter { span: spn.new(0, 0), mode: md.Mode.MutBang, name, typ }
   }
 
   pub fn var_(name: string, typ: Type) -> Parameter {
-    Parameter { span: span.new(0, 0), mode: mode.Mode.Var, name, typ }
+    Parameter { span: spn.new(0, 0), mode: md.Mode.Var, name, typ }
   }
 
   pub fn param_type(self) -> ParamType {

@@ -1,4 +1,4 @@
-import "span"
+import spn "span"
 import "testing"
 
 pub fn test() {
@@ -63,7 +63,7 @@ fn test_read_word(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let mut lex = Lexer.new("let x = 5")
   let tok = lex.read_word()
   t.should_eq(tok.kind, TokenKind.Let)?
-  t.should_eq(tok.span, Span.new(0, 3))?
+  t.should_eq(tok.span, spn.new(0, 3))?
 
   t.should_be_true(lex.peek_char() == ' ', "expected space after `let`")?
   lex.index += 1

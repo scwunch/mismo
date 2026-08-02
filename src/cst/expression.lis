@@ -1,14 +1,15 @@
-import "mode"
+import md "mode"
 import "operator"
-import "span"
+import spn "span"
 
-// type Span = span.Span
+// type Span = spn.Span
 pub type Operator = operator.Operator
 
 #[display]
 #[json]
+#[equality]
 pub struct Expression {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub kind: Expr,
 }
 
@@ -22,9 +23,10 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>),
   TupleLiteral(Slice<Expression>),
+  RecordLiteral(Slice<RecordField>),
   Closure(Slice<Parameter>, Block),
   Identifier(Path),
-  Binding(mode.Mode, Ref<Expression>),
+  Binding(md.Mode, Ref<Expression>),
   Binop(Ref<Binop>),
   Call(Call),
   If(If),
@@ -36,15 +38,16 @@ pub enum Expr {
   Return(Option<Ref<Expression>>),
   Break(Option<Ref<Expression>>),
   Continue,
-  // Type(string, Option<Slice<Type>>),
   DotName(Ref<Expression>, string),
   DotCall(Ref<Expression>, Call),
-  TypeDotCall(Path, Slice<Type>, Call),
+  Type(Path, Option<Slice<Type>>),
+  EnumConstructor(Option<(Path, Option<Slice<Type>>)>, string),
   Extern,
 }
 
 #[json]
 #[display]
+#[equality]
 pub struct Path {
   pub namespace: Slice<string>,
   pub name: string,
@@ -62,23 +65,60 @@ impl Path {
       self.namespace.join("::") + "::" + self.name
     }
   }
+
+  pub fn is_type_name(self) -> bool {
+    for c in self.name.bytes() {
+      match c {
+        '_' => continue,
+        'A' |
+        'B' |
+        'C' |
+        'D' |
+        'E' |
+        'F' |
+        'G' |
+        'H' |
+        'I' |
+        'J' |
+        'K' |
+        'L' |
+        'M' |
+        'N' |
+        'O' |
+        'P' |
+        'Q' |
+        'R' |
+        'S' |
+        'T' |
+        'U' |
+        'V' |
+        'W' |
+        'X' |
+        'Y' |
+        'Z' => return true,
+        _ => break,
+      }
+    }
+    false
+  }
+}
+
+pub struct RecordField {
+  pub span: spn.Span,
+  pub name: string,
+  pub expr: Expression,
 }
 
 #[json]
+#[equality]
 pub struct Binop {
   pub left: Expression,
   pub op: Operator,
   pub right: Expression,
 }
 
-impl Binop {
-  pub fn equals(self, other: Binop) -> bool {
-    self.left.equals(other.left) && self.op == other.op &&
-    self.right.equals(other.right)
-  }
-}
-
 #[json]
+#[equality]
 pub struct Call {
   pub fn_name: Path,
   pub type_args: Option<Slice<Type>>,
@@ -86,21 +126,16 @@ pub struct Call {
 }
 
 #[json]
+#[equality]
 pub struct ForLoop {
   pub binding: Expression,
   pub iter: Expression,
   pub body: Block,
 }
 
-impl ForLoop {
-  pub fn equals(self, other: ForLoop) -> bool {
-    self.binding.equals(other.binding) && self.iter.equals(other.iter) &&
-    self.body.equals(other.body)
-  }
-}
-
 #[json]
 #[display]
+#[equality]
 pub struct If {
   pub checks: Slice<Check>,
   pub default: Option<Block>,
@@ -108,12 +143,14 @@ pub struct If {
 
 #[json]
 #[display]
+#[equality]
 pub enum Check {
   Test(Expression, Block),
   Match(Expression, Slice<Arm>),
 }
 
 #[json]
+#[equality]
 pub struct Arm {
   pub pattern: Expression,
   pub then: Then,
@@ -121,18 +158,19 @@ pub struct Arm {
 
 #[json]
 #[equality]
+#[equality]
 pub enum Then {
   Block(Block),
   If(If),
 }
 
 impl If {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.checks[0].span().merge(self.end_span())
   }
 
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.default {
       Some(block) => block.last().span,
       None => self.checks[self.checks.length() - 1].end_span(),
@@ -141,7 +179,7 @@ impl If {
 }
 
 impl Check {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     match self {
       Test(expr, block) => expr.span.merge(block.last().span),
       Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
@@ -149,7 +187,7 @@ impl Check {
   }
 
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self {
       Test(_, block) => block.last().span,
       Match(_, arms) => arms[arms.length() - 1].end_span(),
@@ -158,11 +196,11 @@ impl Check {
 }
 
 impl Arm {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.pattern.span.merge(self.end_span())
   }
 
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.then {
       Block(block) => block.last().span,
       If(cond) => cond.end_span(),
@@ -176,8 +214,8 @@ pub struct Block {
 }
 
 impl Block {
-  pub fn span(self) -> span.Span {
-    span.new(self.statements[0].span.start, self.last().span.end)
+  pub fn span(self) -> spn.Span {
+    spn.new(self.statements[0].span.start, self.last().span.end)
   }
 
   pub fn last(self) -> Expression {
@@ -189,52 +227,68 @@ impl Block {
   }
 }
 
-pub fn nil_lit(span: span.Span) -> Expression {
+pub fn nil_lit(span: spn.Span) -> Expression {
   Expression { span, kind: Expr.Nil }
 }
 
-pub fn bool_lit(span: span.Span, value: bool) -> Expression {
+pub fn bool_lit(span: spn.Span, value: bool) -> Expression {
   Expression { span, kind: Expr.BoolLiteral(value) }
 }
 
-pub fn int_lit(span: span.Span, value: int) -> Expression {
+pub fn int_lit(span: spn.Span, value: int) -> Expression {
   Expression { span, kind: Expr.IntLiteral(value) }
 }
 
-pub fn float_lit(span: span.Span, value: float64) -> Expression {
+pub fn float_lit(span: spn.Span, value: float64) -> Expression {
   Expression { span, kind: Expr.FloatLiteral(value) }
 }
 
-pub fn string_lit(span: span.Span, value: string) -> Expression {
+pub fn string_lit(span: spn.Span, value: string) -> Expression {
   Expression { span, kind: Expr.StringLiteral(value) }
 }
 
-pub fn array_lit(span: span.Span, values: Slice<Expression>) -> Expression {
+pub fn array_lit(span: spn.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.ArrayLiteral(values) }
 }
 
-pub fn tuple_lit(span: span.Span, values: Slice<Expression>) -> Expression {
+pub fn tuple_lit(span: spn.Span, values: Slice<Expression>) -> Expression {
   Expression { span, kind: Expr.TupleLiteral(values) }
 }
 
-pub fn closure(span: span.Span, params: Slice<Parameter>, body: Block) -> Expression {
+pub fn record_lit(span: spn.Span, fields: Slice<RecordField>) -> Expression {
+  Expression { span, kind: Expr.RecordLiteral(fields) }
+}
+
+pub fn closure(span: spn.Span, params: Slice<Parameter>, body: Block) -> Expression {
   Expression { span, kind: Expr.Closure(params, body) }
 }
 
-pub fn identifier(span: span.Span, path: Path) -> Expression {
+pub fn identifier(span: spn.Span, path: Path) -> Expression {
   Expression { span, kind: Expr.Identifier(path) }
 }
 
-pub fn implicit_self(span: span.Span) -> Expression {
+pub fn type_expr(span: spn.Span, path: Path, type_args: Option<Slice<Type>>) -> Expression {
+  Expression { span, kind: Expr.Type(path, type_args) }
+}
+
+pub fn enum_constructor(
+  span: spn.Span,
+  typ: Option<(Path, Option<Slice<Type>>)>,
+  variant: string,
+) -> Expression {
+  Expression { span, kind: Expr.EnumConstructor(typ, variant) }
+}
+
+pub fn implicit_self(span: spn.Span) -> Expression {
   Expression { span, kind: Expr.Identifier(Path { name: "self", .. }) }
 }
 
-pub fn binding(span: span.Span, mode: mode.Mode, expr: Ref<Expression>) -> Expression {
+pub fn binding(span: spn.Span, mode: md.Mode, expr: Ref<Expression>) -> Expression {
   Expression { span, kind: Expr.Binding(mode, expr) }
 }
 
 pub fn binop_expr(
-  span: span.Span,
+  span: spn.Span,
   left: Expression,
   op: Operator,
   right: Expression,
@@ -242,67 +296,67 @@ pub fn binop_expr(
   Expression { span, kind: Expr.Binop(&Binop { left, op, right }) }
 }
 
-pub fn call_expr(span: span.Span, call: Call) -> Expression {
+pub fn call_expr(span: spn.Span, call: Call) -> Expression {
   Expression { span, kind: Expr.Call(call) }
 }
 
-pub fn if_expr(span: span.Span, cond: If) -> Expression {
+pub fn if_expr(span: spn.Span, cond: If) -> Expression {
   Expression { span, kind: Expr.If(cond) }
 }
 
-pub fn while_(span: span.Span, cond: If) -> Expression {
+pub fn while_(span: spn.Span, cond: If) -> Expression {
   Expression { span, kind: Expr.While(cond) }
 }
 
-pub fn for_(span: span.Span, binding: Expression, iter: Expression, body: Block) -> Expression {
+pub fn for_(span: spn.Span, binding: Expression, iter: Expression, body: Block) -> Expression {
   Expression { span, kind: Expr.For(&ForLoop { binding, iter, body }) }
 }
 
-pub fn block_expr(span: span.Span, exprs: Block) -> Expression {
-  Expression { span, kind: Expr.Block(exprs) }
+pub fn block_expr(span: spn.Span, exprs: Slice<Expression>) -> Expression {
+  Expression { span, kind: Expr.Block(Block { statements: exprs }) }
 }
 
-pub fn neg(span: span.Span, expr: Ref<Expression>) -> Expression {
+pub fn neg(span: spn.Span, expr: Ref<Expression>) -> Expression {
   Expression { span, kind: Expr.Neg(expr) }
 }
 
-pub fn not_(span: span.Span, expr: Ref<Expression>) -> Expression {
+pub fn not_(span: spn.Span, expr: Ref<Expression>) -> Expression {
   Expression { span, kind: Expr.Not(expr) }
 }
 
-pub fn dot_name(span: span.Span, receiver: Ref<Expression>, field: string) -> Expression {
+pub fn dot_name(span: spn.Span, receiver: Ref<Expression>, field: string) -> Expression {
   Expression { span, kind: Expr.DotName(receiver, field) }
 }
 
-pub fn dot_call(span: span.Span, receiver: Ref<Expression>, call: Call) -> Expression {
+pub fn dot_call(span: spn.Span, receiver: Ref<Expression>, call: Call) -> Expression {
   Expression { span, kind: Expr.DotCall(receiver, call) }
 }
 
-pub fn type_dot_call(
-  span: span.Span,
-  path: Path,
-  type_args: Slice<Type>,
-  call: Call,
-) -> Expression {
-  Expression { span, kind: Expr.TypeDotCall(path, type_args, call) }
-}
+// pub fn type_dot_call(
+//   span: spn.Span,
+//   path: Path,
+//   type_args: Slice<Type>,
+//   call: Call,
+// ) -> Expression {
+//   Expression { span, kind: Expr.TypeDotCall(path, type_args, call) }
+// }
 
-pub fn return_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+pub fn return_(mut span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
   // let span = expr.map(|e| span.merge(e.span)).unwrap_or(span)
   if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Return(expr) }
 }
 
-pub fn break_(span: span.Span, expr: Option<Ref<Expression>>) -> Expression {
+pub fn break_(mut span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
   if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Break(expr) }
 }
 
-pub fn continue_(span: span.Span) -> Expression {
+pub fn continue_(span: spn.Span) -> Expression {
   Expression { span, kind: Expr.Continue }
 }
 
-pub fn extern(span: span.Span) -> Expression {
+pub fn extern(span: spn.Span) -> Expression {
   Expression { span, kind: Expr.Extern }
 }
 

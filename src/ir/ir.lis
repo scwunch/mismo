@@ -1,13 +1,13 @@
-import "mode"
-import "ty"
-import "span"
 import "ast"
+import md "mode"
+import spn "span"
+import "ty"
 
 #[display]
 #[json]
 #[equality]
 pub struct Expression {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub kind: Expr,
 }
 
@@ -23,12 +23,12 @@ pub enum Expr {
   ArrayLiteral(Slice<Expression>, ty.Type),
   TupleLiteral(Slice<Expression>),
   Closure(Closure),
-  Declare(mode.Mode, Ref<ty.Variable>, Ref<Expression>),
+  Declare(md.Mode, Ref<ty.Variable>, Ref<Expression>),
   Identifier(Ref<ty.Variable>),
   CapturedIdent(Ref<ty.Variable>),
   Assign(Ref<ty.Variable>, Ref<Expression>),
   AssignCapture(Ref<ty.Variable>, Ref<Expression>),
-  Binding(mode.Mode, Ref<Expression>),
+  Binding(md.Mode, Ref<Expression>),
   Call(Call),
   ConcreteCall(int, Slice<Expression>),
   If(If, ty.Type),
@@ -38,8 +38,8 @@ pub enum Expr {
   Break(Option<Ref<Expression>>),
   Continue,
   FieldAccess(Ref<Expression>, int),
-  StructConstructor(ty.Type, Slice<Expression>),
-  EnumConstructor(ty.Type, ty.Variant, Slice<Expression>),
+  StructConstructor(ty.Type, Ref<Expression>),
+  EnumConstructor(ty.Type, ty.Constructor, Ref<Expression>),
   Extern,
 }
 
@@ -59,7 +59,7 @@ impl Block {
     self.statements.map(|s| s.kind)
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.statements[0].span.merge(self.last().span)
   }
 
@@ -110,12 +110,12 @@ impl Closure {
     ty.Type.Fn(self.params.map(ty.Parameter.param_type), &self.ret_type)
   }
 
-  pub fn call_mode(self) -> mode.Mode {
-    self.env.fold(mode.Mode.Let, |acc, cap| acc.union(cap.mode))
+  pub fn call_mode(self) -> md.Mode {
+    self.env.fold(md.Mode.Let, |acc, cap| acc.union(cap.mode))
   }
 
   pub fn is_movable(self) -> bool {
-    self.env.all(|c| c.mode == mode.Mode.Var)
+    self.env.all(|c| c.mode == md.Mode.Var)
   }
 }
 
@@ -123,10 +123,10 @@ impl Closure {
 pub enum Decision {
   Leaf(Block),
   Fail,
-  Guard{cond: Expression, then: Ref<Decision>, else_: Ref<Decision>},
-  Assign{expr: Expression, place: Place, next: Ref<Decision>},
-  Switch{scrutinee: Place, cases: Slice<Case>, default: Ref<Decision>},
-  Bind{name: string, place: Place, next: Ref<Decision>},
+  Guard { cond: Expression, then: Ref<Decision>, else_: Ref<Decision> },
+  Assign { expr: Expression, place: Place, next: Ref<Decision> },
+  Switch { scrutinee: Place, cases: Slice<Case>, default: Ref<Decision> },
+  Bind { name: string, place: Place, next: Ref<Decision> },
 }
 
 #[equality]
@@ -170,7 +170,7 @@ pub enum Check {
 #[json]
 #[equality]
 pub struct Row {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub patterns: Slice<Pattern>,
   pub then: Then,
 }
@@ -182,6 +182,7 @@ pub enum Pattern {
   Binding(Ref<ty.Variable>),
   Constructor(string, Slice<Pattern>),
 }
+
 impl Pattern {
   pub fn irrefutable(self) -> bool {
     match self {
@@ -200,15 +201,15 @@ pub enum Then {
 
 impl If {
   pub fn new(checks: Slice<Check>, default: Option<Block>, typ: ty.Type) -> If {
-    If{checks, default, decision: &Decision.Fail, typ}
+    If { checks, default, decision: &Decision.Fail, typ }
   }
 
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     self.checks[0].span().merge(self.end_span())
   }
 
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.default {
       Some(block) => block.last().span,
       None => self.checks[self.checks.length() - 1].end_span(),
@@ -235,7 +236,7 @@ impl If {
               If(cond) => acc = cond.fold(acc, f),
             }
           }
-        }
+        },
       }
     }
     self.default.map_or(acc, |blk| f(acc, blk.last()))
@@ -243,16 +244,15 @@ impl If {
 }
 
 impl Check {
-  pub fn span(self) -> span.Span {
+  pub fn span(self) -> spn.Span {
     match self {
       Test(expr, block) => expr.span.merge(block.last().span),
       Match(expr, arms) => expr.span.merge(arms[arms.length() - 1].end_span()),
     }
   }
 
-
   #[allow(manual_map_or)]
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self {
       Test(_, block) => block.last().span,
       Match(_, arms) => arms[arms.length() - 1].end_span(),
@@ -261,7 +261,7 @@ impl Check {
 }
 
 impl Row {
-  pub fn end_span(self) -> span.Span {
+  pub fn end_span(self) -> spn.Span {
     match self.then {
       Block(block) => block.last().span,
       If(cond) => cond.end_span(),
@@ -273,8 +273,8 @@ impl Row {
     let mut patterns = [].reserve(len)
     patterns = patterns.append(self.patterns[..col]...)
     patterns = patterns.append(patt...)
-    patterns = patterns.append(self.patterns[col+1..]...)
-    Row{patterns, ..self}
+    patterns = patterns.append(self.patterns[col + 1..]...)
+    Row { patterns, ..self }
   }
 
   pub fn irrefutable(self) -> bool {
@@ -353,12 +353,12 @@ impl Row {
 // }
 
 impl Expression {
-  pub fn new(span: span.Span, kind: Expr) -> Expression {
+  pub fn new(span: spn.Span, kind: Expr) -> Expression {
     Expression { span, kind }
   }
 
   pub fn blank() -> Expression {
-    Expression.new(span.new(0, 0), Expr.Nil)
+    Expression.new(spn.new(0, 0), Expr.Nil)
   }
 
   pub fn typ(self) -> ty.Type {
@@ -368,9 +368,7 @@ impl Expression {
 
 impl Expr {
   pub fn is_extern(self) -> bool {
-    if let Expr.Extern = self {
-      true
-    } else { false }
+    if let Expr.Extern = self { true } else { false }
   }
 }
 
@@ -385,29 +383,19 @@ impl Expr {
       ArrayLiteral(_, typ) => typ,
       TupleLiteral(exprs) => ty.Type.Tuple(exprs.map(|e| e.typ())),
       Closure(closure) => closure.typ(),
-      Identifier(id) | CapturedIdent(id) |
-      Assign(id, _) | AssignCapture(id, _) => id.typ,
+      Identifier(id) | CapturedIdent(id) | Assign(id, _) | AssignCapture(id, _) => id.typ,
       Declare(_, _, _) => ty.nil(),
       Binding(_, expr) => expr.typ(),
       Call(call) => call.fun.return_type,
       If(_, t) => t,
       While(_, blk) | Block(blk) => blk.typ,
-      FieldAccess(obj, i) => match obj.typ() {
-        ty.Type.Adt(def, args) => match def.kind {
-          Struct(fields) => fields[i].typ.substitute(args),
-          Enum(_) => panic("compiler bug 71: FieldAccess on enum"),
-        },
-        _ => panic("compiler bug 73: FieldAccess on non-ADT"),
-      },
+      FieldAccess(obj, i) => obj.typ().field(i),
       ConcreteCall(_, _) => panic(
         "compiler bug 75: concrete call should never have 'type' method called on it",
       ),
       StructConstructor(typ, _) => typ,
       EnumConstructor(typ, _, _) => typ,
-      Return(_) |
-      Break(_) |
-      Continue |
-      Extern => ty.Type.Never,
+      Return(_) | Break(_) | Continue | Extern => ty.Type.Never,
     }
   }
 }

@@ -1,9 +1,10 @@
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 
 #[json]
+#[equality]
 pub struct Type {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub kind: TypeKind,
 }
 
@@ -11,17 +12,57 @@ pub struct Type {
 pub enum TypeKind {
   Nominal(Path, Slice<Type>),
   Tuple(Slice<Type>),
+  Record(Slice<TypeField>),
+  Enum(Slice<Variant>),
   Fn(Slice<ParamType>, Ref<Type>),
 }
 
 #[json]
+#[equality]
+pub struct TypeField {
+  pub span: spn.Span,
+  pub name: string,
+  pub typ: Type,
+}
+
+pub struct Variant {
+  pub span: spn.Span,
+  pub name: string,
+  pub payload: Option<Type>,
+}
+impl Variant {
+  pub fn equals(self, other: Variant) -> bool {
+    match (self.payload, other.payload) {
+      (Some(a), Some(b)) => self.span == other.span && self.name == other.name && a.equals(b),
+      (None, None) => self.span == other.span && self.name == other.name,
+      _ => false,
+    }
+  }
+}
+
+// #[json]
+// #[equality]
+// pub struct Variant {
+//   pub span: spn.Span,
+//   pub name: string,
+//   pub typ: Type,
+// }
+
+// impl Variant {
+//   pub fn new(span: spn.Span, name: string, typ: Type) -> Variant {
+//     Variant { span, name, typ }
+//   }
+// }
+
+#[json]
+#[equality]
 pub struct ParamType {
-  pub mode: Option<mode.Mode>,
+  pub mode: Option<md.Mode>,
   pub typ: Type,
 }
 
 impl ParamType {
-  pub fn new(mode: Option<mode.Mode>, typ: Type) -> ParamType {
+  pub fn new(mode: Option<md.Mode>, typ: Type) -> ParamType {
     ParamType { mode, typ }
   }
 
@@ -30,39 +71,47 @@ impl ParamType {
   }
 
   pub fn let_(typ: Type) -> ParamType {
-    ParamType { mode: Some(mode.Mode.Let), typ }
+    ParamType { mode: Some(md.Mode.Let), typ }
   }
 
   pub fn mut_(typ: Type) -> ParamType {
-    ParamType { mode: Some(mode.Mode.Mut), typ }
+    ParamType { mode: Some(md.Mode.Mut), typ }
   }
 
   pub fn mut_bang(typ: Type) -> ParamType {
-    ParamType { mode: Some(mode.Mode.MutBang), typ }
+    ParamType { mode: Some(md.Mode.MutBang), typ }
   }
 
   pub fn var_(typ: Type) -> ParamType {
-    ParamType { mode: Some(mode.Mode.Var), typ }
+    ParamType { mode: Some(md.Mode.Var), typ }
   }
 }
 
 impl Type {
-  pub fn new(span: span.Span, name: Path, type_args: Slice<Type>) -> Type {
+  pub fn new(span: spn.Span, name: Path, type_args: Slice<Type>) -> Type {
     Type { span, kind: TypeKind.Nominal(name, type_args) }
   }
 
-  pub fn tuple(span: span.Span, type_args: Slice<Type>) -> Type {
+  pub fn tuple(span: spn.Span, type_args: Slice<Type>) -> Type {
     Type { span, kind: TypeKind.Tuple(type_args) }
   }
 
-  pub fn fn_(span: span.Span, params: Slice<ParamType>, ret: Ref<Type>) -> Type {
+  pub fn record(span: spn.Span, fields: Slice<TypeField>) -> Type {
+    Type { span, kind: TypeKind.Record(fields) }
+  }
+
+  pub fn enum_(span: spn.Span, variants: Slice<Variant>) -> Type {
+    Type { span, kind: TypeKind.Enum(variants)}
+  }
+
+  pub fn fn_(span: spn.Span, params: Slice<ParamType>, ret: Ref<Type>) -> Type {
     Type { span, kind: TypeKind.Fn(params, ret) }
   }
 }
 
 pub fn typ(start: uint32, end: uint32, name: string, type_args: Slice<Type>) -> Type {
-  Type { 
-    span: span.Span { start, end },
+  Type {
+    span: spn.Span { start, end },
     kind: TypeKind.Nominal(Path.name_(name), type_args),
   }
 }

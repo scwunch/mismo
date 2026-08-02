@@ -1,10 +1,9 @@
 import "ast"
 import "cst"
 import dx "diagnostics"
-import "mode"
+import md "mode"
+import spn "span"
 import "ty"
-import "operator"
-import "span"
 import "utils/slice"
 
 type Expr = ast.Expr
@@ -51,6 +50,9 @@ impl Resolver {
       TupleLiteral(elems) => Expr.TupleLiteral(
         slice.map_result(elems, self.resolve)?,
       ),
+      RecordLiteral(fields) => Expr.RecordLiteral(
+        slice.map_result(fields, self.resolve_field)?
+      ),
       Closure(params, body) => self.closure(
         slice.map_result(params, self.ctx.eval_param)?,
         body,
@@ -88,23 +90,16 @@ impl Resolver {
         Expr.Break(Some(&e))
       },
       Continue => Expr.Continue,
-      DotName(expr, name) => {
-        let arg = [self.resolve(expr.*)?]
-        self.bare_call(name, arg, true, node.span)?
-      },
+      DotName(expr, name) => self.dot_name(node.span, expr.*, name)?,
       DotCall(expr, call) => self.dot_call(expr, call, node.span)?,
-      TypeDotCall(path, type_args, call) => self.type_dot_call(
-        path,
-        slice.map_result(type_args, self.ctx.eval_type)?,
-        call,
-        node.span,
-      )?,
+      Type(path, type_args) => self.resolve_constructor(node.span, path, type_args, &ast.nil_expr())?,
+      EnumConstructor(typ, variant) => self.resolve_enum_constructor(node.span, typ, variant, &ast.nil_expr())?,
       Extern => Expr.Extern,
     }
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  fn resolve_path(self, path: cst.Path, span: span.Span) -> Result<Expr, dx.ResolveError> {
+  fn resolve_path(self, path: cst.Path, span: spn.Span) -> Result<Expr, dx.ResolveError> {
     if path.namespace.is_empty() {
       match self.scope.get(path.name) {
         Some((idx, varid)) => {
@@ -124,6 +119,13 @@ impl Resolver {
     }
   }
 
+  fn resolve_field(self, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
+    Ok(ast.Field {
+      span: field.span,
+      name: field.name,
+      expr: self.resolve(field.expr)?,
+    })
+  }
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
   fn capture(self, varid: Ref<ty.Variable>, index: int) -> bool {
@@ -184,12 +186,76 @@ impl Resolver {
     Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
   }
 
-  fn binop(self, binop: cst.Binop, span: span.Span) -> Result<Expr, dx.ResolveError> {
-    if binop.op == operator.Operator.Assign {
-      let value = self.resolve(binop.right)?
-      self.assign(binop.left, &value)
-    } else {
-      self.call(
+  fn resolve_constructor(self, span: spn.Span, path: cst.Path, type_args: Option<Slice<cst.Type>>, payload: Ref<ast.Expression>) -> Result<Expr, dx.ResolveError> {
+    match type_args {
+      Some(type_args) => {
+        let typ = self.ctx.eval_type(cst.Type.new(span, path, type_args))?
+        Ok(Expr.Constructor(ast.Constructor.ResolvedStruct(typ), payload))
+      },
+      None => {
+        let def = self.ctx.env.get_type_def(span, path)?
+        let cons = if def.type_parameters.is_empty() {
+          let typ = self.ctx.eval_type(cst.Type.new(span, path, []))?
+          ast.Constructor.ResolvedStruct(typ)
+        } else {
+          ast.Constructor.GenericStruct(def)
+        }
+        Ok(Expr.Constructor(cons, payload))
+      },
+    }
+  }
+
+  fn resolve_enum_constructor(
+    self,
+    span: spn.Span,
+    typ: Option<(cst.Path, Option<Slice<cst.Type>>)>,
+    variant: string,
+    payload: Ref<ast.Expression>
+  ) -> Result<Expr, dx.ResolveError> {
+    match typ {
+      Some((path, Some(type_args))) => {
+        let typ = self.ctx.eval_type(cst.Type.new(span, path, type_args))?
+        let variant = match typ.variants().find(|v| v.name == variant) {
+          None => return Err(dx.MissingNameError.new(variant, span)),
+          Some(v) => v,
+        }
+        Ok(Expr.Constructor(ast.Constructor.ResolvedVariant(typ, variant), payload))
+      },
+      Some((path, None)) => {
+        let def = self.ctx.env.get_type_def(span, path)?
+        let cons = if def.type_parameters.is_empty() {
+          let typ = self.ctx.eval_type(cst.Type.new(span, path, []))?
+          let variant = match typ.variants().find(|v| v.name == variant) {
+            None => return Err(dx.MissingNameError.new(variant, span)),
+            Some(v) => v,
+          }
+          ast.Constructor.ResolvedVariant(typ, variant)
+        } else {
+          ast.Constructor.GenericVariant(def, variant)
+        }
+        Ok(Expr.Constructor(cons, payload))
+      },
+      None => Ok(Expr.Constructor(
+        ast.Constructor.BareVariant(variant),
+        payload,
+      )),
+    }
+  }
+
+  fn binop(self, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+    match binop.op {
+      Assign => {
+        let value = self.resolve(binop.right)?
+        self.assign(binop.left, &value)
+      },
+      Juxtaposition => {
+        let payload = self.resolve(binop.right)?
+        match binop.left.kind {
+          Type(path, type_args) => self.resolve_constructor(binop.left.span, path, type_args, &payload),
+          EnumConstructor(typ, variant) => self.resolve_enum_constructor(binop.left.span, typ, variant, &payload),
+          _ => panic("compiler bug: parser should only allow `Type` and `EnumConstructor` here."),
+      }},
+      _ => self.call(
         cst.Path.name_(binop.op.sigil()),
         None,
         [self.resolve(binop.left)?, self.resolve(binop.right)?],
@@ -268,7 +334,7 @@ impl Resolver {
   fn resolve_pattern(self: Ref<Resolver>, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Identifier(cst.Path { namespace: [], name }) => {
-        let varid = &ty.Variable.new(mode.Mode.MutBang, name, node.span.start)
+        let varid = &ty.Variable.new(md.Mode.MutBang, name, node.span.start)
         self.scope.bindings = self.scope.bindings.append(varid)
         ast.Expr.Identifier(varid)
       },
@@ -285,30 +351,23 @@ impl Resolver {
       TupleLiteral(elems) => ast.Expr.TupleLiteral(
         slice.map_result(elems, self.resolve_pattern)?,
       ),
+      RecordLiteral(fields) => ast.Expr.RecordLiteral(
+        slice.map_result(fields, self.field_pattern)?
+      ),
       ArrayLiteral(elems) => ast.Expr.ArrayLiteral(
         slice.map_result(elems, self.resolve_pattern)?,
       ),
-      DotName(expr, name) => {
-        self.resolve_qualified_constructor(expr, name, [])?
-      },
-      DotCall(expr, call) if call.fn_name.namespace.is_empty() => {
-        self.resolve_qualified_constructor(expr, call.fn_name.name, call.args)?
-      },
-      Call(call) if call.fn_name.namespace.is_empty() => {
-        // raise error if fn_name is namespaced
-        let variant = call.fn_name.name
-        let args = slice.map_result(call.args, self.resolve_pattern)?
-        Expr.BareConstructor(variant, args)
-      },
+      Type(_, _) |
+      EnumConstructor(_, _) => return self.resolve(node),
+      Binop(binop) => self.binop_pattern(binop.*, node.span)?,
       // Not(expr) => Expr.Not(self.resolve_pattern(expr)?),
       Call(_) |
       DotCall(_, _) |
+      DotName(_, _) |
       Identifier(_) |
       Not(_) |
-      TypeDotCall(_, _, _) |
       Binding(_, _) |
       Closure(_, _) |
-      Binop(_) |
       If(_) |
       While(_) |
       For(_) |
@@ -321,30 +380,25 @@ impl Resolver {
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  // TODO: the verbose `match` is a workaround for compiler bug
-  #[allow(verbose_failure_propagation)]
-  fn resolve_qualified_constructor(
-    self: Ref<Resolver>,
-    expr: Ref<cst.Expression>,
-    name: string,
-    args: Slice<cst.Expression>,
-  ) -> Result<Expr, dx.ResolveError> {
-    let cst.Expr.Identifier(path) = expr.kind else {
-      return Err(dx.InvalidPatternError.new(expr.span, expr.kind))
+  fn field_pattern(self: Ref<Resolver>, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
+    Ok(ast.Field {
+      span: field.span,
+      name: field.name,
+      expr: self.resolve_pattern(field.expr)?
+    })
+  }
+
+  fn binop_pattern(self: Ref<Resolver>, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+    match binop.op {
+      Juxtaposition => {
+        let payload = self.resolve_pattern(binop.right)?
+        match binop.left.kind {
+          Type(path, type_args) => self.resolve_constructor(binop.left.span, path, type_args, &payload),
+          EnumConstructor(typ, variant) => self.resolve_enum_constructor(binop.left.span, typ, variant, &payload),
+          _ => panic("compiler bug: parser should only allow `Type` and `EnumConstructor` here."),
+      }},
+      _ => Err(dx.InvalidPatternError.new(span, binop)),
     }
-    let type_def = match self.get_type_def(path, expr.span) {
-      Ok(td) => td,
-      Err(e) => return Err(e),
-    }
-    let ty.TypeKind.Enum(variants) = type_def.kind else {
-      return Err(dx.InvalidPatternError.new(expr.span, expr.kind))
-    }
-    let variant = match variants.filter(|v| v.name == name) {
-      [variant] => variant,
-      _ => return Err(dx.MissingNameError.new(name, expr.span)),
-    }
-    let args = slice.map_result(args, self.resolve_pattern)?
-    Ok(Expr.EnumConstructor(type_def, variant, args))
   }
 
   fn while_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {
@@ -391,25 +445,33 @@ impl Resolver {
     // }
   }
 
-  fn for_expr(self, for_loop: cst.ForLoop, span: span.Span) -> Result<Expr, dx.ResolveError> {
+  fn for_expr(self, for_loop: cst.ForLoop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
     let _ = for_loop
     let _ = span
     panic("not implemented yet")
   }
 
-  fn get_type_def(self, type_path: cst.Path, span: span.Span) -> Result<Ref<ty.TypeDef>, dx.ResolveError> {
-    self.ctx.env.get_module(span, type_path)?.type_defs
-      .get(type_path.name)
-      .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)
+  fn dot_name(self, span: spn.Span, expr: cst.Expression, name: string) -> Result<Expr, dx.ResolveError> {
+    match expr.kind {
+      Type(path, type_args) => {
+        self.type_dot_call(
+          path,
+          type_args,
+          cst.Call{fn_name: cst.Path.name_(name), ..},
+          span,
+        )
+      },
+      _ => {
+        let arg = [self.resolve(expr)?]
+        self.bare_call(name, arg, true, span)
+      }
+    }
   }
 
-  fn dot_call(self, expr: Ref<cst.Expression>, call: cst.Call, span: span.Span) -> Result<Expr, dx.ResolveError> {
+  fn dot_call(self, expr: Ref<cst.Expression>, call: cst.Call, span: spn.Span) -> Result<Expr, dx.ResolveError> {
     let receiver = match expr.kind {
-      Identifier(path) => match self.resolve_path(path, expr.span) {
-        Ok(expr) => ast.Expression.new(span, expr),
-        Err(_) => return self.type_dot_call(path, [], call, span)
-      },
-      _ => self.resolve(expr.*)?
+      Type(path, type_args) => return self.type_dot_call(path, type_args, call, span),
+      _ => self.resolve(expr.*)?,
     }
     let mut args = [].reserve(call.args.length())
     args = args.append(receiver)
@@ -428,9 +490,9 @@ impl Resolver {
   fn type_dot_call(
     self,
     type_path: cst.Path,
-    type_args: Slice<Type>,
+    type_args: Option<Slice<cst.Type>>,
     call: cst.Call,
-    span: span.Span,
+    span: spn.Span,
   ) -> Result<Expr, dx.ResolveError> {
     let module = match type_path.namespace {
       [] => self.ctx.env.*,
@@ -439,12 +501,6 @@ impl Resolver {
     let type_def = module.type_defs
       .get(type_path.name)
       .ok_or_else(|| dx.MissingNameError.new(type_path.name, span) as dx.ResolveError)?
-    if let ty.TypeKind.Enum(variants) = type_def.kind {
-      if let Some(variant) = variants.find(|v| v.name == call.fn_name.name) {
-        let args = slice.map_result(call.args, self.resolve)?
-        return Ok(ast.Expr.EnumConstructor(type_def, variant, args))
-      }
-    }
     let global_candidates = type_def
       .signatures
       .get(call.fn_name.name)
@@ -456,9 +512,14 @@ impl Resolver {
       )
     }
     // combine the type args from the type with the type args with the type args from the call
-    let type_args = match call.type_args {
-      None => Some(type_args),
-      Some(ta) => Some(type_args.append(slice.map_result(ta, self.ctx.eval_type)?...)),
+    let type_args = match (type_args, call.type_args) {
+      (None, None) => None,
+      (Some(ta), None) | (None, Some(ta)) => {
+        Some(slice.map_result(ta, self.ctx.eval_type)?)
+      },
+      (Some(ta1), Some(ta2)) => {
+        Some(slice.map_result(ta1.append(ta2...), self.ctx.eval_type)?)
+      },
     }
     let args = slice.map_result(call.args, self.resolve)?
     Ok(ast.Expr.Call(
@@ -477,7 +538,7 @@ impl Resolver {
     fname: cst.Path,
     type_args: Option<Slice<cst.Type>>,
     args: Slice<ast.Expression>,
-    span: span.Span,
+    span: spn.Span,
   ) -> Result<Expr, dx.ResolveError> {
     if let ([], None) = (fname.namespace, type_args) {
       return self.bare_call(fname.name, args, false, span)
@@ -514,11 +575,8 @@ impl Resolver {
     fname: string,
     args: Slice<ast.Expression>,
     is_dotname: bool,
-    span: span.Span,
+    span: spn.Span,
   ) -> Result<ast.Expr, dx.ResolveError> {
-    if is_pascal_case(fname) {
-      return Ok(ast.Expr.BareConstructor(fname, args))
-    }
     let local_candidates = self.scope.bindings.filter(|v| v.name == fname)
     for v in local_candidates {
       // capture ALL local names that match, just in case they might be used
@@ -532,7 +590,7 @@ impl Resolver {
     if let (false, [], []) = (is_dotname, global_candidates, local_candidates) {
       return Err(dx.MissingNameError.new(fname, span) as dx.ResolveError)
     }
-    let field = if is_dotname {Some(fname)} else {None}
+    let field = if is_dotname { Some(fname) } else { None }
     Ok(ast.Expr.Call(
       ast.Call {
         local_candidates,
@@ -581,15 +639,4 @@ impl Scope {
     }
     None
   }
-}
-
-fn is_pascal_case(str: string) -> bool {
-  for c in str.bytes() {
-    match c {
-      '_' => continue,
-      'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z' => return true,
-      _ => break,
-    }
-  }
-  false
 }

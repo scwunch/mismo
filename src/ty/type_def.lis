@@ -1,69 +1,87 @@
-import "mode"
-import "span"
+import md "mode"
+import spn "span"
 
 #[json]
 #[equality]
 pub struct TypeDef {
-  pub span: span.Span,
-  pub name: string,
+  pub span: spn.Span,
+  pub ctor: Constructor,
   pub type_parameters: Slice<TypeParameter>,
-  pub kind: TypeKind,
   pub signatures: Map<string, Slice<int>>,
 }
 
 #[json]
 #[equality]
-pub enum TypeKind {
-  Struct(Slice<Field>),
-  Enum(Slice<Variant>),
+#[display]
+pub struct Constructor {
+  pub name: string,
+  pub typ: Type,
+}
+
+impl Constructor {
+  pub fn substitute(self, args: Slice<Type>) -> Constructor {
+    Constructor { name: self.name, typ: self.typ.substitute(args) }
+  }
 }
 
 #[json]
 #[equality]
 pub struct TypeParameter {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub name: string,
 }
 
 impl TypeDef {
   pub fn new(
-    span: span.Span,
+    span: spn.Span,
     name: string,
     type_parameters: Slice<TypeParameter>,
-    kind: TypeKind,
+    typ: Type,
   ) -> TypeDef {
-    TypeDef { span, name, type_parameters, kind, signatures: Map.new() }
+    TypeDef { span, ctor: Constructor { name, typ }, type_parameters, signatures: Map.new() }
+  }
+
+  pub fn new_enum(
+    span: spn.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    variants: Slice<(string, Type)>
+  ) -> TypeDef {
+    TypeDef {
+      span,
+      ctor: Constructor {
+        name,
+        typ: Type.Enum(variants.map(|(name, typ)| Constructor { name, typ }))
+      },
+      type_parameters,
+      signatures: Map.new()
+    }
+  }
+
+  pub fn new_struct(
+    span: spn.Span,
+    name: string,
+    type_parameters: Slice<TypeParameter>,
+    fields: Slice<(string, Type)>,
+  ) -> TypeDef {
+    TypeDef {
+      span,
+      ctor: Constructor {
+        name,
+        typ: Type.Record(fields.map(|(name, typ)| Field { name, typ }))
+      },
+      type_parameters,
+      signatures: Map.new()
+    }
   }
 }
 
 impl TypeParameter {
-  pub fn new(span: span.Span, name: string) -> TypeParameter {
+  pub fn new(span: spn.Span, name: string) -> TypeParameter {
     TypeParameter { span, name }
   }
 
   pub fn mock(name: string) -> TypeParameter {
     TypeParameter { name, .. }
-  }
-}
-
-#[json]
-#[equality]
-pub struct Field {
-  pub span: span.Span,
-  pub name: string,
-  pub typ: Type,
-}
-
-#[json]
-#[equality]
-pub struct Variant {
-  pub span: span.Span,
-  pub name: string,
-  pub fields: Slice<Type>,
-}
-
-impl Field {
-  pub fn to_param(self) -> Parameter {
-    Parameter.new(self.span, mode.Mode.Var, self.name, self.typ)
   }
 }

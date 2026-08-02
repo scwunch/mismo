@@ -3,11 +3,10 @@ import "go:fmt"
 import "ast"
 import "cst"
 import dx "diagnostics"
-import "mode"
-import "ty"
-import "operator"
+import md "mode"
 import "parser"
-import "span"
+import spn "span"
+import "ty"
 
 #[test("resolver: Scoping Rules")]
 fn test_scope(t) {
@@ -21,10 +20,10 @@ fn test_scope(t) {
   ])
   let assert Ok(block) = Resolver.new_blank().block(cst_node)
   let assert [stmt1, stmt2, stmt3] = block.statements
-  let assert ast.Declare(mode.Mode.Let, foo1, _) = stmt1.kind
-  let assert ast.Declare(mode.Mode.Let, bar1, _) = stmt2.kind
-  assert foo1.mode == mode.Mode.Let
-  assert bar1.mode == mode.Mode.Let
+  let assert ast.Declare(md.Mode.Let, foo1, _) = stmt1.kind
+  let assert ast.Declare(md.Mode.Let, bar1, _) = stmt2.kind
+  assert foo1.mode == md.Mode.Let
+  assert bar1.mode == md.Mode.Let
   assert foo1.name == "foo"
   assert bar1.name == "bar"
   let assert ast.Expr.While(cond) = stmt3.kind
@@ -58,8 +57,8 @@ fn test_closure(t) -> Result<(), error> {
   assert cap == ast.Capture.new(bar1)
   let assert [param] = closure.params
   assert param.equals(ty.Parameter.new(
-    span.new(34, 41),
-    mode.Mode.Let,
+    spn.new(34, 41),
+    md.Mode.Let,
     "arg",
     Type.Int,
   ))
@@ -330,7 +329,7 @@ fn test_conditional_branching(t) {
   let assert [decl, ast.Expr.If(cond)] = block.kinds()
   let assert ast.Expr.Declare(_, x0, _) = decl
   let assert [ast.Check.Match(_subj, [arm])] = cond.checks
-  let assert ast.Expr.BareConstructor("Some", [arg]) = arm.pattern.kind
+  let assert ast.Expr.Constructor(ast.Constructor.BareVariant("Some"), arg) = arm.pattern.kind
   let assert ast.Expr.Identifier(x2) = arg.kind
   let assert ast.Then.Block(block) = arm.then
   let assert [ast.Expr.Identifier(x3)] = block.kinds()
@@ -358,10 +357,12 @@ fn test_conditional_branching(t) {
 fn test_wildcard(t) {
   t.skip("TODO")
 }
+
 #[test("resolver/conditional: tuples and arrays")]
 fn test_tuple_matching(t) {
   t.skip("TODO")
 }
+
 #[test("resolver/conditional/enum-matching: bare variants, and qualified variants")]
 fn test_enum_matching(t) {
   t.skip("TODO")
@@ -377,9 +378,3 @@ fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
 fn dx2err<E: dx.Diagnostic>(e: E) -> error {
   fmt.Errorf("%v", e.message())
 }
-
-// fn fail(t: TestContext, message: string) -> Result<Never, error> {
-//   t.log(message)
-//   assert false
-//   Err(fmt.Errorf("%s", message))
-// }

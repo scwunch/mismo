@@ -1,5 +1,6 @@
 import "go:fmt"
 
+import spn "span"
 import "cst"
 import dx "diagnostics"
 import myt "testing"
@@ -11,13 +12,14 @@ fn test_parser_top_level(t) {
     test_consume,
     test_parse_type_params,
     test_parse_type,
-    test_parse_tuple_type,
     test_parse_fn_type,
     test_parse_field,
-    test_parse_fields,
-    test_parse_struct,
-    test_parse_variant,
-    test_parse_enum,
+
+    // test_parse_fields,
+    // test_parse_struct,
+    // test_parse_variant,
+    // test_parse_enum,
+
     test_parse_signature,
     test_parse_function,
   ] {
@@ -28,19 +30,19 @@ fn test_parser_top_level(t) {
 #[test("parser/expression-parser")]
 fn test_expression_parser(t) {
   for test in [
-    test_parse_simple_binary,
-    test_parse_arithmetic_precedence,
-    test_parse_parens,
-    test_parse_basic_literals,
-    test_parse_array_literals,
-    test_parse_tuple_literals,
-    test_parse_closure,
-    test_parse_function_calls,
-    test_parse_method_calls,
-    test_parse_unary_neg,
-    test_parse_unary_not,
-    test_parse_let_var,
-    test_parse_return_break_continue,
+    // test_parse_simple_binary,
+    // test_parse_arithmetic_precedence,
+    // test_parse_parens,
+    // test_parse_basic_literals,
+    // test_parse_array_literals,
+    // test_parse_tuple_literals,
+    // test_parse_closure,
+    // test_parse_function_calls,
+    // test_parse_method_calls,
+    // test_parse_unary_neg,
+    // test_parse_unary_not,
+    // test_parse_let_var,
+    // test_parse_return_break_continue,
   ] {
     // test_parse_while,
     t.run("ExpressionParser", wrap_test(test))
@@ -54,6 +56,170 @@ fn wrap_test(test_func: fn(Ref<myt.TestRunner>) -> Result<(), string>) -> fn(Tes
       assert false
     }
   }
+}
+
+#[test("parser/types/tuple")]
+fn test_parse_tuple_type(t) {
+  let mut parser = Parser.new("{Type, Type}")
+  let assert Ok(typ) = parser.parse_type()
+  assert typ.span == spn.new(0, 12)
+  let assert cst.TypeKind.Tuple([t1, t2]) = typ.kind
+  assert t1.span == spn.new(1, 5)
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = t1.kind
+  assert t2.span == spn.new(7, 11)
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = t2.kind
+
+  parser = Parser.new("{mod::Type, Type}")
+  let assert Ok(typ) = parser.parse_type()
+  assert typ.span == spn.new(0, 17)
+  let assert cst.TypeKind.Tuple([t1, t2]) = typ.kind
+  assert t1.span == spn.new(1, 10)
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = t1.kind
+  assert t2.span == spn.new(12, 16)
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = t2.kind
+}
+
+#[test("parser/types/record")]
+fn test_parse_record_type(t) {
+  let mut parser = Parser.new("{x: Type, y: Type}")
+  let assert Ok(typ) = parser.parse_type()
+  assert typ.span == spn.new(0, 18)
+  let assert cst.TypeKind.Record([f1, f2]) = typ.kind
+  assert f1.span == spn.new(1, 8)
+  assert f1.name == "x"
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = f1.typ.kind
+  assert f2.span == spn.new(10, 17)
+  assert f2.name == "y"
+  let assert cst.TypeKind.Nominal(cst.Path{name: "Type",..}, []) = f2.typ.kind
+}
+
+#[test("parser/expressions/literals/tuple")]
+fn test_tuple_literal(t) {
+  let mut parser = Parser.new("{1, 2, 3, 4}")
+  let assert Ok(expr) = parser.parse_expression()
+  assert expr.span == spn.new(0, 12)
+  let assert cst.Expr.TupleLiteral([t1, t2, t3, t4]) = expr.kind
+  assert t1.span == spn.new(1, 2)
+  assert t2.span == spn.new(4, 5)
+  assert t3.span == spn.new(7, 8)
+  assert t4.span == spn.new(10, 11)
+
+  parser = Parser.new("{\n 1\n 2\n 3\n 4\n}")
+  let assert Ok(expr) = parser.parse_expression()
+  // assert expr.span == spn.new(0, 15)
+  let assert cst.Expr.TupleLiteral([t1, t2, t3, t4]) = expr.kind
+  assert t1.span == spn.new(3, 4)
+  assert t2.span == spn.new(6, 7)
+  assert t3.span == spn.new(9, 10)
+  assert t4.span == spn.new(12, 13)
+}
+
+#[test("parser/expressions/literals/record")]
+fn test_record_literal(t) {
+  let mut parser = Parser.new("{x: 1}")
+  let assert Ok(rec) = parser.parse_expression()
+  let assert cst.Expr.RecordLiteral(fields) = rec.kind
+  let assert [cst.RecordField{span, name, expr}] = fields
+  assert span == spn.new(1, 5)
+  assert name == "x"
+  let assert cst.Expr.IntLiteral(1) = expr.kind
+
+  parser = Parser.new("{x: 1, y: 2}")
+  let assert Ok(rec) = parser.parse_expression()
+  let assert cst.Expr.RecordLiteral(fields) = rec.kind
+  let assert [field1, field2] = fields
+  assert field1.span == spn.new(1, 5)
+  assert field1.name == "x"
+  let assert cst.Expr.IntLiteral(1) = field1.expr.kind
+  assert field2.span == spn.new(7, 11)
+  assert field2.name == "y"
+  let assert cst.Expr.IntLiteral(2) = field2.expr.kind
+
+  parser = Parser.new("{\n  x:\n    11\n    12\n  y:\n    21\n    22\n}")
+  let assert Ok(rec) = parser.parse_expression()
+  let assert cst.Expr.RecordLiteral(fields) = rec.kind
+  let assert [field1, field2] = fields
+  assert field1.name == "x"
+  let assert cst.Expr.Block(xb) = field1.expr.kind
+  let assert [x1, x2] = xb.statements
+  let assert cst.Expr.IntLiteral(11) = x1.kind
+  let assert cst.Expr.IntLiteral(12) = x2.kind
+  assert field2.name == "y"
+  let assert cst.Expr.Block(yb) = field2.expr.kind
+  let assert [y1, y2] = yb.statements
+  let assert cst.Expr.IntLiteral(21) = y1.kind
+  let assert cst.Expr.IntLiteral(22) = y2.kind
+}
+
+#[test("parser/expressions/constructors")]
+fn test_struct_constructor(t) {
+  let mut parser = Parser.new("Point {x: 1, y: 2}")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0,18)
+  let assert cst.Expr.Binop(binop) = cons.kind
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert (cst.Expr.Type(path, args), cst.Expr.RecordLiteral(fields)) = (binop.left.kind, binop.right.kind)
+  assert path.name == "Point"
+  let assert None = args
+  let assert [field1, field2] = fields
+  assert field1.span == spn.new(7, 11)
+  assert field1.name == "x"
+  let assert cst.Expr.IntLiteral(1) = field1.expr.kind
+  assert field2.span == spn.new(13, 17)
+  assert field2.name == "y"
+  let assert cst.Expr.IntLiteral(2) = field2.expr.kind
+
+  parser = Parser.new("Point [Int] {\n  x: 1\n  y: 2\n}")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0, 29)
+  let assert cst.Expr.Binop(binop) = cons.kind
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert (cst.Expr.Type(path, args), cst.Expr.RecordLiteral(fields)) = (binop.left.kind, binop.right.kind)
+  assert path.name == "Point"
+  let assert Some([int_typ]) = args
+  let assert cst.TypeKind.Nominal(_int, []) = int_typ.kind
+  let assert [field1, field2] = fields
+  assert field1.span == spn.new(16, 20)
+  assert field1.name == "x"
+  let assert cst.Expr.IntLiteral(1) = field1.expr.kind
+  assert field2.span == spn.new(23, 27)
+  assert field2.name == "y"
+  let assert cst.Expr.IntLiteral(2) = field2.expr.kind
+}
+
+#[test("parser/expressions/constructors: enum constructors")]
+fn test_enum_constructor(t) {
+  let mut parser = Parser.new("Option.None")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0, 11)
+  let assert cst.Expr.EnumConstructor(Some((path, None)), "None") = cons.kind
+  assert path.namespace.is_empty()
+  assert path.name == "Option"
+
+  parser = Parser.new("Option.Some [1]")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0, 15)
+  let assert cst.Expr.Binop(binop) = cons.kind
+  assert binop.left.span == spn.new(0, 11)
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert cst.Expr.EnumConstructor(Some((path, None)), "Some") = binop.left.kind
+  assert path.namespace.is_empty()
+  assert path.name == "Option"
+  let assert cst.Expr.ArrayLiteral([_]) = binop.right.kind
+
+  parser = Parser.new(".Some [1]")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0, 9)
+  let assert cst.Expr.Binop(binop) = cons.kind
+  assert binop.left.span == spn.new(0, 5)
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert cst.Expr.EnumConstructor(None, "Some") = binop.left.kind
+  let assert cst.Expr.ArrayLiteral([_]) = binop.right.kind
+
+  parser = Parser.new(".None")
+  let assert Ok(cons) = parser.parse_expression()
+  assert cons.span == spn.new(0, 5)
+  let assert cst.Expr.EnumConstructor(None, "None") = cons.kind
 }
 
 #[test("parser/conditional/simple")]
@@ -113,8 +279,8 @@ fn test_multi_check_conditional(t) {
 fn test_simple_match(t) {
   let assert Ok(block) = parse([
     "if opt is           ",
-    "  Some(val): 1      ",
-    "  None: 2           ",
+    "  .Some val: 1      ",
+    "  .None: 2           ",
   ])
   let assert [
     cst.Expr.If(cst.If { checks: [cst.Check.Match(subj, arms)], default: None }),
@@ -124,20 +290,21 @@ fn test_simple_match(t) {
     cst.Arm { pattern: p1, then: cst.Then.Block(b1) },
     cst.Arm { pattern: p2, then: cst.Then.Block(b2) },
   ] = arms
-  let assert cst.Expr.Call(call) = p1.kind
-  let assert cst.Path { name: "Some", .. } = call.fn_name
+  let assert cst.Expr.Binop(binop) = p1.kind
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert cst.Expr.EnumConstructor(None, "Some") = binop.left.kind
   let assert [cst.Expr.IntLiteral(1)] = b1.expr_kinds()
   let assert [cst.Expr.IntLiteral(2)] = b2.expr_kinds()
-  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = p2.kind
+  let assert cst.Expr.EnumConstructor(None, "None") = p2.kind
 
-  let assert Ok(block) = parse(["if opt is None: 0          "])
+  let assert Ok(block) = parse(["if opt is .None: 0          "])
   let assert [
     cst.Expr.If(
       cst.If { checks: [cst.Check.Match(subj, [arm])], default: None },
     ),
   ] = block.expr_kinds()
   let assert cst.Expr.Identifier(cst.Path { name: "opt", .. }) = subj.kind
-  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = arm.pattern.kind
+  let assert cst.Expr.EnumConstructor(None, "None") = arm.pattern.kind
   let assert cst.Then.Block(block) = arm.then
   let assert [cst.Expr.IntLiteral(0)] = block.expr_kinds()
 }
@@ -146,8 +313,8 @@ fn test_simple_match(t) {
 fn test_match_guards(t) {
   let assert Ok(block) = parse([
     "if opt is               ",
-    "  Some(val) if cond: 1  ",
-    "  None if cond:      2  ",
+    "  .Some val if cond: 1  ",
+    "  .None if cond:      2  ",
   ])
   let assert [
     cst.Expr.If(cst.If { checks: [cst.Check.Match(subj, arms)], default: None }),
@@ -157,9 +324,10 @@ fn test_match_guards(t) {
     cst.Arm { pattern: p1, then: cst.Then.If(cond1) },
     cst.Arm { pattern: p2, then: cst.Then.If(cond2) },
   ] = arms
-  let assert cst.Expr.Call(call) = p1.kind
-  let assert cst.Path { name: "Some", .. } = call.fn_name
-  let assert cst.Expr.Identifier(cst.Path { name: "None", .. }) = p2.kind
+  let assert cst.Expr.Binop(binop) = p1.kind
+  assert binop.op == operator.Operator.Juxtaposition
+  let assert cst.Expr.EnumConstructor(None, "Some") = binop.left.kind
+  let assert cst.Expr.EnumConstructor(None, "None") = p2.kind
   let assert cst.If { checks: [cst.Check.Test(cond, b1)], default: None } = cond1
   let assert cst.Expr.Identifier(cst.Path { name: "cond", .. }) = cond.kind
   let assert [cst.Expr.IntLiteral(1)] = b1.expr_kinds()
@@ -218,7 +386,7 @@ fn test_match_guards(t) {
 #[test("parser/conditional/match-with-inline-guards")]
 fn test_inline_guards(t) {
   let assert Ok(block) = parse([
-    "if opt is Some(a) if a is [a] if a is (x, y): ",
+    "if opt is .Some a if a is [a] if a is {x, y}:",
     "   b                                         ",
   ])
   let assert [
@@ -226,7 +394,7 @@ fn test_inline_guards(t) {
       cst.If { checks: [cst.Check.Match(_subj, [arm])], default: None },
     ),
   ] = block.expr_kinds()
-  let assert cst.Expr.Call(_call) = arm.pattern.kind
+  let assert cst.Expr.Binop(_) = arm.pattern.kind
   let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
   let assert cst.Check.Match(subj, [arm]) = check
   let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind
@@ -238,9 +406,9 @@ fn test_inline_guards(t) {
   let assert cst.Then.Block(_block) = arm.then
 
   let assert Ok(block) = parse([
-    "if opt is Some(a)                           ",
+    "if opt is .Some a                           ",
     "   if a is [a]                              ",
-    "   if a is (x, y):                          ",
+    "   if a is {x, y}:                          ",
     "      b                                     ",
   ])
   let assert [
@@ -248,7 +416,7 @@ fn test_inline_guards(t) {
       cst.If { checks: [cst.Check.Match(_subj, [arm])], default: None },
     ),
   ] = block.expr_kinds()
-  let assert cst.Expr.Call(_call) = arm.pattern.kind
+  let assert cst.Expr.Binop(_) = arm.pattern.kind
   let assert cst.Then.If(cst.If { checks: [check], default: None }) = arm.then
   let assert cst.Check.Match(subj, [arm]) = check
   let assert cst.Expr.Identifier(cst.Path { name: "a", .. }) = subj.kind

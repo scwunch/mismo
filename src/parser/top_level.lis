@@ -7,14 +7,15 @@ impl Parser {
     loop {
       let result: Result<(), dx.ParseError> = match self.peek().kind {
         Identifier("import") => self.parse_import(),
-        Identifier("struct") => self.parse_struct(),
-        Identifier("enum") => self.parse_enum(),
+        Identifier("type") => self.parse_type_declaration(),
+        // Identifier("struct") => self.parse_struct(),
+        // Identifier("enum") => self.parse_enum(),
         Identifier("fn") => self.parse_function(),
         Identifier("extern") => self.parse_extern(),
         EOF => return self.defs,
         _ => Err(dx.ParseError.new(
           self.peek().span,
-          "Expected top-level definition (fn, import, struct, enum)",
+          "Expected top-level definition (fn, import, type, extern)",
         )),
       }
       if let Err(e) = result {
@@ -31,38 +32,53 @@ impl Parser {
     }
   }
 
-  fn parse_struct(self: Ref<Parser>) -> Result<(), dx.ParseError> {
-    let mut span = self.next().span
-    // consume the "struct" keyword
+  fn parse_type_declaration(self: Ref<Parser>) -> Result<(), dx.ParseError> {
+    // consume the "type" keyword
+    let span: Span = self.next().span
     let name = self.consume_identifier()?
-    let mut type_params = []
+    let mut type_parameters = []
     if self.consume(TokenKind.LeftBracket).is_ok() {
-      type_params = self.parse_type_params()?
+      type_parameters = self.parse_type_params()?
       let _ = self.consume(TokenKind.RightBracket)?
     }
-    let fields = self.parse_fields()?
-    span.end = self.peek().span.start
-    self.defs.add_type(cst.TypeDecl.new_struct(span, name, type_params, fields))
+    let body = self.parse_type()?
+    let span = span.merge(body.span)
+    self.defs.add_type(cst.TypeDecl { span, name, type_parameters, body })
     Ok(())
   }
 
-  fn parse_enum(self: Ref<Parser>) -> Result<(), dx.ParseError> {
-    let mut span = self.next().span
-    // consume the "enum" keyword
-    let name = self.consume_identifier()?
-    let mut type_params = []
-    if self.consume(TokenKind.LeftBracket).is_ok() {
-      type_params = self.parse_type_params()?
-      let _ = self.consume(TokenKind.RightBracket)?
-    }
-    let variants = self.parse_variants()?
-    span.end = self.peek().span.start
-    self.defs.add_type(cst.TypeDecl.new_enum(span, name, type_params, variants))
-    Ok(())
-  }
+  // fn parse_struct(self: Ref<Parser>) -> Result<(), dx.ParseError> {
+  //   let mut span: Span = self.next().span
+  //   // consume the "struct" keyword
+  //   let name = self.consume_identifier()?
+  //   let mut type_params = []
+  //   if self.consume(TokenKind.LeftBracket).is_ok() {
+  //     type_params = self.parse_type_params()?
+  //     let _ = self.consume(TokenKind.RightBracket)?
+  //   }
+  //   let fields = self.parse_fields()?
+  //   span.end = self.peek().span.start
+  //   self.defs.add_type(cst.TypeDecl.new_struct(span, name, type_params, fields))
+  //   Ok(())
+  // }
+
+  // fn parse_enum(self: Ref<Parser>) -> Result<(), dx.ParseError> {
+  //   let mut span = self.next().span
+  //   // consume the "enum" keyword
+  //   let name = self.consume_identifier()?
+  //   let mut type_params = []
+  //   if self.consume(TokenKind.LeftBracket).is_ok() {
+  //     type_params = self.parse_type_params()?
+  //     let _ = self.consume(TokenKind.RightBracket)?
+  //   }
+  //   let variants = self.parse_variants()?
+  //   span.end = self.peek().span.start
+  //   self.defs.add_type(cst.TypeDecl.new_enum(span, name, type_params, variants))
+  //   Ok(())
+  // }
 
   fn parse_extern(self: Ref<Parser>) -> Result<(), dx.ParseError> {
-    let mut span = self.next().span
+    let mut span: Span = self.next().span
     let _ = self.consume(TokenKind.Identifier("fn"))?
     let sig = self.parse_signature()?
     span = span.merge(sig.span)
@@ -75,7 +91,7 @@ impl Parser {
   }
 
   fn parse_function(self: Ref<Parser>) -> Result<(), dx.ParseError> {
-    let mut span = self.next().span
+    let mut span: Span = self.next().span
     let sig = self.parse_signature()?
     let body = self.parse_colon_and_block()?
     span = span.merge(body.last().span)
@@ -84,7 +100,7 @@ impl Parser {
   }
 
   fn parse_signature(self: Ref<Parser>) -> Result<cst.Signature, dx.ParseError> {
-    let mut span = self.peek().span
+    let mut span: Span = self.peek().span
     let name = self.consume_identifier()?
     let mut type_params = []
     if self.consume(TokenKind.LeftBracket).is_ok() {
@@ -117,7 +133,7 @@ impl Parser {
   }
 
   fn parse_parameter(self: Ref<Parser>) -> Result<cst.Parameter, dx.ParseError> {
-    let mut span = self.peek().span
+    let mut span: Span = self.peek().span
     let mode = self.consume_mode()
     let name = self.consume_identifier()?
     let _ = self.consume(TokenKind.Colon)
@@ -136,33 +152,21 @@ impl Parser {
     self.parse_list(']', self.parse_type_param)
   }
 
-  fn parse_variants(self: Ref<Parser>) -> Result<Slice<cst.Variant>, dx.ParseError> {
-    self.parse_list('\n', self.parse_variant)
-  }
+  // fn parse_variants(self: Ref<Parser>) -> Result<Slice<cst.Variant>, dx.ParseError> {
+  //   self.parse_list('\n', self.parse_variant)
+  // }
 
-  fn parse_variant(self: Ref<Parser>) -> Result<cst.Variant, dx.ParseError> {
-    let mut span = self.peek().span
-    let name = self.consume_identifier()?
-    let mut payload = []
-    if self.consume(TokenKind.LeftParen).is_ok() {
-      payload = self.parse_list(')', self.parse_type)?
-      let lparen = self.consume(TokenKind.RightParen)?
-      span = span.merge(lparen)
-    }
-    Ok(cst.Variant.new(span, name, payload))
-  }
+  // fn parse_fields(self: Ref<Parser>) -> Result<Slice<cst.Field>, dx.ParseError> {
+  //   self.parse_list('\n', self.parse_field)
+  // }
 
-  fn parse_fields(self: Ref<Parser>) -> Result<Slice<cst.Field>, dx.ParseError> {
-    self.parse_list('\n', self.parse_field)
-  }
-
-  fn parse_field(self: Ref<Parser>) -> Result<cst.Field, dx.ParseError> {
-    let mut span = self.peek().span
-    let name = self.consume_identifier()?
-    let _ = self.consume(TokenKind.Colon)
-    // optional colon
-    span = span.merge(self.peek().span)
-    let typ = self.parse_type()?
-    Ok(cst.Field { span, name, typ })
-  }
+  // fn parse_field(self: Ref<Parser>) -> Result<cst.Field, dx.ParseError> {
+  //   let mut span = self.peek().span
+  //   let name = self.consume_identifier()?
+  //   let _ = self.consume(TokenKind.Colon)
+  //   // optional colon
+  //   span = span.merge(self.peek().span)
+  //   let typ = self.parse_type()?
+  //   Ok(cst.Field { span, name, typ })
+  // }
 }
