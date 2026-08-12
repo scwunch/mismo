@@ -1,6 +1,6 @@
 import "go:fmt"
-import "go:io"
-import "go:os"
+// import "go:io"
+// import "go:os"
 
 import "cst"
 import dx "diagnostics"

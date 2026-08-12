@@ -1,16 +1,14 @@
-import "ty"
 import "ast"
-import "ir"
 import dx "diagnostics"
+import "ir"
+import "ty"
 
 pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
   let mut reg = ir.Registry.new()
   reg.type_defs = env.type_defs
   reg.function_defs = env.function_defs.map(|fun| {
     let (new_fun, err) = lower(fun)
-    if let Some(e) = err {
-      env.error(e)
-    }
+    if let Some(e) = err { env.error(e) }
     new_fun
   })
   reg

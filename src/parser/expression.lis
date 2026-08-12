@@ -1,12 +1,9 @@
-import "go:fmt"
-
 import "cst"
 import dx "diagnostics"
 import "lexer"
 import md "mode"
 import "operator"
 import spn "span"
-import t "testing"
 
 type Operator = operator.Operator
 

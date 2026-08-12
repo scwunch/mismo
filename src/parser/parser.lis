@@ -3,7 +3,6 @@ import dx "diagnostics"
 import lex "lexer"
 import md "mode"
 import spn "span"
-import t "testing"
 
 type Span = spn.Span
 

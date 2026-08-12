@@ -1,5 +1,5 @@
 import "semantic"
-import "span"
+import spn "span"
 import "testing"
 
 pub fn test_specialization() {
@@ -93,7 +93,7 @@ fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string>
   let _ = spec.index_of(call)
 
   let expr = Expression.new(
-    span.new(0, 0),
+    spn.new(0, 0),
     semantic.Expr.Call(semantic.FnCall.new(ref_fn, [Type.Int], [])),
   )
   let result = spec.substitute(expr, [])
@@ -175,15 +175,15 @@ fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
   let foo = env.signatures["foo"][0]
 
   main.body = Expression.new(
-    span.new(0, 0),
+    spn.new(0, 0),
     Expr.Block(
       [
         Expression.new(
-          span.new(0, 0),
+          spn.new(0, 0),
           Expr.Call(semantic.FnCall.new(foo, [Type.Int], [])),
         ),
         Expression.new(
-          span.new(0, 0),
+          spn.new(0, 0),
           Expr.Call(semantic.FnCall.new(foo, [Type.String], [])),
         ),
       ],

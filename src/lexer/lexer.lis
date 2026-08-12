@@ -9,7 +9,7 @@ pub struct Lexer {
 
 impl Lexer {
   pub fn new(source: string) -> Lexer {
-    Lexer { 
+    Lexer {
       source: source as Slice<rune>,
       index: 0,
       indent: 0,
@@ -384,7 +384,7 @@ impl Lexer {
         '!' => Operator.Neq,
         '<' => Operator.Lte,
         '>' => Operator.Gte,
-        c => return Token.error(start, self.index, "Invalid operator: {c}="),
+        c => return Token.error(start, self.index, f"Invalid operator: {c}="),
       }
     } else {
       self.index += 1

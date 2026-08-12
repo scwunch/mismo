@@ -1,5 +1,5 @@
 import "semantic"
-import "span"
+import spn "span"
 
 pub type TypeParameter = semantic.TypeParameter
 
@@ -10,7 +10,7 @@ pub type Type = semantic.Type
 pub type Expression = semantic.Expression
 
 pub struct Function {
-  pub span: span.Span,
+  pub span: spn.Span,
   pub name: string,
   pub parameters: Slice<Parameter>,
   pub return_type: Type,

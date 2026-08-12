@@ -1,4 +1,3 @@
-import "go:fmt"
 import "go:io"
 import "go:os"
 import "go:os/exec"
@@ -28,7 +27,7 @@ impl IoStreams {
 
 impl Options {
   pub fn new() -> Options {
-    Options { 
+    Options {
       zig_bin: "zig",
       zig_prelude_path: "",
       out_bin: "out",
@@ -54,7 +53,7 @@ pub fn build_zig(zig_source: string, opts: Options) -> Result<Path, error> {
   if !opts.keep_work_dir {
     // only cleans the .zig source and cache
     // — the binary is copied out before this runs if needed.
-    defer os.RemoveAll(work_dir)
+    defer { let _ = os.RemoveAll(work_dir) }
   }
 
   // --- write source file ---

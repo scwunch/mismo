@@ -44,6 +44,7 @@ pub struct TypeDecl {
 }
 
 impl TypeDecl {
+  #[allow(shadowed_capture)]
   pub fn new_struct(
     span: spn.Span,
     name: string,
@@ -57,6 +58,7 @@ impl TypeDecl {
     TypeDecl { span, name, type_parameters, body }
   }
 
+  #[allow(shadowed_capture)]
   pub fn new_enum(
     span: spn.Span,
     name: string,

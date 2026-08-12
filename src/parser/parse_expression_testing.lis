@@ -1,5 +1,4 @@
 import "cst"
-import "lexer"
 import md "mode"
 import spn "span"
 import "testing"

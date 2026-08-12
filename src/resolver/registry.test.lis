@@ -1,9 +1,5 @@
-import "go:fmt"
-
 import "ast"
 import "cst"
-import dx "diagnostics"
-import md "mode"
 import spn "span"
 import "ty"
 

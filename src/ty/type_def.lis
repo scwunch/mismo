@@ -1,4 +1,3 @@
-import md "mode"
 import spn "span"
 
 #[json]
@@ -41,6 +40,7 @@ impl TypeDef {
     TypeDef { span, ctor: Constructor { name, typ }, type_parameters, signatures: Map.new() }
   }
 
+  #[allow(shadowed_capture)]
   pub fn new_enum(
     span: spn.Span,
     name: string,
@@ -58,6 +58,7 @@ impl TypeDef {
     }
   }
 
+  #[allow(shadowed_capture)]
   pub fn new_struct(
     span: spn.Span,
     name: string,

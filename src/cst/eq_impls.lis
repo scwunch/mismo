@@ -1,6 +1,3 @@
-import md "mode"
-import spn "span"
-
 // impl Type {
 //   pub fn equals(self, other: Type) -> bool {
 //     self.span == other.span && self.kind.equals(other.kind)

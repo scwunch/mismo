@@ -1,7 +1,6 @@
 import "go:hash/maphash"
 
-// import "semantic"
-import "span"
+import spn "span"
 
 struct Cache { map: Map<uint64, Slice<(MonoMorphKey, int)>>, hasher: Hasher }
 
@@ -110,7 +109,7 @@ impl Hasher {
     }
   }
 
-  fn write_span(self, s: span.Span) {
+  fn write_span(self, s: spn.Span) {
     self.write_byte(s.start as byte)
     self.write_byte(s.end as byte)
   }

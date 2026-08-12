@@ -1,4 +1,3 @@
-import md "mode"
 import spn "span"
 import "ty"
 import "utils/slice"
