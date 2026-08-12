@@ -6,11 +6,17 @@ related:
 table of contents
 - philosophy: Why Mismo?
 - Mode System
-- Algebraic Data Types
-	- structs and enums
+- Memory Safety
+	- ownership
+	- 2nd class references
+	- pointer range tracking
+- Type System
+	- structural and nominal types
+	- Algebraic Data Types: records and enums
 	- struct of function-pointers rather than `dyn`
 - control flow
-	- UCS: "Ultimate Conditional Syntax"
+	- loops
+	- conditional syntax
 - functions
 	- function as methods
 	- overload resolution
@@ -26,6 +32,12 @@ Mismo is an exploration of mutable value semantics with pythonic syntax and a st
 Memory safety is guaranteed via scoped, second-class references, and the tools to make it both fast and expressive.
 
 The syntax is indentation sensitive, supports UFCS (Uniform Function Call Syntax) and UCS (Ultimate Conditionsl Syntax).  Mismo takes inspiration from Python, Inko, and Ante.  
+
+- OOP style without methods or inheritance
+- memory safety without GC or reference counting
+- readable syntax without brace-delimited blocks
+- ergonomic, generic programming, without traits or typeclasses
+- fast programs without first-class references
 
 Mismo does **not** support:
 - Garbage Collection 
@@ -143,12 +155,8 @@ Furthermore, assignment (`foo = expression`) requires `foo` to be a `mut!` if `f
 
 Otherwise, this assignment only requires `mut`.
 
-## Provenance Tracking
-Within a function scope, tracking the provenance of a reference is not too hard.  You just need to look at how the references are generated (field access, or index of a buffer, or captured field of a matched enum value) and follow all branches of control flow.
-
-Tracking provenance across function boundaries is tougher.  Since we are unwilling to do whole program compilation, each function must be checked only knowing the signatures of other functions.  This generally means the provenance of a referenced passed into a function as a parameter is unknown.
-
-So what can we do?
+## Memory Safety
+The primary mechanism for memory safety in Mismo is **owned types**.  When an owned type goes out of scope, its destructor is automatically run to prevent memory leaks.
 
 
 

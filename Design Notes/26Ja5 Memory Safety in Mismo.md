@@ -38,7 +38,7 @@ There is one mode for owned values (`var`) and three kinds of references, which 
 - *Note: in an earlier version we considered renaming this mode to `dyn` as in "dynamic mutation".  We decided against that because `dyn` implies dynamic typing and vtables, which is wrong and unrelated.*
 #### **`mut`**
 - like `mut!` except limited only to changing fields that are copy types (ie, composed of primitives like `Int` and `Float`)
-- `mut` is also restricted from changing the variant of an enum value if the enum has any variants with fields.
+- `mut` is also restricted from changing the variant of an enum value if the enum has variants with differently types payloads 
 #### **`let`**
 - shared immutable pointer
 - equivalent to Rust's `&` or Pony's `box`
@@ -56,7 +56,7 @@ There are further restrictions on passing/sharing a `var` to maintain uniqueness
 If a `var` is used in any context expecting `mut!`, `mut`, or `let`, it is *aliased* (no longer unique) and temporarily demoted to a `mut!` for the lifetime of all aliases, including aliases of its children.
 
 ```
-var foo = Person("Ralph")
+var foo = Person.new("Ralph")
 mut! name = foo.name
 var bar = foo  -- this is an error since one borrow (name) is still live until the following line.
 print(name)
@@ -68,22 +68,24 @@ print(name)
 Mismo types are divided into two universes: copy types and linear types.  All of the built-in primitive types are **copy types**.  They are:
 - Nil 
 - Bool
-- UInt 
+- Nat 
 - Int 
 - Float
 
 Additionally, any compound type that is composed entirely of copy types is, by default, also a copy type.  For example:
 ```
-struct Point
-	.x Int
-	.y Int 
+type Point {
+	x Int
+	y Int
+}
 	
-enum Number
-	Int(Int)
-	Rational(Int, UInt)
-	Float(Float)
+type Number .{
+	Int Int
+	Rational {Int, Nat}
+	Float Float
 	NaN
 	Infinity 
+}
 ```
 
 A **linear type** on the other hand is any type that is either (a) explicitly marked as linear or (b) contains at least one linearly typed field.  
@@ -94,19 +96,20 @@ There are also many unsafe functions on `Pointer`.  These functions may result i
 
 Copy types have a super power that linear types do not have: they can bypass the mode hierarchy by implicitly copying themselves.
 
-Additionally, pass-by-implicit-copy is the default for copy types.  Given a function parameter `let foo: Type`, the mode is explicitly always `let`.  However, if the mode annotation is omitted, as in `foo: Type`, then if `Type` is linear, then the access mode will be `let`.  If `Type` is a copy type, then the implicit passing mode is "copy" and any argument passed to that parameter (regardless of access mode of the source) will be copied in, resulting in a `var` inside the body of the function.  If the linearity of `Type` depends on type arguments ( `Option[T]`, for example, is linear when `T` is `String`, but a copy type when `T` is `UInt`) then the access mode defaults to `let` as it has the broadest compatibility.
+Additionally, pass-by-implicit-copy is the default for copy types.  Given a function parameter `let foo: Type`, the mode is explicitly always `let`.  However, if the mode annotation is omitted, as in `foo: Type`, then if `Type` is linear, then the access mode will be `let`.  If `Type` is a copy type, then the implicit passing mode is "copy" and any argument passed to that parameter (regardless of access mode of the source) will be copied in, resulting in a `var` inside the body of the function.  If the linearity of `Type` depends on type arguments ( `Option[T]`, for example, is linear when `T` is `String`, but a copy type when `T` is `Int`) then the access mode defaults to `let` as it has the broadest compatibility.
 
 So whereas for a linear type, casting a `let` as a `var` is prohibited by the compiler, for copy types, this operation will copy the underlying value (bitwise, no function call) to make that transformation.  Moving down the mode hierarchy still works the same way for copy types and linear types.
 
 > Note: when a copy typed value moves *down* the hierarchy (eg casting a `var` to a `mut`), the value is *aliased*.  When a value moves *up* the hierarchy, it is implicitly *copied*.
 
 ```
-struct Point
-	.x Int
-	.y Int 
-	
+type Point {
+	x Int
+	y Int 
+}
+
 fn main():
-	var p = Point(0,0)
+	var p = Point.new(0,0)
 	mut p_mut = p
 	let p_let = p_mut
 	var p2 = p_let  -- implicit copy happens here
@@ -116,8 +119,8 @@ fn main():
 ```
 Output:
 ```
-Point(1,2)
-Point(0,0)
+Point{1,2}
+Point{0,0}
 ```
 
 However, aliasing copy types is generally not necessary and not recommended.
@@ -131,7 +134,7 @@ Well, of course `var` is fundamental to this model.
 
 `let` is essential for cheaply sharing immutable data, and it's nice to be able to default to immutability.
 
-`mut` and `mut!` give us shared mutability: a super power that is par for the course in garbage collected languages, but a dream for Rust developers and a nightmare for C developers.  It opens up powerful patterns.
+`mut` and `mut!` give us shared mutability: a super power that is par for the course in garbage collected languages, but causes great difficulties in one way or a another for languages that default to inline data.  It opens up powerful patterns.
 
 ### So why the difference between `mut` and `mut!`?
 With great power comes great responsibility.  Shared mutability is known to cause issues with memory safety.  One of the main ways that happens is *the invalidation of references to the contents of dynamic containers*.
@@ -146,7 +149,7 @@ How does this lead to invalid references?
 - First obtain a mutable reference to a dynamic container
 - Second, obtain a reference to an element of said container 
 - Third, perform a "shape mutation" on the dynamic container 
-	- eg, Array.push may reallocate, or Array.pop removes a value from a buffer
+	- eg, Array.push may reallocate, or Array.pop may (conceptually) remove a value from a buffer
 - Now our element reference may be pointing into memory that was moved, or to a value whose type has changed.  We have lost memory safety.
 
 Mismo's solution is to have the compiler invalidate these references *at compile time*.  In order to do that, it must be able to track two things:
@@ -265,3 +268,6 @@ If this was the case, how often would the developer actually use `let` in functi
 
 ### Which option is best?
 I don't really like any of them actually.  And even though I'm not happy with the complexity of so many modes, I'm inclined to keep them all as is.
+
+## Alternative Provenance Annotations 
+What we are really trying to do with provenance annotations is annotate
