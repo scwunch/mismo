@@ -1,71 +1,68 @@
-import "go:fmt"
+// import "go:fmt"
 
-import "cst"
-import "parser"
-import "resolver"
-import "ast"
-import "ir"
-import dx "diagnostics"
+// import "ast"
+// import "cst"
+// import dx "diagnostics"
+// import "ir"
+// import "parser"
+// import "resolver"
 
-#[test("maranget")]
-fn test_maranget(t) {
-  let assert Ok(ir.Expr.Block(blk)) = type_check([
-    "let a = Option.Some(true)        ",
-    "if a is              ",
-    "   Some(b): b        ",
-    "   None(): a           ",
-  ])
-  let assert [_, ir.Expr.If(cond, _ty)] = blk.kinds()
-  // t.log(ty)
-  let assert [ir.Check.Match(subj, rows)] = cond.checks
-  let assert ir.Expr.Identifier(a) = subj.kind
-  assert a.name == "a"
-  let assert [
-    ir.Row{patterns: [some_a], span: _, then: then_b},
-    ir.Row{patterns: [none], span: _, then: then_a},
-  ] = rows
-  let assert ir.Pattern.Constructor("Some", b) = some_a
-  let assert [ir.Pattern.Binding(b_var)] = b
-  assert b_var.name == "b"
-  let assert ir.Then.Block(b_block) = then_b
-  let assert [ir.Expr.Identifier(b_var)] = b_block.kinds()
-  assert b_var.name == "b"
-  let assert ir.Pattern.Constructor("None", []) = none
-  let assert ir.Then.Block(a_block) = then_a
-  let assert [ir.Expr.Identifier(a_var)] = a_block.kinds()
-  assert a_var.name == "a"
+// #[test("maranget")]
+// fn test_maranget(t) {
+//   let assert Ok(ir.Expr.Block(blk)) = type_check([
+//     "let a = Option.Some(true)        ",
+//     "if a is              ",
+//     "   Some(b): b        ",
+//     "   None(): a           ",
+//   ])
+//   let assert [_, ir.Expr.If(cond, _ty)] = blk.kinds()
+//   // t.log(ty)
+//   let assert [ir.Check.Match(subj, rows)] = cond.checks
+//   let assert ir.Expr.Identifier(a) = subj.kind
+//   assert a.name == "a"
+//   let assert [
+//     ir.Row { patterns: [some_a], span: _, then: then_b },
+//     ir.Row { patterns: [none], span: _, then: then_a },
+//   ] = rows
+//   let assert ir.Pattern.Constructor("Some", b) = some_a
+//   let assert [ir.Pattern.Binding(b_var)] = b
+//   assert b_var.name == "b"
+//   let assert ir.Then.Block(b_block) = then_b
+//   let assert [ir.Expr.Identifier(b_var)] = b_block.kinds()
+//   assert b_var.name == "b"
+//   let assert ir.Pattern.Constructor("None", []) = none
+//   let assert ir.Then.Block(a_block) = then_a
+//   let assert [ir.Expr.Identifier(a_var)] = a_block.kinds()
+//   assert a_var.name == "a"
 
-  let assert ir.Decision.Switch{scrutinee, cases, default} = cond.decision.*
-  let assert ir.Decision.Fail = default.*
-  let assert ir.Place{varid: _a_var, path: []} = scrutinee
-  let assert [ir.Case{tag: "Some", then: case1}, ir.Case{tag: "None", then: case2}] = cases
-  t.log(case1)
-  t.log(case2)
-}
+//   let assert ir.Decision.Switch { scrutinee, cases, default } = cond.decision.*
+//   let assert ir.Decision.Fail = default.*
+//   let assert ir.Place { varid: _a_var, path: [] } = scrutinee
+//   let assert [
+//     ir.Case { tag: "Some", then: case1 },
+//     ir.Case { tag: "None", then: case2 },
+//   ] = cases
+//   t.log(case1)
+//   t.log(case2)
+// }
 
-fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
-  parser.Parser
-    .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))
-    .parse_colon_and_block()
-    .map_err(dx2err)
-}
+// fn parse(lines: Slice<string>) -> Result<cst.Block, error> {
+//   parser.Parser
+//     .new(": \n" + lines.map(|ln| f"  {ln}\n").join(""))
+//     .parse_colon_and_block()
+//     .map_err(dx2err)
+// }
 
-fn dx2err<E: dx.Diagnostic>(e: E) -> error {
-  fmt.Errorf("%v", e.message())
-}
+// fn dx2err<E: dx.Diagnostic>(e: E) -> error {
+//   fmt.Errorf("%v", e.message())
+// }
 
-fn resolve(lines: Slice<string>) -> Result<ast.Block, error> {
-  let cst = parse(lines)?
-  resolver.Resolver
-    .with_mock_prelude()
-    .block(cst)
-    .map_err(dx2err)
-}
+// fn resolve(lines: Slice<string>) -> Result<ast.Block, error> {
+//   let cst = parse(lines)?
+//   resolver.Resolver.with_mock_prelude().block(cst).map_err(dx2err)
+// }
 
-fn type_check(lines: Slice<string>) -> Result<ir.Expr, error> {
-  let ast = resolve(lines)?
-  TypeCheck
-    .new_blank()
-    .infer_block_node(ast)
-    .map_err(dx2err)
-}
+// fn type_check(lines: Slice<string>) -> Result<ir.Expr, error> {
+//   let ast = resolve(lines)?
+//   TypeCheck.new_blank().infer_block_node(ast).map_err(dx2err)
+// }

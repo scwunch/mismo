@@ -22,6 +22,7 @@ pub enum Expr {
   StringLiteral(string),
   ArrayLiteral(Slice<Expression>, ty.Type),
   TupleLiteral(Slice<Expression>),
+  RecordLiteral(Slice<Field>),
   Closure(Closure),
   Declare(md.Mode, Ref<ty.Variable>, Ref<Expression>),
   Identifier(Ref<ty.Variable>),
@@ -41,6 +42,12 @@ pub enum Expr {
   StructConstructor(ty.Type, Ref<Expression>),
   EnumConstructor(ty.Type, ty.Constructor, Ref<Expression>),
   Extern,
+}
+
+#[equality]
+pub struct Field {
+  pub name: string,
+  pub expr: Expression,
 }
 
 #[equality]
@@ -164,14 +171,14 @@ pub struct Checks {
 #[equality]
 pub enum Check {
   Test(Expression, Block),
-  Match(Expression, Slice<Row>),
+  Match(Expression, Slice<Arm>),
 }
 
 #[json]
 #[equality]
-pub struct Row {
+pub struct Arm {
   pub span: spn.Span,
-  pub patterns: Slice<Pattern>,
+  pub pattern: Pattern,
   pub then: Then,
 }
 
@@ -180,13 +187,15 @@ pub struct Row {
 pub enum Pattern {
   Wildcard,
   Binding(Ref<ty.Variable>),
-  Constructor(string, Slice<Pattern>),
+  Tuple(Slice<Pattern>),
+  Constructor(string, Ref<Pattern>),
 }
 
 impl Pattern {
   pub fn irrefutable(self) -> bool {
     match self {
       Wildcard | Binding(_) => true,
+      Tuple(patts) => patts.all(Pattern.irrefutable),
       Constructor(_, _) => false,
     }
   }
@@ -260,25 +269,12 @@ impl Check {
   }
 }
 
-impl Row {
+impl Arm {
   pub fn end_span(self) -> spn.Span {
     match self.then {
       Block(block) => block.last().span,
       If(cond) => cond.end_span(),
     }
-  }
-
-  pub fn replace(self, col: int, patt: Slice<Pattern>) -> Row {
-    let len = self.patterns.length() + patt.length() - 1
-    let mut patterns = [].reserve(len)
-    patterns = patterns.append(self.patterns[..col]...)
-    patterns = patterns.append(patt...)
-    patterns = patterns.append(self.patterns[col + 1..]...)
-    Row { patterns, ..self }
-  }
-
-  pub fn irrefutable(self) -> bool {
-    self.patterns.all(|patt| patt.irrefutable())
   }
 }
 
@@ -364,6 +360,10 @@ impl Expression {
   pub fn typ(self) -> ty.Type {
     self.kind.typ()
   }
+
+  pub fn mode(self) -> md.Mode {
+    self.kind.mode()
+  }
 }
 
 impl Expr {
@@ -382,6 +382,9 @@ impl Expr {
       StringLiteral(string) => ty.Type.String,
       ArrayLiteral(_, typ) => typ,
       TupleLiteral(exprs) => ty.Type.Tuple(exprs.map(|e| e.typ())),
+      RecordLiteral(exprs) => ty.Type.Record(exprs.map(|f|
+        ty.Field {name: f.name, typ: f.expr.typ()}
+      )),
       Closure(closure) => closure.typ(),
       Identifier(id) | CapturedIdent(id) | Assign(id, _) | AssignCapture(id, _) => id.typ,
       Declare(_, _, _) => ty.nil(),
@@ -396,6 +399,36 @@ impl Expr {
       StructConstructor(typ, _) => typ,
       EnumConstructor(typ, _, _) => typ,
       Return(_) | Break(_) | Continue | Extern => ty.Type.Never,
+    }
+  }
+
+  pub fn mode(self) -> md.Mode {
+    match self {
+      Nil |
+      BoolLiteral(_) |
+      IntLiteral(_) |
+      FloatLiteral(_) |
+      StringLiteral(_) |
+      ArrayLiteral(_, _) |
+      TupleLiteral(_) |
+      RecordLiteral(_) => md.Mode.Var,
+      Closure(closure) => if closure.is_movable() {
+        md.Mode.Var
+      } else {
+        md.Mode.MutBang
+      },
+      Identifier(varid) | CapturedIdent(varid) => varid.mode,
+      Declare(_, _, _) | Assign(_, _) | AssignCapture(_, _) => md.Mode.Var,
+      Binding(m, _) => m,
+      FieldAccess(obj, _) => obj.mode(),
+      If(cond, _) => md.Mode.Var,
+      While(cond, _) => md.Mode.Var,
+      Block(_) => md.Mode.Var,
+      // TODO: incorrect for If, While, and Block; we actually need to search for all break statements, or store the mode explicitly
+      Call(_) | Return(_) | Break(_) | Continue => md.Mode.Var,
+      ConcreteCall(_, _) => md.Mode.Var,
+      EnumConstructor(_, _, _) | StructConstructor(_, _) => md.Mode.Var,
+      Extern => md.Mode.Var,
     }
   }
 }
