@@ -87,14 +87,14 @@ impl Block {
 #[json]
 #[equality]
 pub struct Call {
-  pub fun: Ref<ast.FunctionDef>,
+  pub fun: Ref<FunctionDef>,
   pub type_args: Slice<ty.Type>,
   pub args: Slice<Expression>,
 }
 
 impl Call {
   pub fn new(
-    fun: Ref<ast.FunctionDef>,
+    fun: Ref<FunctionDef>,
     type_args: Slice<ty.Type>,
     args: Slice<Expression>,
   ) -> Call {
@@ -105,7 +105,7 @@ impl Call {
 #[json]
 #[equality]
 pub struct Closure {
-  pub env: Slice<ast.Capture>,
+  pub env: Slice<Capture>,
   pub params: Slice<ty.Parameter>,
   pub ret_type: ty.Type,
   pub body: Block,

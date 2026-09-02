@@ -1,13 +1,11 @@
 import "ast"
-import "ir"
 import dx "diagnostics"
+import "ir"
+import spn "span"
 import "ty"
-import "span"
 import "utils/slice"
 
-pub struct TypeCheck {
-  function: Ref<ast.FunctionDef>,
-}
+pub struct TypeCheck { function: Ref<ast.FunctionDef> }
 
 impl TypeCheck {
   pub fn new(function: Ref<ast.FunctionDef>) -> TypeCheck {
@@ -21,10 +19,25 @@ impl TypeCheck {
 }
 
 impl TypeCheck {
-  pub fn check(self, node: ast.Expression, expected: ty.Type, src_span: span.Span) -> Result<ir.Expression, dx.TypeError> {
+  pub fn check(
+    self,
+    node: ast.Expression,
+    expected: ty.Type,
+    src_span: spn.Span,
+  ) -> Result<ir.Expression, dx.TypeError> {
     let expr: ir.Expr = match node.kind {
-      ArrayLiteral(elems) => self.check_array(node.span, elems, expected, src_span)?,
-      TupleLiteral(elems) => self.check_tuple(node.span, elems, expected, src_span)?,
+      ArrayLiteral(elems) => self.check_array(
+        node.span,
+        elems,
+        expected,
+        src_span,
+      )?,
+      TupleLiteral(elems) => self.check_tuple(
+        node.span,
+        elems,
+        expected,
+        src_span,
+      )?,
       If(cond) => ir.Expr.If(self.check_if(cond, expected, src_span)?, expected),
       _ => {
         let actual = self.infer(node)?
@@ -39,19 +52,35 @@ impl TypeCheck {
         return Ok(actual)
       },
     }
-    Ok(ir.Expression{span: node.span, kind: expr})
+    Ok(ir.Expression { span: node.span, kind: expr })
   }
 
-  fn check_tuple(self, tuple_span: span.Span, elems: Slice<ast.Expression>, expected: ty.Type, type_span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn check_tuple(
+    self,
+    tuple_span: spn.Span,
+    elems: Slice<ast.Expression>,
+    expected: ty.Type,
+    type_span: spn.Span,
+  ) -> Result<ir.Expr, dx.TypeError> {
     let ty.Type.Tuple(expected_types) = expected else {
-      return Err(dx.TypeMismatchError.new(type_span, f"{expected}", "Tuple", tuple_span))
+      return Err(dx.TypeMismatchError.new(
+        type_span,
+        f"{expected}",
+        "Tuple",
+        tuple_span,
+      ))
     }
     if elems.length() != expected_types.length() {
-      return Err(dx.TypeMismatchError.new(type_span, f"{expected}", f"{elems.length()}-tuple", tuple_span))
+      return Err(dx.TypeMismatchError.new(
+        type_span,
+        f"{expected}",
+        f"{elems.length()}-tuple",
+        tuple_span,
+      ))
     }
     let elems = slice.map_result(
       slice.zip(elems, expected_types),
-      |(expr, typ)| self.check(expr, typ, type_span)
+      |(expr, typ)| self.check(expr, typ, type_span),
     )?
     Ok(ir.Expr.TupleLiteral(elems))
   }
@@ -66,6 +95,9 @@ impl TypeCheck {
       ArrayLiteral(elems) => self.infer_array(elems, node.span)?,
       TupleLiteral(elems) => ir.Expr.TupleLiteral(
         slice.map_result(elems, self.infer)?,
+      ),
+      RecordLiteral(fields) => ir.Expr.RecordLiteral(
+        slice.map_result(fields, self.infer_field)?
       ),
       Closure(closure) => self.infer_closure(closure)?,
       Declare(m, varid, expr) => {
@@ -93,33 +125,40 @@ impl TypeCheck {
         ir.Expr.Break(Some(&e))
       },
       Continue => ir.Expr.Continue,
-      BareConstructor(str, args) => panic("TODO: infer BareConstructor without context"),
-      StructConstructor(typ, args) => panic("TODO: infer StructConstructor without context"),
-      EnumConstructor(def, variant, args) => self.infer_enum_constructor(def, variant, args)?,
+      Constructor(ResolvedStruct(typ), payload) => return self.check(payload.*, typ, node.span),
+      Constructor(GenericStruct(def), payload) => panic(f"infer generic struct: {def} {payload}"),
+      Constructor(ResolvedVariant(typ, variant), payload) => {
+        let payload = self.check(payload.*, variant.typ.substitute(typ.type_args()), node.span)?
+        ir.Expr.EnumConstructor(typ, variant, &payload)
+      },
+      Constructor(GenericVariant(def, variant), payload) => panic(f"infer generic enum constructor: {def}.{variant} {payload}"),
+      Constructor(BareVariant(variant), payload) => panic(f"infer bare enum constructor: .{variant} {payload}"),
       Extern => ir.Expr.Extern,
     }
     Ok(ir.Expression { span: node.span, kind: expr })
   }
 
-  fn infer_enum_constructor(self, def: Ref<ty.TypeDef>, variant: ty.Variant, args: Slice<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
-    if args.length() != variant.fields.length() {
-      panic("arity error")
-    }
-    let args = slice.map_result(
-      slice.zip(variant.fields, args),
-      |(field, arg)| self.check(arg, field, variant.span)
-    )?
-    // TODO: infer type args
-    let ty = ty.Type.Adt(def, [])
-    Ok(ir.Expr.EnumConstructor(ty, variant, args))
+  fn infer_field(self, field: ast.Field) -> Result<ir.Field, dx.TypeError> {
+    let name = field.name
+    let expr = self.infer(field.expr)?
+    Ok(ir.Field { name, expr })
   }
 
-  fn infer_return(self, expr: Option<Ref<ast.Expression>>, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn infer_return(self, expr: Option<Ref<ast.Expression>>, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
     match (expr, self.function.return_type) {
       (None, Tuple([])) => Ok(ir.Expr.Return(None)),
-      (None, _) => Err(dx.TypeMismatchError.new(self.function.span, f"{self.function.return_type}", "Nil", span)),
+      (None, _) => Err(dx.TypeMismatchError.new(
+        self.function.span,
+        f"{self.function.return_type}",
+        "Nil",
+        span,
+      )),
       (Some(expr), _) => {
-        let expr = self.check(expr.*, self.function.return_type, self.function.span)?
+        let expr = self.check(
+          expr.*,
+          self.function.return_type,
+          self.function.span,
+        )?
         Ok(ir.Expr.Return(Some(&expr)))
       },
     }
@@ -159,16 +198,19 @@ impl TypeCheck {
     // })
   }
 
-  fn check_block(self, block: ast.Block, expected: ty.Type, src_span: span.Span) -> Result<ir.Block, dx.TypeError> {
+  fn check_block(self, block: ast.Block, expected: ty.Type, src_span: spn.Span) -> Result<ir.Block, dx.TypeError> {
     let len = block.statements.length()
-    let mut statements = slice.map_result(block.statements[..len-2], |stmt| {
-      let expr = self.infer(stmt)?
-      if expr.typ().equals(ty.nil()) {
-        Ok(expr)
-      } else {
-        Err(dx.UnusedValueError.new(expr.span))
-      }
-    })?
+    let mut statements = slice.map_result(
+      block.statements[..len - 2],
+      |stmt| {
+        let expr = self.infer(stmt)?
+        if expr.typ().equals(ty.nil()) {
+          Ok(expr)
+        } else {
+          Err(dx.UnusedValueError.new(expr.span))
+        }
+      },
+    )?
     // let mut statements = slice.map_result(block.statements[..len-1], |stmt| {
     //   match stmt.kind {
     //     Break(Some(expr)) => {
@@ -178,11 +220,13 @@ impl TypeCheck {
     //     _ =>         self.check(stmt, ty.nil())
     //   }
     // })?
-    statements = statements.append(self.check(block.statements[len-1], expected, src_span)?)
+    statements = statements.append(
+      self.check(block.statements[len - 1], expected, src_span)?,
+    )
     Ok(ir.Block.new(statements, expected))
   }
 
-  fn infer_array(self, elems: Slice<ast.Expression>, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn infer_array(self, elems: Slice<ast.Expression>, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
     if elems.is_empty() { return Err(dx.EmptyArrayLiteralError.new(span)) }
     let inferred = slice.map_result(elems, self.infer)?
     let mut lub = LUB.new()
@@ -231,34 +275,66 @@ impl TypeCheck {
   //   })
   // }
 
-  fn check_array(self, array_span: span.Span, elems: Slice<ast.Expression>, expected: ty.Type, type_span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn check_array(
+    self,
+    array_span: spn.Span,
+    elems: Slice<ast.Expression>,
+    expected: ty.Type,
+    type_span: spn.Span,
+  ) -> Result<ir.Expr, dx.TypeError> {
     let ty.Type.Array(expected) = expected else {
-      return Err(dx.TypeMismatchError.new(type_span, f"{expected}", "Array", array_span))
+      return Err(dx.TypeMismatchError.new(
+        type_span,
+        f"{expected}",
+        "Array",
+        array_span,
+      ))
     }
     let elem_type = expected.*
-    let elems = slice.map_result(elems, |expr| self.check(expr, elem_type, type_span))?
+    let elems = slice.map_result(
+      elems,
+      |expr| self.check(expr, elem_type, type_span),
+    )?
 
     Ok(ir.Expr.ArrayLiteral(elems, elem_type))
   }
 
   fn infer_closure(self, closure: ast.Closure) -> Result<ir.Expr, dx.TypeError> {
     let body = self.infer_block(closure.body, &LUB.new())?
-    Ok(ir.Expr.Closure(ir.Closure { env: closure.env, params: closure.params, ret_type: body.typ, body }))
+    Ok(ir.Expr.Closure(
+      ir.Closure {
+        env: closure.env,
+        params: closure.params,
+        ret_type: body.typ,
+        body,
+      },
+    ))
     // Ok(Expression.new(span, Expr.Closure(closure)))
   }
 
   fn assign(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
-    let value = self.check(value.*, target.typ, span.new(target.init, target.init))?
+    let value = self.check(
+      value.*,
+      target.typ,
+      spn.new(target.init, target.init),
+    )?
     Ok(ir.Expr.Assign(target, &value))
   }
 
   fn assign_cap(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
-    let value = self.check(value.*, target.typ, span.new(target.init, target.init))?
+    let value = self.check(
+      value.*,
+      target.typ,
+      spn.new(target.init, target.init),
+    )?
     Ok(ir.Expr.AssignCapture(target, &value))
   }
 
-  fn check_if(self, cond: ast.If, expected: ty.Type, type_span: span.Span) -> Result<ir.If, dx.TypeError> {
-    let checks = slice.map_result(cond.checks, |chk| self.check_check(chk, expected, type_span))?
+  fn check_if(self, cond: ast.If, expected: ty.Type, type_span: spn.Span) -> Result<ir.If, dx.TypeError> {
+    let checks = slice.map_result(
+      cond.checks,
+      |chk| self.check_check(chk, expected, type_span),
+    )?
     let default = match cond.default {
       // None if !expected.equals(ty.nil()) => {
       //   panic("raise a 'MissingElseBlock' error")
@@ -269,7 +345,12 @@ impl TypeCheck {
     Ok(ir.If.new(checks, default, expected))
   }
 
-  fn check_check(self, check: ast.Check, expected: ty.Type, type_span: span.Span) -> Result<ir.Check, dx.TypeError> {
+  fn check_check(
+    self,
+    check: ast.Check,
+    expected: ty.Type,
+    type_span: spn.Span,
+  ) -> Result<ir.Check, dx.TypeError> {
     match check {
       Test(expr, blk) => {
         let test = self.infer(expr)?
@@ -281,20 +362,29 @@ impl TypeCheck {
       },
       Match(subj, arms) => {
         let subj = self.infer(subj)?
-        let arms = slice.map_result(arms, |arm| self.check_arm(arm, subj.typ(), expected, type_span))?
+        let arms = slice.map_result(
+          arms,
+          |arm| self.check_arm(arm, subj.typ(), expected, type_span),
+        )?
         Ok(ir.Check.Match(subj, arms))
-      }
+      },
     }
   }
 
-  fn check_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, expected: ty.Type, type_span: span.Span) -> Result<ir.Row, dx.TypeError> {
-    let patterns = self.row_pattern(arm.pattern, scrutinee_type)?
+  fn check_arm(
+    self,
+    arm: ast.Arm,
+    scrutinee_type: ty.Type,
+    expected: ty.Type,
+    type_span: spn.Span,
+  ) -> Result<ir.Arm, dx.TypeError> {
+    let pattern = self.pattern(arm.pattern, scrutinee_type)?
     let then = match arm.then {
       Block(blk) => ir.Then.Block(self.check_block(blk, expected, type_span)?),
       If(cond) => ir.Then.If(self.check_if(cond, expected, type_span)?),
     }
     let span = arm.span()
-    Ok(ir.Row{span, patterns, then})
+    Ok(ir.Arm { span, pattern, then })
   }
 
   fn infer_if_node(self, cond: ast.If) -> Result<ir.Expr, dx.TypeError> {
@@ -327,21 +417,24 @@ impl TypeCheck {
       },
       Match(subj, arms) => {
         let subj = self.infer(subj)?
-        let arms = slice.map_result(arms, |arm| self.infer_arm(arm, subj.typ(), lub))?
+        let arms = slice.map_result(
+          arms,
+          |arm| self.infer_arm(arm, subj.typ(), lub),
+        )?
         Ok(ir.Check.Match(subj, arms))
-      }
+      },
     }
   }
 
-  fn infer_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, lub: Ref<LUB>) -> Result<ir.Row, dx.TypeError> {
+  fn infer_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, lub: Ref<LUB>) -> Result<ir.Arm, dx.TypeError> {
     // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
-    let patterns = self.row_pattern(arm.pattern, scrutinee_type)?
+    let pattern = self.pattern(arm.pattern, scrutinee_type)?
     let then = match arm.then {
       Block(blk) => ir.Then.Block(self.infer_block(blk, lub)?),
       If(cond) => ir.Then.If(self.infer_if(cond, lub)?),
     }
     let span = arm.span()
-    Ok(ir.Row{span, patterns, then})
+    Ok(ir.Arm { span, pattern, then })
   }
 
   // fn infer_checks(self, checks: Slice<ast.Check>, default: Option<ast.Block>) -> Result<ir.Check, dx.TypeError> {
@@ -374,78 +467,105 @@ impl TypeCheck {
   //   }
   // }
 
-  fn row_pattern(self, patt: ast.Expression, patt_type: ty.Type) -> Result<Slice<ir.Pattern>, dx.TypeError> {
-    match (patt.kind, patt_type) {
-      (TupleLiteral(elements), Tuple(types)) => self.tuple_pattern(elements, types),
-      _ => Ok([self.pattern(patt, patt_type)?])
-    }
-  }
-
   fn pattern(self, patt: ast.Expression, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
     match patt.kind {
       Identifier(varid) if varid.name == "_" => Ok(ir.Pattern.Wildcard),
       Identifier(varid) => Ok(ir.Pattern.Binding(varid)),
-      CapturedIdent(varid) => panic("Compiler bug: `CapturedIdent` in pattern position; the resolver should have caught this captured identifier and turned it into a fresh variable at this point."),
-      BareConstructor(variant, args) => self.bare_constructor_pattern(variant, args, patt_type),
-      EnumConstructor(def, variant, args) => match patt_type {
-        Adt(expected_def, _) if def == expected_def => self.constructor_pattern(variant, args),
-        _ => panic("type mismatch 'ty' shuld be 'patt_type'"),
-      },
-      TupleLiteral(elements) => match patt_type {
-        Tuple(_) => panic("tuple pattern not supported in this position; assign to a variable first then match on that variable"),
-        _ => panic("type-pattern mismatch")
-      },
-      _ => panic("Unsupported pattern shape: {patt.kind}")
+      CapturedIdent(varid) => panic(
+        "Compiler bug: `CapturedIdent` in pattern position; the resolver should have caught this captured identifier and turned it into a fresh variable at this point.",
+      ),
+      Constructor(cons, payload) => self.constructor_pattern(cons, payload.*, patt_type),
+      TupleLiteral(elements) => self.tuple_pattern(elements, patt_type),
+      _ => panic(f"Unsupported pattern shape: {patt.kind}"),
     }
   }
 
-  fn tuple_pattern(self, elements: Slice<ast.Expression>, types: Slice<ty.Type>) -> Result<Slice<ir.Pattern>, dx.TypeError> {
+  fn tuple_pattern(self, elements: Slice<ast.Expression>, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
+    let ty.Type.Tuple(types) = patt_type else {
+      // return Err(dx.TypeMismatchError.new)
+      panic("type mismatch error")
+    }
     if types.length() != elements.length() {
       panic("raise type error for arity mismatch")
     }
-    slice.map_result(
+    let elements = slice.map_result(
       slice.zip(elements, types),
-      |(el, ty)| self.pattern(el, ty)
-    )
-  }
-
-  fn bare_constructor_pattern(self, variant: string, args: Slice<ast.Expression>, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
-    let ty.Adt(def, _type_args) = patt_type else {
-      panic(f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'")
-    }
-    let ty.TypeKind.Enum(variants) = def.kind else {
-      panic(f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'")
-    }
-    match variants.find(|v| v.name == variant) {
-      Some(variant) => self.constructor_pattern(variant, args),
-      None => panic(f"raise dx.TypeError for '`{variant}` is not a variant of `{patt_type}`'"),
-    }
-  }
-
-  fn constructor_pattern(self, variant: ty.Variant, args: Slice<ast.Expression>) -> Result<ir.Pattern, dx.TypeError> {
-    if args.length() != variant.fields.length() {
-      panic("arity error")
-    }
-    let fields = slice.map_result(
-      slice.zip(args, variant.fields),
-      |(el, ty)| self.pattern(el, ty)
+      |(el, t)| self.pattern(el, t),
     )?
-    Ok(ir.Pattern.Constructor(variant.name, fields))
+    Ok(ir.Pattern.Tuple(elements))
   }
 
-  fn while_expr(self, cond: ast.If, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn constructor_pattern(self, cons: ast.Constructor, payload: ast.Expression, patt_type: ty.Type) -> Result<ir.Pattern, dx.TypeError> {
+    let variants = match patt_type {
+      Adt(def, type_args) => match def.ctor.typ.substitute(type_args) {
+        Enum(variants) => variants,
+        _ => panic(f"{patt_type} should be a variant constructor.")
+      },
+      Enum(variants) => variants,
+      _ => panic(f"{patt_type} should be a variant constructor.")
+    }
+
+    match cons {
+      ResolvedStruct(_) | GenericStruct(_) => panic("struct patterns not yet supported"),
+      ResolvedVariant(typ, variant) => {
+        if !variants.any(|v| v.equals(variant)) {
+          panic(f"{variant} is not a variant of {patt_type}")
+        }
+        let pattern = self.pattern(payload, variant.typ)?
+        Ok(ir.Pattern.Constructor(variant.name, &pattern))
+      },
+      GenericVariant(def, variant) => panic("cannot yet infer type arguments of constructors"),
+      BareVariant(variant) => {
+        match variants.find(|v| v.name == variant) {
+          Some(variant) => {
+            let pattern = self.pattern(payload, variant.typ)?
+            Ok(ir.Pattern.Constructor(variant.name, &pattern))
+          },
+          None => panic(
+            f"raise dx.TypeError for '`{variant}` is not a variant of `{patt_type}`'",
+          ),
+        }
+      },
+    }
+  }
+
+  // fn bare_constructor_pattern(
+  //   self,
+  //   variant: string,
+  //   args: Slice<ast.Expression>,
+  //   patt_type: ty.Type,
+  // ) -> Result<ir.Pattern, dx.TypeError> {
+  //   let ty.Adt(def, _type_args) = patt_type else {
+  //     panic(
+  //       f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'",
+  //     )
+  //   }
+  //   let ty.TypeKind.Enum(variants) = def.kind else {
+  //     panic(
+  //       f"raise dx.TypeError for 'expected `{patt_type}` pattern; got `{variant}` constructor'",
+  //     )
+  //   }
+  //   match variants.find(|v| v.name == variant) {
+  //     Some(variant) => self.constructor_pattern(variant, args),
+  //     None => panic(
+  //       f"raise dx.TypeError for '`{variant}` is not a variant of `{patt_type}`'",
+  //     ),
+  //   }
+  // }
+
+  fn while_expr(self, cond: ast.If, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
     let _ = cond
     let _ = span
     panic("not implemented yet")
   }
 
-  fn for_expr(self, for_loop: ast.ForLoop, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn for_expr(self, for_loop: ast.ForLoop, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
     let _ = for_loop
     let _ = span
     panic("not implemented yet")
   }
 
-  // fn dot_name(self, expr: ast.Expression, name: string, span: span.Span) -> Result<Expr, dx.TypeError> {
+  // fn dot_name(self, expr: ast.Expression, name: string, span: spn.Span) -> Result<Expr, dx.TypeError> {
   //   let typ = expr.typ()
   //   if let Type.Adt(def, args) = typ {
   //     if let TypeKind.Struct(fields) = def.kind {
@@ -462,7 +582,7 @@ impl TypeCheck {
   //   type_path: ast.Path,
   //   type_args: Slice<Type>,
   //   call: ast.Call,
-  //   span: span.Span,
+  //   span: spn.Span,
   // ) -> Result<ir.Expr, dx.TypeError> {
   //   let type_args = match call.type_args {
   //     Some(extra_type_args) => {
@@ -485,10 +605,13 @@ impl TypeCheck {
   //   )
   // }
 
-  fn infer_call(self, call: ast.Call, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  fn infer_call(self, call: ast.Call, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
     if let Some(field) = call.field {
       match (call.args, call.type_args) {
-        ([obj], None) => if let Some(expr) = self.field_access(self.infer(obj)?, field) {
+        ([obj], None) => if let Some(expr) = self.field_access(
+          self.infer(obj)?,
+          field,
+        ) {
           return Ok(expr)
         },
         _ => panic("invalid `dotname` Call"),
@@ -497,27 +620,32 @@ impl TypeCheck {
     let args = slice.map_result(call.args, self.infer)?
     let call = match call.type_args {
       Some(type_args) => panic("explicit type args not handled yet"),
-      None => resolve_overload(call.local_candidates, call.global_candidates, args, span)?,
+      None => resolve_overload(
+        call.local_candidates,
+        call.global_candidates,
+        args,
+        span,
+      )?,
     }
     Ok(ir.Expr.Call(call))
   }
 
   fn field_access(self, obj: ir.Expression, field_name: string) -> Option<ir.Expr> {
-    let ty.Type.Adt(type_def, _) = obj.typ() else {
-      return None
-    }
-    let ty.TypeKind.Struct(fields) = type_def.kind else {
-      return None
+    let fields = match obj.typ() {
+      Record(fields) => fields,
+      Adt(def, args) => match def.ctor.typ {
+        Record(fields) => fields.map(|f| f.substitute(args)),
+        _ => return None,
+      },
+      _ => return None,
     }
     for (i, field) in fields.enumerate() {
-      if field.name == field_name {
-        return Some(ir.Expr.FieldAccess(&obj, i))
-      }
+      if field.name == field_name { return Some(ir.Expr.FieldAccess(&obj, i)) }
     }
     None
   }
 
-  // fn infer_call_old(self, call: ast.Call, span: span.Span) -> Result<ir.Expr, dx.TypeError> {
+  // fn infer_call_old(self, call: ast.Call, span: spn.Span) -> Result<ir.Expr, dx.TypeError> {
   //   if type_args.is_empty() && fname.namespace.is_empty() {
   //     let local_funs = self.get_local_functions(fname.name)
   //     for fun in local_funs {
@@ -560,13 +688,17 @@ fn resolve_overload(
   local_candidates: Slice<Ref<ty.Variable>>,
   global_candidates: Slice<Ref<ast.FunctionDef>>,
   args: Slice<ir.Expression>,
-  span: span.Span,
+  span: spn.Span,
 ) -> Result<ir.Call, dx.TypeError> {
   if !local_candidates.is_empty() {
     panic("local_candidates not handled yet in overload resolution")
   }
   // TODO: if type_args present, use them!
-  let candidates = global_candidates.map(|fun| try_match_candidate(fun, args, span))
+  let candidates = global_candidates.map(|fun| try_match_candidate(
+    fun,
+    args,
+    span,
+  ))
   let mut matches = []
   for cand in candidates {
     if let OverloadCandidate.Ok(call) = cand { matches = matches.append(call) }
@@ -598,7 +730,7 @@ enum OverloadCandidate {
 fn try_match_candidate(
   fun: Ref<ast.FunctionDef>,
   args: Slice<ir.Expression>,
-  span: span.Span,
+  span: spn.Span,
 ) -> OverloadCandidate {
   if fun.parameters.length() != args.length() {
     return OverloadCandidate.Err(
@@ -633,7 +765,7 @@ fn match_types(
   param: ty.Type,
   arg: ty.Type,
   mut bindings: Slice<ty.Type>,
-  span: span.Span,
+  span: spn.Span,
 ) -> Result<(), dx.TypeError> {
   if let ty.Type.Var(idx) = param {
     match bindings[idx] {
@@ -665,31 +797,29 @@ fn match_types(
 // }
 
 /// Least Upper Bound
-struct LUB {
-  span: span.Span,
-  ty: ty.Type,
-}
+struct LUB { span: spn.Span, ty: ty.Type }
+
 impl LUB {
   fn new() -> LUB {
-    LUB{ty: ty.Type.Never, ..}
+    LUB { ty: ty.Type.Never, .. }
   }
 
   fn unify(self: Ref<LUB>, expr: ir.Expression) -> Result<(), dx.TypeError> {
     match (expr.typ(), self.ty) {
       (Never, _) => (),
-      (ty, Never) => {
-        self.ty = ty
+      (typ, Never) => {
+        self.ty = typ
         self.span = expr.span
       },
-      (ty, _) => match self.ty.least_upper_bound(ty) {
+      (typ, _) => match self.ty.least_upper_bound(typ) {
         Some(t) => self.ty = t,
         None => return Err(dx.TypeMismatchError.new(
           self.span,
           f"{self.ty}",
           f"{expr.typ()}",
-          expr.span
+          expr.span,
         )),
-      }
+      },
     }
     Ok(())
   }

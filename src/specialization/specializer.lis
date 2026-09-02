@@ -1,15 +1,14 @@
 import dx "diagnostics"
-import "semantic"
+import "ty"
+import "ir"
 
-type Expr = semantic.Expr
-
-pub fn specialize(reg: semantic.TypeEnv) -> Result<ConcreteRegistry, dx.SpecializationError> {
-  let main = match reg.signatures.get("main") {
-    Some([main]) => main,
-    Some(funs) => Err(
+pub fn specialize(reg: ir.Registry) -> Result<ConcreteRegistry, dx.SpecializationError> {
+  let main = match reg.main {
+    [main] => main,
+    [] => Err(dx.NoMainFunctionError.new() as dx.SpecializationError)?,
+    funs => Err(
       dx.MultipleMainFunctionsError.new(funs.map(|f| f.span)) as dx.SpecializationError,
     )?,
-    None => Err(dx.NoMainFunctionError.new() as dx.SpecializationError)?,
   }
 
   let mut spec = Specializer.new()
@@ -22,12 +21,12 @@ pub fn specialize(reg: semantic.TypeEnv) -> Result<ConcreteRegistry, dx.Speciali
 
 #[display]
 struct MonoMorphKey {
-  fun: Ref<semantic.FunctionDef>,
-  type_args: Slice<semantic.Type>,
+  fun: Ref<ir.FunctionDef>,
+  type_args: Slice<ty.Type>,
 }
 
 impl MonoMorphKey {
-  fn from_call(call: semantic.FnCall) -> MonoMorphKey {
+  fn from_call(call: ir.Call) -> MonoMorphKey {
     MonoMorphKey { fun: call.fun, type_args: call.type_args as Slice<Type> }
   }
 
@@ -47,7 +46,7 @@ pub struct Specializer {
 
 impl Specializer {
   fn new() -> Specializer {
-    Specializer { 
+    Specializer {
       queue: [],
       functions: [],
       function_map: Cache.new(),
@@ -70,7 +69,7 @@ impl Specializer {
     self.functions[item.0] = func
   }
 
-  fn index_of(self: Ref<Specializer>, call: semantic.FnCall) -> int {
+  fn index_of(self: Ref<Specializer>, call: ir.FnCall) -> int {
     let call = MonoMorphKey.from_call(call)
     self.function_map.get(call).unwrap_or_else(|| self.add_function(call))
   }
@@ -80,7 +79,7 @@ impl Specializer {
     let parameters = call.fun.parameters.map(|p| p.substitute(call.type_args))
     let return_type = call.fun.return_type.substitute(call.type_args)
     self.functions = self.functions.append(
-      Function { 
+      Function {
         span: call.fun.span,
         name: call.fun.name,
         parameters,
@@ -102,65 +101,65 @@ impl Specializer {
     let kind = match expr.kind {
       Call(call) => {
         let i = self.index_of(call)
-        Expr.ConcreteCall(i, call.args.map(|a| self.substitute(a, type_args)))
+        ir.Expr.ConcreteCall(i, call.args.map(|a| self.substitute(a, type_args)))
       },
       ArrayLiteral(exprs, t) => {
-        Expr.ArrayLiteral(exprs.map(|e| self.substitute(e, type_args)), t)
+        ir.Expr.ArrayLiteral(exprs.map(|e| self.substitute(e, type_args)), t)
       },
       TupleLiteral(exprs) => {
-        Expr.TupleLiteral(exprs.map(|e| self.substitute(e, type_args)))
+        ir.Expr.TupleLiteral(exprs.map(|e| self.substitute(e, type_args)))
       },
-      Closure(closure) => Expr.Closure(
-        semantic.Closure { 
+      Closure(closure) => ir.Expr.Closure(
+        ir.Closure {
           env: closure.env,
           params: closure.params.map(|p| p.substitute(type_args)),
           ret_type: closure.ret_type.substitute(type_args),
           body: &self.substitute(closure.body.*, type_args),
         },
       ),
-      Identifier(id) => Expr.Identifier(id), // HMM: do we need to change the type of `Variable` id?
-      Declare(mode, id, value) => Expr.Declare(
+      Identifier(id) => ir.Expr.Identifier(id), // HMM: do we need to change the type of `Variable` id?
+      Declare(mode, id, value) => ir.Expr.Declare(
         mode,
         id,
         &self.substitute(value.*, type_args),
       ),
-      Assign(id, expr) => Expr.Assign(id, &self.substitute(expr.*, type_args)),
-      Binding(m, expr) => Expr.Binding(m, &self.substitute(expr.*, type_args)),
+      Assign(id, expr) => ir.Expr.Assign(id, &self.substitute(expr.*, type_args)),
+      Binding(m, expr) => ir.Expr.Binding(m, &self.substitute(expr.*, type_args)),
       SwitchIf(cases) => {
-        Expr.SwitchIf(semantic.SwitchIf.new(cases.cases.map(|case| (
+        ir.Expr.SwitchIf(ir.SwitchIf.new(cases.cases.map(|case| (
           self.substitute(case.0, type_args),
           self.substitute(case.1, type_args),
         ))))
       },
-      Match(cases) => Expr.Match(semantic.Match.new(
+      Match(cases) => ir.Expr.Match(ir.Match.new(
         &self.substitute(cases.subject.*, type_args),
         cases.cases.map(|case| {
-          semantic.MatchArm.new(
+          ir.MatchArm.new(
             self.substitute(case.pattern, type_args),
             self.substitute(case.expr, type_args),
           )
         }),
       )),
-      Loop(exprs, t) => Expr.Loop(
+      Loop(exprs, t) => ir.Expr.Loop(
         exprs.map(|e| self.substitute(e, type_args)),
         t,
       ),
-      Block(exprs, t) => Expr.Block(
+      Block(exprs, t) => ir.Expr.Block(
         exprs.map(|e| self.substitute(e, type_args)),
         t,
       ),
-      Return(Some(expr)) => Expr.Return(Some(
+      Return(Some(expr)) => ir.Expr.Return(Some(
         &self.substitute(expr.*, type_args),
       )),
-      Break(Some(expr)) => Expr.Return(Some(&self.substitute(expr.*, type_args))),
-      FieldAccess(obj, i) => Expr.FieldAccess(
+      Break(Some(expr)) => ir.Expr.Return(Some(&self.substitute(expr.*, type_args))),
+      FieldAccess(obj, i) => ir.Expr.FieldAccess(
         &self.substitute(obj.*, type_args),
         i,
       ),
       ConcreteCall(_, _) => panic(
         "compiler bug 134: concrete call should not exist yet in specializer",
       ),
-      Constructor(typ, args) => Expr.Constructor(
+      Constructor(typ, args) => ir.Expr.Constructor(
         typ.substitute(type_args),
         args,
       ),
@@ -183,6 +182,6 @@ impl Specializer {
 }
 
 pub struct ConcreteRegistry {
-  pub type_defs: Map<string, Ref<semantic.TypeDef>>,
+  pub type_defs: Map<string, Ref<ty.TypeDef>>,
   pub functions: Slice<Function>,
 }

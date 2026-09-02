@@ -18,7 +18,7 @@ impl Registry {
   }
 
   pub fn with_mock_prelude() -> Ref<Registry> {
-    let self = &Registry { .. }
+    let mut self = &Registry { .. }
     for fn_name in ["==", "+", "-", "*", "/", "print"] {
       self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
     }

@@ -171,7 +171,7 @@ fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
     ),
   )
 
-  let main = env.signatures["main"][0]
+  let mut main = env.signatures["main"][0]
   let foo = env.signatures["foo"][0]
 
   main.body = Expression.new(

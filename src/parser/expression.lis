@@ -30,7 +30,7 @@ impl ExpressionParser {
       operators: [],
       expression_indent,
       expecting: Expecting.Term,
-      stop_at: TokenKind.EOF as TokenKind,
+      stop_at: TokenKind.EOF,
     }
   }
 

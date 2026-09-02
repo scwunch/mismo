@@ -82,7 +82,7 @@ pub fn build_zig(zig_source: string, opts: Options) -> Result<Path, error> {
   // We pass -femit-bin to tell zig exactly where to put the output.
   let binary_path = filepath.Join(work_dir, opts.out_bin)
   let args = ["build-exe", src_path, f"-femit-bin={binary_path}"]
-  let cmd = exec.Command(opts.zig_bin, args...)
+  let mut cmd = exec.Command(opts.zig_bin, args...)
   cmd.Dir = work_dir
 
   cmd.Stdout = Some(opts.io.stdout)

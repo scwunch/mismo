@@ -1,6 +1,6 @@
 // import dx "diagnostics"
-// import "mode"
-// import "span"
+// import md "mode"
+// import spn "span"
 // import "utils/slice"
 
 // struct ModeCheck {}
@@ -10,7 +10,7 @@
 //     ModeCheck {}
 //   }
 
-//   fn infer(self, node: Expression) -> Result<mode.Mode, dx.TypeError> {
+//   fn infer(self, node: ir.Expression) -> Result<md.Mode, dx.TypeError> {
 //     match node.kind {
 //       Expr.Nil |
 //       Expr.BoolLiteral(_) |
@@ -19,7 +19,7 @@
 //       Expr.StringLiteral(_) |
 //       Expr.ArrayLiteral(_, _) |
 //       Expr.TupleLiteral(_) => {
-//         Ok(mode.Mode.Var)
+//         Ok(md.Mode.Var)
 //       },
 //       Expr.Closure(closure) => {
 //         self.consume(closure.body.*)?
@@ -28,11 +28,11 @@
 //       Expr.Identifier(varid) => self.use_ident(varid, node.span),
 //       Expr.Declare(_, varid, value) => self
 //         .consume(value.*)
-//         .map(|_| mode.Mode.Var),
-//       Expr.Assign(varid, expr) => Ok(mode.Mode.Var),
-//       Expr.Binding(mode.Mode.Var, expr) => self
+//         .map(|_| md.Mode.Var),
+//       Expr.Assign(varid, expr) => Ok(md.Mode.Var),
+//       Expr.Binding(md.Mode.Var, expr) => self
 //         .consume(expr.*)
-//         .map(|_| mode.Mode.Var),
+//         .map(|_| md.Mode.Var),
 //       Expr.Binding(dest_mode, expr) => {
 //         let src_mode = self.infer(expr.*)?
 //         if src_mode.assignable_to(dest_mode) {
@@ -48,27 +48,27 @@
 //       Expr.FieldAccess(obj, _) => self.infer(obj.*),
 //       Expr.Block(exprs, _) => self.infer_block(exprs),
 //       Expr.Call(call) => self.call(call),
-//       Expr.Return(None) => Ok(mode.Mode.Var),
+//       Expr.Return(None) => Ok(md.Mode.Var),
 //       Expr.Return(Some(expr)) => {
 //         self.consume(expr.*)?
-//         Ok(mode.Mode.Var)
+//         Ok(md.Mode.Var)
 //       },
-//       Expr.Break(None) => Ok(mode.Mode.Var),
+//       Expr.Break(None) => Ok(md.Mode.Var),
 //       Expr.Break(Some(expr)) => {
 //         let _ = self.infer(expr.*)?
-//         Ok(mode.Mode.Var)
+//         Ok(md.Mode.Var)
 //       },
-//       Expr.Continue => Ok(mode.Mode.Var),
+//       Expr.Continue => Ok(md.Mode.Var),
 //       Expr.SwitchIf(_) => panic("switchif not implemented"),
 //       Expr.Match(_) => panic("match not implemented"),
 //       Expr.Loop(_, _) => panic("loop not implemented"),
 //       Expr.ConcreteCall(_, _) => panic("concrete call node not created yet"),
-//       Expr.Constructor(_, _) => Ok(mode.Mode.Var),
-//       Expr.Extern => Ok(mode.Mode.Var),
+//       Expr.Constructor(_, _) => Ok(md.Mode.Var),
+//       Expr.Extern => Ok(md.Mode.Var),
 //     }
 //   }
 
-//   fn consume(self, node: Expression) -> Result<(), dx.TypeError> {
+//   fn consume(self, node: ir.Expression) -> Result<(), dx.TypeError> {
 //     match node.kind {
 //       Expr.Identifier(varid) => self.consume_ident(varid, node.span),
 //       Expr.FieldAccess(obj, i) => {
@@ -78,7 +78,7 @@
 //       Expr.Block(exprs, _) => self.consume_block(exprs),
 //       _ => {
 //         let m = self.infer(node)?
-//         if m == mode.Mode.Var {
+//         if m == md.Mode.Var {
 //           Ok(())
 //         } else {
 //           Err(dx.ConsumeBorrowError.new(f"{node.kind}", node.span))
@@ -87,12 +87,12 @@
 //     }
 //   }
 
-//   fn use_ident(self, varid: Ref<Variable>, used: span.Span) -> Result<mode.Mode, dx.TypeError> {
+//   fn use_ident(self, varid: Ref<Variable>, used: spn.Span) -> Result<md.Mode, dx.TypeError> {
 //     if let Some(consumed) = varid.consumed {
 //       return Err(dx.UseAfterConsumeError.new(
 //         varid.name,
 //         used,
-//         span.Span {
+//         spn.Span {
 //           start: consumed,
 //           end: consumed + varid.name.length() as uint32,
 //         },
@@ -101,9 +101,9 @@
 //     Ok(varid.mode)
 //   }
 
-//   fn consume_ident(self, varid: Ref<Variable>, span: span.Span) -> Result<(), dx.TypeError> {
+//   fn consume_ident(self, varid: Ref<Variable>, span: spn.Span) -> Result<(), dx.TypeError> {
 //     let _ = self.use_ident(varid, span)?
-//     if varid.mode == mode.Mode.Var {
+//     if varid.mode == md.Mode.Var {
 //       varid.consumed = Some(span.start)
 //       Ok(())
 //     } else {
@@ -111,8 +111,8 @@
 //     }
 //   }
 
-//   fn infer_block(self, exprs: Slice<Expression>) -> Result<mode.Mode, dx.TypeError> {
-//     let mut m = mode.Mode.Var
+//   fn infer_block(self, exprs: Slice<ir.Expression>) -> Result<md.Mode, dx.TypeError> {
+//     let mut m = md.Mode.Var
 //     for expr in exprs[..exprs.length() - 1] {
 //       if let Expr.Break(Some(expr)) = expr.kind {
 //         m = m.union(self.infer(expr.*)?)
@@ -123,7 +123,7 @@
 //     Ok(m.union(self.infer(exprs[exprs.length() - 1])?))
 //   }
 
-//   fn consume_block(self, exprs: Slice<Expression>) -> Result<(), dx.TypeError> {
+//   fn consume_block(self, exprs: Slice<ir.Expression>) -> Result<(), dx.TypeError> {
 //     for expr in exprs[..exprs.length() - 1] {
 //       if let Expr.Break(Some(expr)) = expr.kind {
 //         self.consume(expr.*)?
@@ -134,9 +134,9 @@
 //     self.consume(exprs[exprs.length() - 1])
 //   }
 
-//   fn call(self, call: FnCall) -> Result<mode.Mode, dx.TypeError> {
+//   fn call(self, call: FnCall) -> Result<md.Mode, dx.TypeError> {
 //     for (arg, param) in slice.zip(call.args, call.fun.parameters) {
-//       if param.mode == mode.Mode.Var {
+//       if param.mode == md.Mode.Var {
 //         self.consume(arg)?
 //       } else {
 //         let m = self.infer(arg)?
@@ -149,12 +149,12 @@
 //         }
 //       }
 //     }
-//     Ok(mode.Mode.Var)
+//     Ok(md.Mode.Var)
 //   }
 // }
 
 // impl Expression {
-//   pub fn mode(self) -> mode.Mode {
+//   pub fn mode(self) -> md.Mode {
 //     match self.kind {
 //       Nil |
 //       BoolLiteral(_) |
@@ -162,25 +162,25 @@
 //       FloatLiteral(_) |
 //       StringLiteral(_) |
 //       ArrayLiteral(_, _) |
-//       TupleLiteral(_) => mode.Mode.Var,
+//       TupleLiteral(_) => md.Mode.Var,
 //       Closure(closure) => if closure.is_movable() {
-//         mode.Mode.Var
+//         md.Mode.Var
 //       } else {
-//         mode.Mode.MutBang
+//         md.Mode.MutBang
 //       },
 //       Identifier(varid) => varid.mode,
-//       Declare(_, _, _) | Assign(_, _) => mode.Mode.Var,
+//       Declare(_, _, _) | Assign(_, _) => md.Mode.Var,
 //       Binding(m, _) => m,
 //       FieldAccess(obj, _) => obj.mode(),
-//       Block([], _) => mode.Mode.Var,
+//       Block([], _) => md.Mode.Var,
 //       Block(exprs, _) => exprs[exprs.length() - 1].mode(),
-//       Call(_) | Return(_) | Break(_) | Continue => mode.Mode.Var,
+//       Call(_) | Return(_) | Break(_) | Continue => md.Mode.Var,
 //       SwitchIf(_) => panic("switchif not implemented"),
 //       Match(_) => panic("match not implemented"),
 //       Loop(_, _) => panic("loop not implemented"),
 //       ConcreteCall(_, _) => panic("concrete call node not created yet"),
-//       Constructor(_, _) => mode.Mode.Var,
-//       Extern => mode.Mode.Var,
+//       Constructor(_, _) => md.Mode.Var,
+//       Extern => md.Mode.Var,
 //     }
 //   }
 // }

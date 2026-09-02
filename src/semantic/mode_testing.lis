@@ -1,6 +1,6 @@
 // import dx "diagnostics"
-// import "mode"
-// import "span"
+// import md "mode"
+// import spn "span"
 // import "testing"
 
 // pub fn test_modecheck() {
@@ -27,31 +27,31 @@
 //   let mc = ModeCheck.new()
 
 //   match mc.infer(nil_expr()) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(bool_expr(true)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(int_expr(42)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(float_expr(1.5)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(string_expr("hello")) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(array_expr([int_expr(1)], Type.Int)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 //   match mc.infer(tuple_expr([int_expr(1), bool_expr(true)])) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -62,21 +62,21 @@
 //   t.test_name = "identifier returns declared mode"
 //   let mc = ModeCheck.new()
 
-//   let v_var = var_(mode.Mode.Var, "x", Type.Int)
+//   let v_var = var_(md.Mode.Var, "x", Type.Int)
 //   match mc.infer(ident_expr(v_var)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
-//   let v_let = var_(mode.Mode.Let, "y", Type.String)
+//   let v_let = var_(md.Mode.Let, "y", Type.String)
 //   match mc.infer(ident_expr(v_let)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Let, f"expected Let, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Let, f"expected Let, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
-//   let v_mut = var_(mode.Mode.Mut, "z", Type.Float)
+//   let v_mut = var_(md.Mode.Mut, "z", Type.Float)
 //   match mc.infer(ident_expr(v_mut)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Mut, f"expected Mut, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Mut, f"expected Mut, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -85,12 +85,12 @@
 
 // fn test_use_after_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "use after consume"
-//   let v = var_(mode.Mode.Var, "x", Type.Int)
+//   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let mc = ModeCheck.new()
 
 //   // Consume x via a Var binding
 //   let src = ident_expr(v)
-//   if let Err(e) = mc.infer(binding_expr(mode.Mode.Var, &src)) {
+//   if let Err(e) = mc.infer(binding_expr(md.Mode.Var, &src)) {
 //     t.fail(e.message())?
 //   }
 
@@ -111,9 +111,9 @@
 //   let mc = ModeCheck.new()
 
 //   // Cannot consume a Let variable via Var binding
-//   let v_let = var_(mode.Mode.Let, "x", Type.Int)
+//   let v_let = var_(md.Mode.Let, "x", Type.Int)
 //   let src = ident_expr(v_let)
-//   match mc.infer(binding_expr(mode.Mode.Var, &src)) {
+//   match mc.infer(binding_expr(md.Mode.Var, &src)) {
 //     Ok(_) => t.fail("expected ConsumeBorrowError")?,
 //     Err(e) => t.should_be_true(
 //       e.code() == 3011,
@@ -122,9 +122,9 @@
 //   }
 
 //   // Cannot consume a Mut variable via Var binding
-//   let v_mut = var_(mode.Mode.Mut, "y", Type.Int)
+//   let v_mut = var_(md.Mode.Mut, "y", Type.Int)
 //   let src2 = ident_expr(v_mut)
-//   match mc.infer(binding_expr(mode.Mode.Var, &src2)) {
+//   match mc.infer(binding_expr(md.Mode.Var, &src2)) {
 //     Ok(_) => t.fail("expected ConsumeBorrowError")?,
 //     Err(e) => t.should_be_true(
 //       e.code() == 3011,
@@ -133,9 +133,9 @@
 //   }
 
 //   // Cannot consume a MutBang variable via Var binding
-//   let v_mutbang = var_(mode.Mode.MutBang, "z", Type.Int)
+//   let v_mutbang = var_(md.Mode.MutBang, "z", Type.Int)
 //   let src3 = ident_expr(v_mutbang)
-//   match mc.infer(binding_expr(mode.Mode.Var, &src3)) {
+//   match mc.infer(binding_expr(md.Mode.Var, &src3)) {
 //     Ok(_) => t.fail("expected ConsumeBorrowError")?,
 //     Err(e) => t.should_be_true(
 //       e.code() == 3011,
@@ -151,10 +151,10 @@
 //   let mc = ModeCheck.new()
 
 //   // A Var source can be bound to a Let dest (downgrade)
-//   let v = var_(mode.Mode.Var, "x", Type.Int)
+//   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let src = ident_expr(v)
-//   match mc.infer(binding_expr(mode.Mode.Let, &src)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Let, f"expected Let, got {m}")?,
+//   match mc.infer(binding_expr(md.Mode.Let, &src)) {
+//     Ok(m) => t.should_be_true(m == md.Mode.Let, f"expected Let, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -166,9 +166,9 @@
 //   let mc = ModeCheck.new()
 
 //   // A Let source cannot be assigned to a Mut dest
-//   let v = var_(mode.Mode.Let, "x", Type.Int)
+//   let v = var_(md.Mode.Let, "x", Type.Int)
 //   let src = ident_expr(v)
-//   match mc.infer(binding_expr(mode.Mode.Mut, &src)) {
+//   match mc.infer(binding_expr(md.Mode.Mut, &src)) {
 //     Ok(_) => t.fail("expected ModeMismatchError")?,
 //     Err(e) => t.should_be_true(
 //       e.code() == 3013,
@@ -178,9 +178,9 @@
 
 //   // A Let source cannot be assigned to a Var dest (this goes through
 //   // consume_ident instead, producing ConsumeBorrowError)
-//   let v2 = var_(mode.Mode.Let, "y", Type.Int)
+//   let v2 = var_(md.Mode.Let, "y", Type.Int)
 //   let src2 = ident_expr(v2)
-//   match mc.infer(binding_expr(mode.Mode.Var, &src2)) {
+//   match mc.infer(binding_expr(md.Mode.Var, &src2)) {
 //     Ok(_) => t.fail("expected error")?,
 //     Err(e) => t.should_be_true(
 //       e.code() == 3011 || e.code() == 3013,
@@ -196,7 +196,7 @@
 //   let mc = ModeCheck.new()
 
 //   // A Var arg can be passed to a Let param (downgrade), and is not consumed
-//   let v = var_(mode.Mode.Var, "x", Type.Int)
+//   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let fn_def = FunctionDef.mock(
 //     "f",
 //     [],
@@ -204,7 +204,7 @@
 //     Type.Tuple([]),
 //   )
 //   match mc.infer(call_expr(&fn_def, [], [ident_expr(v)])) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -219,7 +219,7 @@
 //   let mc = ModeCheck.new()
 
 //   // A Var arg passed to a Var param is consumed
-//   let v = var_(mode.Mode.Var, "x", Type.Int)
+//   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let fn_def = FunctionDef.mock(
 //     "f",
 //     [],
@@ -227,7 +227,7 @@
 //     Type.Tuple([]),
 //   )
 //   match mc.infer(call_expr(&fn_def, [], [ident_expr(v)])) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -248,7 +248,7 @@
 //   let mc = ModeCheck.new()
 
 //   // A Let arg cannot be passed to a Mut param
-//   let v = var_(mode.Mode.Let, "x", Type.Int)
+//   let v = var_(md.Mode.Let, "x", Type.Int)
 //   let fn_def = FunctionDef.mock(
 //     "f",
 //     [],
@@ -272,13 +272,13 @@
 
 //   // Block with a single Var expression returns Var
 //   match mc.infer(block_expr([int_expr(42)], Type.Int)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
 //   // Block with Var expressions still returns Var
 //   match mc.infer(block_expr([int_expr(1), int_expr(2)], Type.Int)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
@@ -291,15 +291,15 @@
 
 //   // Return(None) returns Var
 //   match mc.infer(return_expr(None)) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
 //   // Return(Some(ident)) consumes the variable
-//   let v = var_(mode.Mode.Var, "x", Type.Int)
+//   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let ret = return_expr(Some(&ident_expr(v)))
 //   match mc.infer(ret) {
-//     Ok(m) => t.should_be_true(m == mode.Mode.Var, f"expected Var, got {m}")?,
+//     Ok(m) => t.should_be_true(m == md.Mode.Var, f"expected Var, got {m}")?,
 //     Err(e) => t.fail(e.message())?,
 //   }
 
