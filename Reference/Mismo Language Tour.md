@@ -9,22 +9,32 @@ table of contents
 - Memory Safety
 	- ownership
 	- 2nd class references
+	- mutation of dynamic containers
 	- pointer range tracking
 - Type System
 	- structural and nominal types
 	- Algebraic Data Types: records and enums
-	- struct of function-pointers rather than `dyn`
-- control flow
+- Control flow
 	- loops
-	- conditional syntax
-- functions
+	- unified conditional and match syntax
+- Functions
 	- function as methods
 	- overload resolution
-- implicits
+- Generics
+	- name-based implicit parameters
 - Closures & Coroutines
 	- Capturing references
 - concurrency
 - modules
+
+Recent work: 
+- conditional syntax
+	- evolution from UCS to Scala-like embedded if-trees
+- type system
+- function signatures
+	- pointer range annotations: `let{x.*} a: T`
+	- `mutates` clause
+	- `mut?` and `mut!` syntactic sugar
 
 ## Why Mismo?
 Mismo is an exploration of mutable value semantics with pythonic syntax and a strong static algebraic type system.
