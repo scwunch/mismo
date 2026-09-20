@@ -1,0 +1,414 @@
+type Lexer {
+   source: Array[Byte]
+   index: Nat
+   indent: Nat
+}
+
+fn Lexer.new(source: String) Lexer:
+   Lexer {source: source.bytes, index: 0, indent: 0}
+
+fn peek_byte(self: Lexer) Byte:
+   .source.get(.index) or Token.eof(.index)
+
+fn next(mut self: Lexer) Token:
+   .on_line_start = false
+
+   var tok = if self.peek_byte is
+      '\n': .new_line
+      ',': Token.comma(.index)
+      '.': Token.dot(.index)
+      ';': Token.semicolon(.index)
+      '(': Token.left_paren(.index)
+      //'"' or '\'' or '`': .read_string
+      ...
+      '-' if .peek_byte(1) is
+         '-': .new_line
+         '>': .arrow(.index)
+      '|' if .peek_byte(1) != '=': Token.pipe(.index)
+      ' ' or '\t':
+         .index += 1
+         .next
+      ':' if .peek_byte(1) is
+         ':': Token.namespace_separator(.index)
+         _  : Token.colon(.index)
+      0: Token.eof(.index)
+      .is_digit:       .read_number
+      .is_ident_start: .read_word
+      .is_operator:    .read_operator
+      b: Token.error(.index, .index + 1, "unrecognized character: '\{b}'")
+
+   .index = tok.span.end
+
+   tok
+
+fn new_line(mut self Lexer) Token:
+   """"
+   Advances to next significant line (non-whitespace, non-comment) and
+   counts the indentation (spaces/tabs) until the first significant
+   character.
+
+   Sets .on_line_start to `true` and returns the next token
+   """"
+   while true:
+      if .peek_byte is
+         '\n': break
+         0   :
+            .indent = 0
+            return Token.eof(.index)
+         _: .index += 1
+
+   var indent = 0
+
+   while true:
+      if .peek_byte is
+         ' ' or '\t': indent += 1
+         '\n': indent = 0
+         '-' if .peek_byte(1) == '-':
+            if .peek_byte(2) == '-' and indent == 0:
+               .skip_block_comment
+            else:
+               return .new_line
+         0: return Token.eof(.index)
+         _: break
+      .index += 1
+
+   .indent = indent
+   var tok = .next
+   .on_line_start = true
+   tok
+
+fn skip_block_comment(mut self Lexer):
+   while true:
+      .index += 1
+         if .peek_byte == '\n'
+            and {-1, -2, -3}.all(|i|:
+               .peek_byte(i) == '-'
+            ) and .peek_byte(-4) == '\n':
+               break
+         if .index == .source.size:
+            -- unterminated block comment, we're just gonna let it slide for now
+            return
+   .index += 1
+
+fn read_word(mut self Lexer) Token:
+   let start = .index
+   while .peek_byte.is_alphanumeric:
+      .index += 1
+
+   if .source.slice(start, .index).string is
+      "let": Token.let(start, .index)
+      "var": Token.var(start, .index)
+      "mut" if .peek_byte is '!':
+         .index += 1
+         Token.mut!(start, .index)
+      "mut": Token.mut(start, .index)
+      /"if": Token.if(start, .index)
+      \"for": Token.for(start, .index)
+      ...
+      word: Token.identifier(start, .index, word)
+
+fn read_number(mut self Lexer) Token:
+   let start = .index
+   let {int_part, _} = .read_int
+   if .peek_byte == '.' and .peek_byte(1).is_digit:
+      .index += 1
+      let {frac_part, num_digits} = .read_int
+      let divisor = num_digits.math::pow10
+      let float_val = int_part.float + frac_part.float / divisor
+      Token.float(start, .index, float_val)
+   else:
+      Token.int(start, .index, int_part.int)
+
+fn read_int(mut self Lexer) {Nat, Nat}: ...
+
+fn read_string...
+
+fn read_single_line_string(
+   mut self Lexer
+   start Nat
+   quote Byte
+) Token:
+
+fn fibonacci(n Nat) Nat:
+   if n < 2: return 1
+   :fib(a = n-1, b = n):
+      if a == 0
+
+
+fn fact(n Nat, acc Nat) Nat:
+   if n == 1:
+      acc
+   else:
+      fact(n-1, acc*n)
+
+fn factorial(n Nat) Nat:
+   :fact(n=n, acc=1):
+      if n == 1:
+         acc
+      else:
+         loop fact(n-1, acc*n)
+
+fn main:
+   for i in range(0, 20):
+      do-this
+
+   :loop(i=0):
+      if i == 20:
+         break
+      do-this
+      loop loop(i + 1)
+
+   while condition:
+      do-this
+
+   :loop: if condition:
+      do-this
+      loop
+
+   1.to(20).each(|i|:
+      do-this(i)
+      if condition:
+         break
+   )
+
+fn to(start Int, stop Int, step Int = 1) Range: ...
+
+fn each(range Range, do(Int)->#T):
+   let i = range.start
+   while i < range.end:
+      do(i)
+      i += 1
+
+
+enum ControlFlow<R, C=(), B> {
+   Return(R),
+   Continue(C),
+   Break(B),
+}
+
+fn foo() -> int {
+   let result = iter.each(|x| {
+      if condition1 {
+         break 1
+      };
+      if condition2 {
+         continue
+      };
+      if condition3: {
+         return 99
+      };
+   });
+   result + 1
+}
+
+class ControlFlow(Exception): pass
+class Continue(ControlFlow): pass
+class Return(ControlFlow):
+   def __init__(self, data):
+      self.data = data
+class Break(ControlFlow):
+   def __init__(self, data):
+      self.data = data
+
+def foo() -> int {
+   result = None
+   try:
+      for x in iter:
+         if condition1:
+            raise Break(1)
+         if condition2:
+            raise Continue()
+         if condition3:
+            raise Return(99)
+   except ControlFlow as cf:
+      match cf:
+         case Return(r): return r
+         case Continue(c): pass
+         case Break(b): result = b
+   result + 1
+}
+
+struct Lexer[S Peekable[Byte]]
+   var stream: S
+   var log: Logger
+
+   constructor(move stream S):
+      .stream = stream
+      .log = Logger.new
+
+   static fn from_file(file_path String) Lexer:
+      Lexer(File.open(file_path).bytes))
+
+   static fn from_source(source String) Lexer:
+      Lexer(
+         Peekable(source.bytes)
+      )
+
+   fn mut lex Array[Token]:
+      var toks = Array[Token].new
+      -- for char in .stream:
+      while .stream.peek is Some(char):
+         if char
+            .numeric?:
+               .number(char, toks)
+            .alpha?:
+               .identifier(char, toks)
+            in {'"' , '\''}:
+               .string(char, toks)
+            else:
+               .stream.next
+               if char ==
+                  ':':
+                     toks.push(Token.Colon)
+                  '.':
+                     toks.push(Token.Dot)
+                  ',':
+                     toks.push(Token.Comma)
+                  '(':
+                     toks.push(Token.LParen)
+                  ')':
+                     toks.push(Token.RParen)
+                  '[':
+                     toks.push(Token.LBracket)
+                  ']':
+                     toks.push(Token.RBracket)
+                  '{':
+                     toks.push(Token.LBrace)
+                  '}':
+                     toks.push(Token.RBrace)
+                  '\n':
+                     toks.push(Token.Newline)
+                  ' ':
+                     continue
+                  '\t':
+                     continue
+                  '\0':
+                     break
+                  else:
+                     .log.error("unrecognized token: " + char)
+      toks
+
+   fn mut number(char Byte, mut toks Array[Token]):
+      var int = int(char - '0')
+      -- for char in .stream:
+      while .stream.peek is Some(char):
+         if char
+            .numeric?:
+               int *= 10
+               int += char - '0'
+               .stream.next
+            == '.':
+               -- read float
+               .stream.next
+               var float = int.float
+               var scale = 0.1
+               while .stream.peek is Some(char)
+                  and char.numeric?:
+                     float += float(char - '0') * scale
+                     scale /= 10
+                     .stream.next
+               if scale == 0.1:
+                  -- no numeral after radix point => interpret as dot
+                  toks.push(Token.Int(int))
+                  toks.push(Token.Dot)
+               else:
+                  toks.push(Token.Float(float))
+               return
+            else:
+               toks.push(Token.Int(int))
+               return
+
+   fn mut identifier(char Byte, mut toks Array[Token]): Token:
+      var str = String.new
+      while .stream.next is Some(char)
+         and char.alpha?:
+            str.push(char)
+      Token.Identifier(str)
+
+   fn mut string(quote Byte, mut toks Array[Token]):
+      var str = String.new
+      for char in .stream:
+         if char ==
+            quote:
+               break
+            '\\':
+               str.push('\\')
+               str.push(.stream.next or '\0')
+            else:
+               str.push(char)
+      Token.String(str)
+
+fn numeric?(char Byte) Bool:
+   char >= '0' and char <= '9'
+
+
+fn alpha?(char Byte) Bool:
+   (char >= 'a' and char <= 'z')
+      or (char >= 'A' and char <= 'Z')
+      or char == '_'
+
+
+struct Parser
+   var tokens: Array[Token]
+   var index: Nat
+   var log: Logger
+
+   constructor(tokens Array[Token]):
+      .tokens = tokens
+      .index = 0
+      .log = Logger.new
+
+   fn peek Token:
+      .tokens.get(index).clone
+
+   fn next Token:
+      .tokens.get(index += 1).clone
+
+   fn parse Array[Ast]:
+      var items = Array[Ast].new
+      while .peek is Some(token):
+         if token is
+            Newline:
+               continue
+            EOF:
+               break
+            Identifier(str):
+               .next
+               .parse_top_level_item(str)
+            else:
+               .log.error("unrecognized token: " + token.string)
+               .recover_to_next_top_level_item
+      items
+
+   fn parse_top_level_item(str String):
+      if str ==
+         "import":
+            .parse_import
+         "struct":
+            .parse_struct
+         "enum":
+            .parse_enum
+         "trait":
+            .parse_trait
+         "impl":
+            .parse_impl
+         "fn":
+            .parse_fn
+         else:
+            .log.error("unrecognized top-level item: " + str)
+            .recover_to_next_top_level_item
+
+   fn parse_import:
+
+   fn parse_struct:
+
+
+   fn parse_enum:
+
+   fn parse_trait:
+
+   fn parse_impl:
+
+   fn parse_fn:
+
+   fn parse_

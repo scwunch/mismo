@@ -1,0 +1,15 @@
+type Span {
+   start: Nat
+   end: Nat
+}
+
+fn span(start Nat, end Nat) Span:
+   Span { start: start, end: end }
+
+fn merge(self Span, other Span) Span:
+   Span {
+      start: (.start < other.start) * .start
+           + (.start >= other.start) * other.start
+      end: (.end < other.end) * .end
+         + (.end >= other.end) * other.end
+   }

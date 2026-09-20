@@ -1,0 +1,41 @@
+import src/span Span
+
+type Token {
+   span: Span
+   kind: TokenKind
+}
+
+
+type TokenKind .{
+   Nil
+   Bool Bool
+   Int Int
+   Float Float
+   String String
+   Op Operator
+   Identifier String
+   Dot
+   Colon
+   Comma
+   LParen
+   RParen
+   LBrace
+   RBrace
+   LBracket
+   RBracket
+   Newline
+   EOF
+}
+
+
+fn Token.nil(start Nat, end Nat) Token:
+  Token {span: span(start, end), TokenKind.Nil}
+
+fn Token.false(start Nat) Token:
+  Token {span: span(start, start+5), TokenKind.Bool false}
+
+fn Token.true(start Nat) Token:
+  Token {span: span(start, start+5), TokenKind.Bool true}
+
+fn Token.int(start Nat, end Nat, int Int) Token:
+  Token { span: span(start, end), TokenKind.Int int }
