@@ -23,7 +23,7 @@ pub fn test_top_level() {
   )
 }
 
-fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_consume(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parser Consume"
   let mut parser = Parser.new("[[[[[")
   match parser.consume(lexer.TokenKind.LeftBracket) {
@@ -42,7 +42,7 @@ fn test_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_type_params(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parse Type Params"
   // NOTE: parse_type_params is called *after* consuming the opening bracket,
   // so we just leave it off here
@@ -153,7 +153,7 @@ fn test_parse_type_params(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_type(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Type"
   let mut parser = Parser.new("Type")
   match parser.parse_type() {
@@ -203,7 +203,7 @@ fn test_parse_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_fn_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_fn_type(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Function Type"
   let mut parser = Parser.new("(Type, Type) -> Type")
   let res = cst.Type.fn_(
@@ -235,7 +235,7 @@ fn test_parse_fn_type(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_field(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parsing Field of Struct"
   let mut parser = Parser.new("field: Type")
   match parser.parse_field() {
@@ -248,7 +248,7 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-// fn test_parse_fields(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_parse_fields(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "Parsing Struct Fields"
 //   let mut parser = Parser.new("\n  field: Type\n  field: Type\n")
 //   match parser.parse_fields() {
@@ -264,7 +264,7 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
 //   Ok(())
 // }
 
-// fn test_parse_struct(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_parse_struct(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "Parsing Struct"
 //   let mut parser = Parser.new("struct Point \n  x: Int\n  y: Int\n")
 
@@ -324,7 +324,7 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
 //   Ok(())
 // }
 
-// fn test_parse_variant(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_parse_variant(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "Parsing Variant"
 //   let mut parser = Parser.new("Some(T)")
 //   match parser.parse_variant() {
@@ -345,7 +345,7 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
 //   Ok(())
 // }
 
-// fn test_parse_enum(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_parse_enum(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "Parsing Enum"
 //   let mut parser = Parser.new("enum Color\n  Red\n  Green\n  Blue\n")
 //   parser.parse_enum().map_err(|e| e.message())?
@@ -399,7 +399,7 @@ fn test_parse_field(t: Ref<testing.TestRunner>) -> Result<(), string> {
 //   Ok(())
 // }
 
-fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_signature(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parse Function Signature"
   let mut parser = Parser.new("fn foo(a: Int, b: Int) Int")
   match parser.consume_identifier() {
@@ -448,7 +448,7 @@ fn test_parse_signature(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_function(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Parse Function Definition"
   let mut parser = Parser.new("fn main(): print(\"hello world\")")
   parser.parse_function().map_err(|e| e.msg)?

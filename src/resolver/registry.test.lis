@@ -5,7 +5,7 @@ import "ty"
 
 #[test("resolver/registry: register and fill struct")]
 fn test_register_and_fill_struct(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx =  TypeContext.new_blank()
 
   let decl = cst.TypeDecl.new_struct(
     spn.new(0, 22),
@@ -33,7 +33,7 @@ fn test_register_and_fill_struct(t) -> Result<(), error> {
 
 #[test("resolver/registry: register and fill enum")]
 fn test_register_and_fill_enum(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx =  TypeContext.new_blank()
 
   let decl = cst.TypeDecl.new_enum(
     spn.new(0, 30),
@@ -61,7 +61,7 @@ fn test_register_and_fill_enum(t) -> Result<(), error> {
 
 #[test("resolver/registry: duplicate name error")]
 fn test_duplicate_name_error(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx =  TypeContext.new_blank()
 
   register_types(
     ctx.env,
@@ -79,7 +79,7 @@ fn test_duplicate_name_error(t) -> Result<(), error> {
 
 #[test("resolver/registry: eval function")]
 fn test_eval_function(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx =  TypeContext.new_blank()
 
   // fn foo() Int
   let sig = cst.Signature.new(
@@ -167,7 +167,7 @@ fn test_eval_function(t) -> Result<(), error> {
 
 #[test("resolver/registry: register functions")]
 fn test_register_functions(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx =  TypeContext.new_blank()
 
   // Register fn foo() Int: 42
   let foo_sig = cst.Signature.new(

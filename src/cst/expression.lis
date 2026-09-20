@@ -341,13 +341,15 @@ pub fn dot_call(span: spn.Span, receiver: Ref<Expression>, call: Call) -> Expres
 //   Expression { span, kind: Expr.TypeDotCall(path, type_args, call) }
 // }
 
-pub fn return_(mut span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
+pub fn return_(span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
   // let span = expr.map(|e| span.merge(e.span)).unwrap_or(span)
+  let mut span = span
   if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Return(expr) }
 }
 
-pub fn break_(mut span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
+pub fn break_(span: spn.Span, expr: Option<Ref<Expression>>) -> Expression {
+  let mut span = span
   if let Some(e) = expr { span = span.merge(e.span) }
   Expression { span, kind: Expr.Break(expr) }
 }

@@ -32,7 +32,7 @@ impl Token {
   }
 }
 
-fn test_token_equality(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_token_equality(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Token Equality"
   let tok1 = TokenKind.LeftParen
   let tok2 = TokenKind.LeftParen
@@ -45,7 +45,7 @@ fn test_token_equality(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.shouldnt_eq(Token.left_brace(0), Token.left_brace(99))
 }
 
-fn test_peek_next_char(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_peek_next_char(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Peek/Next Char"
   let lex = Lexer.new("hello")
   t.should_be_true(
@@ -58,7 +58,7 @@ fn test_peek_next_char(t: Ref<testing.TestRunner>) -> Result<(), string> {
   t.should_be_true(c3 == 0 as rune, f"expected 0, got {c3}")
 }
 
-fn test_read_word(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_read_word(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Read Word"
   let mut lex = Lexer.new("let x = 5")
   let tok = lex.read_word()
@@ -82,7 +82,7 @@ fn test_read_word(t: Ref<testing.TestRunner>) -> Result<(), string> {
 }
 
 #[allow(float_cmp)]
-fn test_read_number(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_read_number(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Read Number"
   let mut lex = Lexer.new("42")
   let tok = lex.next()
@@ -122,7 +122,7 @@ fn test_read_number(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_operators(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_operators(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Operators"
   t.should_eq(
     Lexer.new("+").read_operator().kind,
@@ -150,7 +150,7 @@ fn test_operators(t: Ref<testing.TestRunner>) -> Result<(), string> {
   )
 }
 
-fn test_keywords_and_operators(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_keywords_and_operators(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Keywords and Word Operators"
   let mut lex = Lexer.new("and or not is in")
   let tok = lex.next()
@@ -181,7 +181,7 @@ fn test_keywords_and_operators(t: Ref<testing.TestRunner>) -> Result<(), string>
   Ok(())
 }
 
-fn test_comments(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_comments(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Comments"
   let mut lex = Lexer.new("-- this is a comment\nhello")
   // let tok = lex.next()
@@ -197,7 +197,7 @@ fn test_comments(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_full_program(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer Full Program"
   let mut lex = Lexer.new(
     "function greet(name String):\n  print(\"hello, \" + name)",
@@ -227,7 +227,7 @@ fn test_full_program(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_read_single_line_string(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_read_single_line_string(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer String Literals (single-line)"
   // empty strings
   let mut tok = Lexer.new("\"\" + other content").read_string()
@@ -257,7 +257,7 @@ fn test_read_single_line_string(t: Ref<testing.TestRunner>) -> Result<(), string
   Ok(())
 }
 
-fn test_read_multiline_string(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_read_multiline_string(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Lexer String Literals (multiline)"
 
   // validate open quote
@@ -326,7 +326,7 @@ fn test_read_multiline_string(t: Ref<testing.TestRunner>) -> Result<(), string> 
   Ok(())
 }
 
-// fn test_newlines(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_newlines(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "Lexer Newline"
 //   let mut lex = Lexer.new("\n")
 //   let tok = lex.next()

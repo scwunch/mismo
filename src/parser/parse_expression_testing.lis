@@ -25,7 +25,7 @@ pub fn test_expression() {
   // test_parse_while,
 }
 
-fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_simple_binary(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "simple binary"
   let mut parser = Parser.new("1 + 2")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -42,7 +42,7 @@ fn test_parse_simple_binary(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_arithmetic_precedence(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "arithmetic precedence"
   let mut parser = Parser.new("1 + 2 * 3")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -91,7 +91,7 @@ fn test_parse_arithmetic_precedence(t: Ref<testing.TestRunner>) -> Result<(), st
   Ok(())
 }
 
-fn test_parse_parens(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_parens(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "parentheses"
   let mut parser = Parser.new("(1 + 2) * 3")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -114,7 +114,7 @@ fn test_parse_parens(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_basic_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_basic_literals(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "basic literals"
 
   let mut parser = Parser.new("1")
@@ -149,7 +149,7 @@ fn test_parse_basic_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_array_literals(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "array literals"
   let mut parser = Parser.new("[1, 2, 3]")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -177,7 +177,7 @@ fn test_parse_array_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_tuple_literals(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "tuple literals"
   let mut parser = Parser.new("(1, 2, 3, 4)")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -214,7 +214,7 @@ fn test_parse_tuple_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_function_calls(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "function calls"
   let mut parser = Parser.new("awesome(1, 2, 3)")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -264,7 +264,7 @@ fn test_parse_function_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_closure(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "closure"
   let mut parser = Parser.new("|mut a Int|: a += 1")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -288,7 +288,7 @@ fn test_parse_closure(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_method_calls(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "method calls"
 
   let mut parser = Parser.new(".awesome(1, 2, 3)")
@@ -354,7 +354,7 @@ fn test_parse_method_calls(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_unary_neg(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "unary negation"
   let mut parser = Parser.new("-5")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -373,7 +373,7 @@ fn test_parse_unary_neg(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_unary_not(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "unary not"
   let mut parser = Parser.new("not x")
   let mut ep = ExpressionParser.new(&parser, 0)
@@ -386,7 +386,7 @@ fn test_parse_unary_not(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_let_var(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "let/var declarations"
 
   let mut parser = Parser.new("let x = 5")
@@ -427,7 +427,7 @@ fn test_parse_let_var(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_parse_return_break_continue(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "return/break/continue"
 
   let mut parser = Parser.new("return 42")
@@ -450,7 +450,7 @@ fn test_parse_return_break_continue(t: Ref<testing.TestRunner>) -> Result<(), st
   Ok(())
 }
 
-// fn test_parse_while(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_parse_while(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "while"
 
 //   let mut parser = Parser.new("while true: 1+1")

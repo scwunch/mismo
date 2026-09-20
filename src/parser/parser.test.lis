@@ -49,7 +49,7 @@ fn test_expression_parser(t) {
   }
 }
 
-fn wrap_test(test_func: fn(Ref<myt.TestRunner>) -> Result<(), string>) -> fn(TestContext) -> () {
+fn wrap_test(test_func: fn(mut Ref<myt.TestRunner>) -> Result<(), string>) -> fn(TestContext) -> () {
   |t| {
     if let Err(s) = test_func(&myt.TestRunner.new("")) {
       t.log(s)

@@ -14,7 +14,7 @@ enum Expecting {
 }
 
 struct ExpressionParser {
-  parser: Ref<Parser>,
+  parser: mut Ref<Parser>,
   terms: Slice<cst.Expression>,
   operators: Slice<Operator>,
   expression_indent: uint32,
@@ -23,7 +23,7 @@ struct ExpressionParser {
 }
 
 impl ExpressionParser {
-  fn new(parser: Ref<Parser>, expression_indent: uint32) -> ExpressionParser {
+  fn new(parser: mut Ref<Parser>, expression_indent: uint32) -> mut ExpressionParser {
     ExpressionParser {
       parser,
       terms: [],
@@ -34,7 +34,7 @@ impl ExpressionParser {
     }
   }
 
-  fn until(parser: Ref<Parser>, expression_indent: uint32, stop_at: TokenKind) -> ExpressionParser {
+  fn until(parser: mut Ref<Parser>, expression_indent: uint32, stop_at: TokenKind) -> mut ExpressionParser {
     ExpressionParser {
       parser,
       terms: [],
@@ -45,13 +45,13 @@ impl ExpressionParser {
     }
   }
 
-  fn optional_expression(self: Ref<ExpressionParser>) -> Result<Option<Ref<cst.Expression>>, dx.ParseError> {
+  fn optional_expression(self: mut Ref<ExpressionParser>) -> Result<Option<Ref<cst.Expression>>, dx.ParseError> {
     if self.expression_done() { return Ok(None) }
     let expr = self.parser.parse_expression()?
     Ok(Some(&expr))
   }
 
-  fn do_parse(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
+  fn do_parse(self: mut Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     loop {
       match self.expecting {
         Expecting.Term => self.read_operand()?,
@@ -61,7 +61,7 @@ impl ExpressionParser {
     }
   }
 
-  fn parse(self: Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
+  fn parse(self: mut Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
     self.do_parse()?
 
     if self.expecting == Expecting.Term {
@@ -88,7 +88,7 @@ impl ExpressionParser {
     Ok(result)
   }
 
-  fn expression_done(self: Ref<ExpressionParser>) -> bool {
+  fn expression_done(self: mut Ref<ExpressionParser>) -> bool {
     match self.parser.peek().kind {
       RightParen | RightBracket | RightBrace | Colon | Comma | EOF => true,
       tok if tok == self.stop_at => true,
@@ -96,7 +96,7 @@ impl ExpressionParser {
     }
   }
 
-  fn read_operand(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
+  fn read_operand(self: mut Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     let tok = self.parser.next()
     let term = match tok.kind {
       Operator(Sub) => return self.handle_prefix(Operator.Neg),
@@ -144,12 +144,12 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn handle_prefix(self: Ref<ExpressionParser>, prefix_op: Operator) -> Result<(), dx.ParseError> {
+  fn handle_prefix(self: mut Ref<ExpressionParser>, prefix_op: Operator) -> Result<(), dx.ParseError> {
     self.push_operator(prefix_op)?
     self.read_operand()
   }
 
-  fn identifier(self: Ref<ExpressionParser>, span: spn.Span, name: string) -> Result<cst.Expression, dx.ParseError> {
+  fn identifier(self: mut Ref<ExpressionParser>, span: spn.Span, name: string) -> Result<cst.Expression, dx.ParseError> {
     match name {
       "true" => Ok(cst.bool_lit(span, true)),
       "false" => Ok(cst.bool_lit(span, false)),
@@ -170,7 +170,7 @@ impl ExpressionParser {
     }
   }
 
-  // fn constructor(self: Ref<ExpressionParser>, mut span: spn.Span, path: cst.Path) -> Result<cst.Expression, dx.ParseError> {
+  // fn constructor(self: mut Ref<ExpressionParser>, mut span: spn.Span, path: cst.Path) -> Result<cst.Expression, dx.ParseError> {
   //   let type_args = self.parse_type_args()?
   //   span.end = self.parser.peek().span.start
   //   let ty = cst.Type.new(span, path, type_args.unwrap_or([]))
@@ -185,7 +185,7 @@ impl ExpressionParser {
   // }
 
   // fn parse_type_dot_call(
-  //   self: Ref<ExpressionParser>,
+  //   self: mut Ref<ExpressionParser>,
   //   typ_span: Span,
   //   type_path: cst.Path,
   //   type_args: Slice<cst.Type>,
@@ -207,7 +207,7 @@ impl ExpressionParser {
   //   Ok(cst.type_dot_call(span_, type_path, type_args, call))
   // }
 
-  fn read_operator(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
+  fn read_operator(self: mut Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     // let tok = self.parser.next()
     // let tok_span = tok.span
     match self.parser.peek().kind {
@@ -244,7 +244,7 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn push_operator(self: Ref<ExpressionParser>, right_op: Operator) -> Result<(), dx.ParseError> {
+  fn push_operator(self: mut Ref<ExpressionParser>, right_op: Operator) -> Result<(), dx.ParseError> {
     loop {
       match self.operators.get(self.operators.length() - 1) {
         None => break,
@@ -262,7 +262,7 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn compress(self: Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
+  fn compress(self: mut Ref<ExpressionParser>) -> Result<(), dx.ParseError> {
     if self.operators.is_empty() { return Ok(()) }
     let last = self.operators.length() - 1
     let op = self.operators[last]
@@ -280,7 +280,7 @@ impl ExpressionParser {
     Ok(())
   }
 
-  fn pop_term(self: Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
+  fn pop_term(self: mut Ref<ExpressionParser>) -> Result<cst.Expression, dx.ParseError> {
     if self.terms.is_empty() {
       return Err(dx.ParseError.new(
         self.parser.peek().span,
@@ -293,7 +293,7 @@ impl ExpressionParser {
     Ok(term)
   }
 
-  fn parse_paren_group(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_paren_group(self: mut Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
     let exprs = self.parse_list(')')?
     let end = self.parser.consume(TokenKind.RightParen)?
     let s = _span.merge(end)
@@ -303,14 +303,14 @@ impl ExpressionParser {
     }
   }
 
-  fn parse_array_literal(self: Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_array_literal(self: mut Ref<ExpressionParser>, _span: Span) -> Result<cst.Expression, dx.ParseError> {
     let items = self.parse_list(']')?
     let rbracket_span = self.parser.consume(TokenKind.RightBracket)?
     let s = _span.merge(rbracket_span)
     Ok(cst.array_lit(s, items))
   }
 
-  fn parse_tuple_or_record_literal(self: Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_tuple_or_record_literal(self: mut Ref<ExpressionParser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     if let Ok(end) = self.parser.consume(TokenKind.RightBrace) {
       return Ok(cst.tuple_lit(span.merge(end), []))
     }
@@ -329,7 +329,7 @@ impl ExpressionParser {
   }
 
   fn finish_tuple_literal(
-      self: Ref<ExpressionParser>,
+      self: mut Ref<ExpressionParser>,
       open: Span,
       open_brace_indent: uint32,
       first: cst.Expression
@@ -342,7 +342,7 @@ impl ExpressionParser {
   }
 
   fn finish_record_literal(
-    self: Ref<ExpressionParser>,
+    self: mut Ref<ExpressionParser>,
     open: Span,
     open_brace_indent: uint32,
     first_field_span: Span,
@@ -363,7 +363,7 @@ impl ExpressionParser {
     Ok(cst.record_lit(open.merge(close), fields))
   }
 
-  fn parse_field(self: Ref<ExpressionParser>) -> Result<cst.RecordField, dx.ParseError> {
+  fn parse_field(self: mut Ref<ExpressionParser>) -> Result<cst.RecordField, dx.ParseError> {
     let span: Span = self.parser.peek().span
     let name = self.parser.consume_identifier()?
     let block = self.parser.parse_colon_and_block()?
@@ -376,7 +376,7 @@ impl ExpressionParser {
   }
 
   fn handle_dot(
-    self: Ref<ExpressionParser>,
+    self: mut Ref<ExpressionParser>,
     receiver: Option<cst.Expression>,
     dot_span: spn.Span,
   ) -> Result<cst.Expression, dx.ParseError> {
@@ -406,7 +406,7 @@ impl ExpressionParser {
         Ok(cst.enum_constructor(span, None, path.name))
       },
       _ => {
-        let receiver = receiver.unwrap_or_else(|| cst.implicit_self(dot_span))
+        let mut receiver = receiver.unwrap_or_else(|| cst.implicit_self(dot_span))
         let (span, type_args) = self.parser.parse_type_args(receiver.span)?
         if path.namespace.is_empty() && type_args.is_none() &&
         self.parser.peek().kind != lexer.TokenKind.LeftParen {
@@ -420,7 +420,7 @@ impl ExpressionParser {
   }
 
   fn function_call(
-    self: Ref<ExpressionParser>,
+    self: mut Ref<ExpressionParser>,
     start: Span,
     fn_name: cst.Path,
     type_args: Option<Slice<cst.Type>>,
@@ -430,7 +430,7 @@ impl ExpressionParser {
   }
 
   fn parse_call(
-    self: Ref<ExpressionParser>,
+    self: mut Ref<ExpressionParser>,
     start: Span,
     fn_name: cst.Path,
     type_args: Option<Slice<cst.Type>>,
@@ -445,7 +445,7 @@ impl ExpressionParser {
     Ok((s, cst.Call { fn_name, type_args, args }))
   }
 
-  fn parse_closure(self: Ref<ExpressionParser>, span: spn.Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_closure(self: mut Ref<ExpressionParser>, span: spn.Span) -> Result<cst.Expression, dx.ParseError> {
     let parameters = self.parser.parse_list('|', self.parser.parse_parameter)?
     let _ = self.parser.consume(TokenKind.Pipe)?
     let body = self.parser.parse_colon_and_block()?
@@ -453,22 +453,21 @@ impl ExpressionParser {
     Ok(cst.closure(span, parameters, body))
   }
 
-  fn parse_list(self: Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, dx.ParseError> {
+  fn parse_list(self: mut Ref<ExpressionParser>, end: rune) -> Result<Slice<cst.Expression>, dx.ParseError> {
     self.parser.parse_list(end, self.parser.parse_expression)
   }
 }
 
 impl Parser {
-  pub fn parse_expression(self: Ref<Parser>) -> Result<cst.Expression, dx.ParseError> {
-    let mut expr_parser = ExpressionParser.new(self, self.peek_indent())
-    expr_parser.parse()
+  pub fn parse_expression(self: mut Ref<Parser>) -> Result<cst.Expression, dx.ParseError> {
+    ExpressionParser.new(self, self.peek_indent()).parse()
   }
 
-  fn parse_until(self: Ref<Parser>, kind: TokenKind) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_until(self: mut Ref<Parser>, kind: TokenKind) -> Result<cst.Expression, dx.ParseError> {
     ExpressionParser.until(self, self.peek_indent(), kind).parse()
   }
 
-  pub fn parse_colon_and_block(self: Ref<Parser>) -> Result<cst.Block, dx.ParseError> {
+  pub fn parse_colon_and_block(self: mut Ref<Parser>) -> Result<cst.Block, dx.ParseError> {
     let _ = self.consume(TokenKind.Colon)?
     let indent = self.current_line_indent
     if self.peek_indent() == indent {
@@ -485,7 +484,7 @@ impl Parser {
     Ok(cst.Block { statements })
   }
 
-  fn parse_while_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_while_expression(self: mut Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let conditional = self.parse_conditional(span)?
     let span = span.merge(conditional.end_span())
     Ok(cst.while_(span, conditional))
@@ -506,7 +505,7 @@ impl Parser {
     // Ok(cst.while_(span, cond))
   }
 
-  fn parse_for_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_for_expression(self: mut Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let header = self.parse_expression()?
     let (patt, iter) = match header.kind {
       Binop(binop) => match binop.* {
@@ -526,13 +525,13 @@ impl Parser {
     Ok(cst.for_(span, patt, iter, body))
   }
 
-  fn parse_if_expression(self: Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
+  fn parse_if_expression(self: mut Ref<Parser>, span: Span) -> Result<cst.Expression, dx.ParseError> {
     let cond = self.parse_conditional(span)?
     let span = span.merge(cond.end_span())
     Ok(cst.if_expr(span, cond))
   }
 
-  fn parse_conditional(self: Ref<Parser>, span: spn.Span) -> Result<cst.If, dx.ParseError> {
+  fn parse_conditional(self: mut Ref<Parser>, span: spn.Span) -> Result<cst.If, dx.ParseError> {
     let cond_indent = self.current_line_indent
     let checks = self.parse_list('\n', self.parse_check)?
     if checks.is_empty() {
@@ -547,7 +546,7 @@ impl Parser {
     Ok(cst.If { checks, default })
   }
 
-  fn parse_check(self: Ref<Parser>) -> Result<cst.Check, dx.ParseError> {
+  fn parse_check(self: mut Ref<Parser>) -> Result<cst.Check, dx.ParseError> {
     let is = TokenKind.Operator(Operator.Is)
     let condition = self.parse_until(is)?
     if let Ok(span) = self.consume(is) {
@@ -563,7 +562,7 @@ impl Parser {
     }
   }
 
-  fn parse_arm(self: Ref<Parser>) -> Result<cst.Arm, dx.ParseError> {
+  fn parse_arm(self: mut Ref<Parser>) -> Result<cst.Arm, dx.ParseError> {
     let pattern = self.parse_until(TokenKind.If)?
     if let Ok(span) = self.consume(TokenKind.If) {
       let conditional = self.parse_conditional(span)?

@@ -3,7 +3,7 @@ import md "mode"
 import "ty"
 import "utils/slice"
 
-pub fn compile_match(cond: Ref<ir.If>) {
+pub fn compile_match(cond: mut Ref<ir.If>) {
   let default = cond.default.map_or(
     &ir.Decision.Fail,
     |blk| &ir.Decision.Leaf(blk),
@@ -12,7 +12,7 @@ pub fn compile_match(cond: Ref<ir.If>) {
   cond.decision = compile_checks(cond.checks, default)
 }
 
-pub fn compile_checks(checks: Slice<ir.Check>, default: Ref<ir.Decision>) -> Ref<ir.Decision> {
+pub fn compile_checks(checks: Slice<ir.Check>, default: mut Ref<ir.Decision>) -> Ref<ir.Decision> {
   match checks {
     [] => default,
     [Test(expr, blk), ..rest] => &ir.Decision.Guard {
@@ -32,7 +32,7 @@ struct PatternMatrix {
   scrutinee: Slice<ir.Place>,
   rows: Slice<Row>,
   checks: Slice<ir.Check>, // represents remaining checks yet to be compiled to matrices
-  default: Ref<ir.Decision>,
+  default: mut Ref<ir.Decision>,
 }
 
 // fn decide_row(self: ir.Row, place: ir.Place) -> Ref<ir.Decision> {
@@ -57,7 +57,7 @@ impl PatternMatrix {
     scrutinee: ir.Expression,
     rows: Slice<Row>,
     checks: Slice<ir.Check>,
-    default: Ref<ir.Decision>,
+    default: mut Ref<ir.Decision>,
   ) -> PatternMatrix {
     let varid = match scrutinee.kind {
       Identifier(varid) => varid,

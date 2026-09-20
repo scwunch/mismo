@@ -22,7 +22,7 @@
 //   )
 // }
 
-// fn test_mode_infer_literals(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_mode_infer_literals(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "infer literals return Var"
 //   let mc = ModeCheck.new()
 
@@ -58,7 +58,7 @@
 //   Ok(())
 // }
 
-// fn test_identifier_mode(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_identifier_mode(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "identifier returns declared mode"
 //   let mc = ModeCheck.new()
 
@@ -83,7 +83,7 @@
 //   Ok(())
 // }
 
-// fn test_use_after_consume(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_use_after_consume(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "use after consume"
 //   let v = var_(md.Mode.Var, "x", Type.Int)
 //   let mc = ModeCheck.new()
@@ -106,7 +106,7 @@
 //   Ok(())
 // }
 
-// fn test_consume_borrow(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_consume_borrow(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "consume borrow"
 //   let mc = ModeCheck.new()
 
@@ -146,7 +146,7 @@
 //   Ok(())
 // }
 
-// fn test_binding_downgrade(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_binding_downgrade(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "binding mode downgrade"
 //   let mc = ModeCheck.new()
 
@@ -161,7 +161,7 @@
 //   Ok(())
 // }
 
-// fn test_binding_mode_mismatch(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_binding_mode_mismatch(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "binding mode mismatch"
 //   let mc = ModeCheck.new()
 
@@ -191,7 +191,7 @@
 //   Ok(())
 // }
 
-// fn test_call_downgrade(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_call_downgrade(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "call param mode downgrade"
 //   let mc = ModeCheck.new()
 
@@ -214,7 +214,7 @@
 //   Ok(())
 // }
 
-// fn test_call_var_param(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_call_var_param(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "call consumes var arg"
 //   let mc = ModeCheck.new()
 
@@ -243,7 +243,7 @@
 //   Ok(())
 // }
 
-// fn test_call_mode_mismatch(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_call_mode_mismatch(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "call param mode mismatch"
 //   let mc = ModeCheck.new()
 
@@ -266,7 +266,7 @@
 //   Ok(())
 // }
 
-// fn test_block_infer(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_block_infer(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "block infers last expression mode"
 //   let mc = ModeCheck.new()
 
@@ -285,7 +285,7 @@
 //   Ok(())
 // }
 
-// fn test_return_consumes(t: Ref<testing.TestRunner>) -> Result<(), string> {
+// fn test_return_consumes(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
 //   t.test_name = "return consumes expression"
 //   let mc = ModeCheck.new()
 

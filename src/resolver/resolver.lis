@@ -12,29 +12,27 @@ type Expr = ast.Expr
 pub struct Resolver {
   pub ctx: TypeContext,
   pub scope: Scope,
-  pub capture_set_stack: Ref<Slice<CaptureSet>>,
+  pub capture_set_stack: mut Ref<mut Slice<CaptureSet>>,
 }
 
 impl Resolver {
-  pub fn new(env: Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
+  pub fn new(env: mut Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
     let scope = Scope.from_params(func.parameters)
     let ctx = TypeContext.new(env, func.type_parameters)
-    let capture_set_stack = &Slice.new()
-    Resolver { ctx, scope, capture_set_stack }
+    let mut css = []
+    Resolver { ctx, scope, capture_set_stack: &css }
   }
 
   pub fn new_blank() -> Resolver {
-    Resolver.new(
-      &ast.Registry.new(),
-      &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
-    )
+    let mut reg = ast.Registry.new()
+    let mut fun = ast.FunctionDef.mock("dummy", [], [], ty.nil())
+    Resolver.new(&reg, &fun)
   }
 
   pub fn with_mock_prelude() -> Resolver {
-    Resolver.new(
-      ast.Registry.with_mock_prelude(),
-      &ast.FunctionDef.mock("dummy", [], [], ty.nil()),
-    )
+    let mut reg = ast.Registry.with_mock_prelude()
+    let mut fun = ast.FunctionDef.mock("dummy", [], [], ty.nil())
+    Resolver.new(reg, &fun)
   }
 
   pub fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
@@ -128,11 +126,11 @@ impl Resolver {
   }
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
-  fn capture(self, varid: Ref<ty.Variable>, index: int) -> bool {
+  fn capture(self, varid: mut Ref<ty.Variable>, index: int) -> bool {
     // let mut self = &self
     let mut is_capture = false
     for i in 0..self.capture_set_stack.length() {
-      let capset = &self.capture_set_stack.*[i]
+      let mut capset = &self.capture_set_stack.*[i]
       if index < capset.index {
         is_capture = true
         capset.captures = capset.captures.append(varid)
@@ -339,7 +337,7 @@ impl Resolver {
     Ok(ast.Arm { pattern, then })
   }
 
-  fn resolve_pattern(self: Ref<Resolver>, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+  fn resolve_pattern(self: mut Ref<Resolver>, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Identifier(cst.Path { namespace: [], name }) => {
         let varid = &ty.Variable.new(md.Mode.MutBang, name, node.span.start)
@@ -388,7 +386,7 @@ impl Resolver {
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  fn field_pattern(self: Ref<Resolver>, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
+  fn field_pattern(self: mut Ref<Resolver>, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
     Ok(ast.Field {
       span: field.span,
       name: field.name,
@@ -396,7 +394,7 @@ impl Resolver {
     })
   }
 
-  fn binop_pattern(self: Ref<Resolver>, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn binop_pattern(self: mut Ref<Resolver>, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
     match binop.op {
       Juxtaposition => {
         let payload = self.resolve_pattern(binop.right)?
@@ -585,8 +583,8 @@ impl Resolver {
     is_dotname: bool,
     span: spn.Span,
   ) -> Result<ast.Expr, dx.ResolveError> {
-    let local_candidates = self.scope.bindings.filter(|v| v.name == fname)
-    for v in local_candidates {
+    let mut local_candidates = self.scope.bindings.filter(|v| v.name == fname)
+    for mut v in local_candidates {
       // capture ALL local names that match, just in case they might be used
       // TODO: during typechecking, just add the resolved local closure variable to all the containing closure capture sets
       //       I guess that means we have to track the stack of closure capture sets during typechecking too
@@ -618,7 +616,7 @@ impl Resolver {
 
 /// index: the boundary in the stack of variables at which the closure scope opens
 /// captures: the set of variables outside the scope of the closure
-struct CaptureSet { index: int, captures: Slice<Ref<ty.Variable>> }
+struct CaptureSet { index: int, captures: mut Slice<Ref<ty.Variable>> }
 
 impl CaptureSet {
   fn string(self) -> string {
@@ -629,7 +627,7 @@ impl CaptureSet {
 /// an immutable stack of bindings
 /// scope is *shallow-copied* on every function call, so the length only ever increases with Go's call stack depth
 /// this naturally mirrors the scoping rules of Mismo's tree-shaped CST.
-pub struct Scope { bindings: Slice<Ref<ty.Variable>> }
+pub struct Scope { bindings: mut Slice<mut Ref<ty.Variable>> }
 
 impl Scope {
   fn from_params(params: Slice<ty.Parameter>) -> Scope {

@@ -87,7 +87,7 @@
 //     }
 //   }
 
-//   fn use_ident(self, varid: Ref<Variable>, used: spn.Span) -> Result<md.Mode, dx.TypeError> {
+//   fn use_ident(self, varid: mut Ref<Variable>, used: spn.Span) -> Result<md.Mode, dx.TypeError> {
 //     if let Some(consumed) = varid.consumed {
 //       return Err(dx.UseAfterConsumeError.new(
 //         varid.name,
@@ -101,7 +101,7 @@
 //     Ok(varid.mode)
 //   }
 
-//   fn consume_ident(self, varid: Ref<Variable>, span: spn.Span) -> Result<(), dx.TypeError> {
+//   fn consume_ident(self, varid: mut Ref<Variable>, span: spn.Span) -> Result<(), dx.TypeError> {
 //     let _ = self.use_ident(varid, span)?
 //     if varid.mode == md.Mode.Var {
 //       varid.consumed = Some(span.start)

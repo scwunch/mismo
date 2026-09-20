@@ -3,7 +3,7 @@ import dx "diagnostics"
 import "ir"
 import "ty"
 
-pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
+pub fn analyze(env: mut Ref<ast.Registry>) -> ir.Registry {
   let mut reg = ir.Registry.new()
   reg.type_defs = env.type_defs
   reg.function_defs = env.function_defs.map(|fun| {
@@ -14,7 +14,7 @@ pub fn analyze(env: Ref<ast.Registry>) -> ir.Registry {
   reg
 }
 
-fn lower(fun: Ref<ast.FunctionDef>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
+fn lower(fun: mut Ref<ast.FunctionDef>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
   let new_fun = &ir.FunctionDef.new(
     fun.span,
     fun.id,

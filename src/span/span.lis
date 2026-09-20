@@ -44,8 +44,8 @@ impl Span {
   }
 
   pub fn merge(self, other: Span) -> Span {
-    let start = if self.start < other.start { self.start } else { other.start }
-    let end = if self.end > other.end { self.end } else { other.end }
+    let start = min(self.start, other.start)
+    let end = max(self.end, other.end)
     Span { start, end }
   }
 

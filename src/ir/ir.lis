@@ -87,14 +87,14 @@ impl Block {
 #[json]
 #[equality]
 pub struct Call {
-  pub fun: Ref<FunctionDef>,
+  pub fun: mut Ref<FunctionDef>,
   pub type_args: Slice<ty.Type>,
   pub args: Slice<Expression>,
 }
 
 impl Call {
   pub fn new(
-    fun: Ref<FunctionDef>,
+    fun: mut Ref<FunctionDef>,
     type_args: Slice<ty.Type>,
     args: Slice<Expression>,
   ) -> Call {
@@ -105,7 +105,7 @@ impl Call {
 #[json]
 #[equality]
 pub struct Closure {
-  pub env: Slice<Capture>,
+  pub env: Slice<ast.Capture>,
   pub params: Slice<ty.Parameter>,
   pub ret_type: ty.Type,
   pub body: Block,
@@ -130,21 +130,21 @@ impl Closure {
 pub enum Decision {
   Leaf(Block),
   Fail,
-  Guard { cond: Expression, then: Ref<Decision>, else_: Ref<Decision> },
-  Assign { expr: Expression, place: Place, next: Ref<Decision> },
-  Switch { scrutinee: Place, cases: Slice<Case>, default: Ref<Decision> },
-  Bind { name: string, place: Place, next: Ref<Decision> },
+  Guard { cond: Expression, then: mut Ref<Decision>, else_: mut Ref<Decision> },
+  Assign { expr: Expression, place: Place, next: mut Ref<Decision> },
+  Switch { scrutinee: Place, cases: Slice<Case>, default: mut Ref<Decision> },
+  Bind { name: string, place: Place, next: mut Ref<Decision> },
 }
 
 #[equality]
 pub struct Case {
   pub tag: string,
-  pub then: Ref<Decision>,
+  pub then: mut Ref<Decision>,
 }
 
 #[equality]
 pub struct Place {
-  pub varid: Ref<ty.Variable>,
+  pub varid: mut Ref<ty.Variable>,
   pub path: Slice<int>,
 }
 
@@ -157,7 +157,7 @@ impl Place {
 pub struct If {
   pub checks: Slice<Check>,
   pub default: Option<Block>,
-  pub decision: Ref<Decision>,
+  pub decision: mut Ref<Decision>,
   pub typ: ty.Type,
 }
 
@@ -326,12 +326,12 @@ impl Arm {
 
 // #[json]
 // pub struct Match {
-//   pub subject: Ref<Expression>,
+//   pub subject: mut Ref<Expression>,
 //   pub cases: Slice<MatchArm>,
 // }
 
 // impl Match {
-//   pub fn new(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Match {
+//   pub fn new(subject: mut Ref<Expression>, cases: Slice<MatchArm>) -> Match {
 //     Match { subject, cases }
 //   }
 // }

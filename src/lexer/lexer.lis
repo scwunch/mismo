@@ -18,7 +18,7 @@ impl Lexer {
   }
 
   /// Returns the next token in the source, advancing the index.
-  pub fn next(self: Ref<Lexer>) -> Token {
+  pub fn next(self: mut Ref<Lexer>) -> Token {
     self.on_line_start = false
     let pos = self.index
 
@@ -82,7 +82,7 @@ impl Lexer {
   /// character.
   ///
   /// Sets @on_line_start to `true` and returns the next token
-  fn new_line(self: Ref<Lexer>) -> Token {
+  fn new_line(self: mut Ref<Lexer>) -> Token {
     loop {
       match self.peek_char() {
         '\n' => break,
@@ -118,7 +118,7 @@ impl Lexer {
     tok
   }
 
-  fn skip_block_comment(self: Ref<Lexer>) {
+  fn skip_block_comment(self: mut Ref<Lexer>) {
     loop {
       self.index += 1
       if self.peek_char() == '\n' &&
@@ -138,7 +138,7 @@ impl Lexer {
   }
 
   /// Reads an identifier, keyword, or word-operator (and, or, not, is, in).
-  fn read_word(self: Ref<Lexer>) -> Token {
+  fn read_word(self: mut Ref<Lexer>) -> Token {
     let start = self.index
     loop {
       let c = self.peek_char()
@@ -172,7 +172,7 @@ impl Lexer {
   }
 
   /// Reads an integer or float literal (e.g., 42, 3.14, 1_000).
-  fn read_number(self: Ref<Lexer>) -> Token {
+  fn read_number(self: mut Ref<Lexer>) -> Token {
     let start = self.index
     let (int_part, _) = self.read_int()
     if self.peek_char() == '.' && is_digit(self.peek_char_at(1)) {
@@ -187,7 +187,7 @@ impl Lexer {
     }
   }
 
-  fn read_int(self: Ref<Lexer>) -> (uint64, int) {
+  fn read_int(self: mut Ref<Lexer>) -> (uint64, int) {
     let mut acc: uint64 = 0
     let mut num_digits = 0
     loop {
@@ -203,7 +203,7 @@ impl Lexer {
     }
   }
 
-  fn read_string(self: Ref<Lexer>) -> Token {
+  fn read_string(self: mut Ref<Lexer>) -> Token {
     let start = self.index
     let quote = self.source[start as int]
     self.index += 1
@@ -221,7 +221,7 @@ impl Lexer {
     }
   }
 
-  fn read_single_line_string(self: Ref<Lexer>, start: uint32, quote: rune) -> Token {
+  fn read_single_line_string(self: mut Ref<Lexer>, start: uint32, quote: rune) -> Token {
     if quote == '`' {
       loop {
         match self.peek_char() {
@@ -275,7 +275,7 @@ impl Lexer {
 
   /// call immediately after consuming open quote
   fn read_multiline_string(
-    self: Ref<Lexer>,
+    self: mut Ref<Lexer>,
     start: uint32,
     quote: rune,
     quote_width: int,
@@ -294,7 +294,7 @@ impl Lexer {
   /// verify only whitespace on the line after the open quote
   /// precondition: self.index immediately after open quote
   /// postcondition: self.index immediately after '\n'
-  fn validate_open_quote(self: Ref<Lexer>, start: uint32) -> Result<(), Token> {
+  fn validate_open_quote(self: mut Ref<Lexer>, start: uint32) -> Result<(), Token> {
     while self.peek_char() == ' ' || self.peek_char() == '\t' {
       self.index += 1
     }
@@ -316,7 +316,7 @@ impl Lexer {
   /// the opening or closing quotes.  Also return the indent of the end
   /// quote.
   fn get_string_lines(
-    self: Ref<Lexer>,
+    self: mut Ref<Lexer>,
     start: uint32,
     quote: rune,
     quote_width: int,
@@ -366,7 +366,7 @@ impl Lexer {
   }
 
   /// Reads an operator (e.g., +, -, ==, !=, +=, <=, etc.).
-  fn read_operator(self: Ref<Lexer>) -> Token {
+  fn read_operator(self: mut Ref<Lexer>) -> Token {
     let start = self.index
     let op_char = self.peek_char()
     let op = if self.peek_char_at(1) == '=' {

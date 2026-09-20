@@ -22,7 +22,7 @@ impl Emitter {
     self.buffer.join("")
   }
 
-  pub fn emit_program(self: Ref<Emitter>) {
+  pub fn emit_program(self: mut Ref<Emitter>) {
     for (_, t) in self.reg.type_defs {
       self.emit_type_def(t.*)
       self.newline()
@@ -34,7 +34,7 @@ impl Emitter {
   }
 
   fn emit_function(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     func: specialization.Function,
     index: int,
   ) {
@@ -64,13 +64,13 @@ impl Emitter {
     self.newline()
   }
 
-  fn emit_parameter(self: Ref<Emitter>, param: semantic.Parameter) {
+  fn emit_parameter(self: mut Ref<Emitter>, param: semantic.Parameter) {
     self.ident(param.name)
     self.emit(": ")
     self.emit_param_type(param.mode, param.typ)
   }
 
-  fn emit_statement(self: Ref<Emitter>, expr: semantic.Expression) {
+  fn emit_statement(self: mut Ref<Emitter>, expr: semantic.Expression) {
     match expr.kind {
       Declare(_, _, _) | Assign(_, _) | Break(_) | Return(_) | Continue => (),
       _ => self.emit("_ = "),
@@ -79,11 +79,11 @@ impl Emitter {
     self.emit(";")
   }
 
-  fn emit_expression(self: Ref<Emitter>, expr: semantic.Expression) {
+  fn emit_expression(self: mut Ref<Emitter>, expr: semantic.Expression) {
     self.emit_expr(expr.kind)
   }
 
-  fn emit_expr(self: Ref<Emitter>, expr: semantic.Expr) {
+  fn emit_expr(self: mut Ref<Emitter>, expr: semantic.Expr) {
     match expr {
       Nil => self.emit(".{}"),
       BoolLiteral(b) => self.emit(f"{b}"),
@@ -127,7 +127,7 @@ impl Emitter {
   }
 
   fn declare(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     m: md.Mode,
     name: string,
     value: semantic.Expr,
@@ -145,13 +145,13 @@ impl Emitter {
     self.emit_expr(value)
   }
 
-  fn emit_string_literal(self: Ref<Emitter>, s: string) {
+  fn emit_string_literal(self: mut Ref<Emitter>, s: string) {
     self.emit("string_from_literal(")
     self.emit(strconv.Quote(s))
     self.emit(")")
   }
 
-  fn emit_closure(self: Ref<Emitter>, closure: semantic.Closure) {
+  fn emit_closure(self: mut Ref<Emitter>, closure: semantic.Closure) {
     self.emit("struct ")
     self.start_block()
     self.emit("state: ")
@@ -187,7 +187,7 @@ impl Emitter {
     self.emit(" }")
   }
 
-  fn emit_call(self: Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {
+  fn emit_call(self: mut Ref<Emitter>, fn_id: int, args: Slice<semantic.Expression>) {
     let func = self.reg.functions[fn_id]
     self.emit(func.name)
     if !func.is_extern() { self.emit(f"_{fn_id}") }
@@ -204,7 +204,7 @@ impl Emitter {
   }
 
   fn emit_constructor(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     typ: semantic.Type,
     args: Slice<string>,
   ) {
@@ -212,24 +212,24 @@ impl Emitter {
     self.emit_list(args, "{", "}", |a| self.emit(f".{a}: {a}"))
   }
 
-  fn newline(self: Ref<Emitter>) {
+  fn newline(self: mut Ref<Emitter>) {
     self.emit("\n")
     self.emit(strings.Repeat("  ", self.indent))
   }
 
-  fn start_block(self: Ref<Emitter>) {
+  fn start_block(self: mut Ref<Emitter>) {
     self.emit("{")
     self.indent += 1
     self.newline()
   }
 
-  fn end_block(self: Ref<Emitter>) {
+  fn end_block(self: mut Ref<Emitter>) {
     self.indent -= 1
     // self.newline()
     self.emit("}")
   }
 
-  fn emit_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+  fn emit_type_def(self: mut Ref<Emitter>, type_def: semantic.TypeDef) {
     self.type_params = type_def.type_parameters
     if type_def.type_parameters.is_empty() {
       self.emit_concrete_type_def(type_def)
@@ -238,7 +238,7 @@ impl Emitter {
     }
   }
 
-  fn emit_concrete_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+  fn emit_concrete_type_def(self: mut Ref<Emitter>, type_def: semantic.TypeDef) {
     self.emit("pub const ")
     self.type_name(type_def.name)
     self.emit(" = ")
@@ -251,7 +251,7 @@ impl Emitter {
   }
 
   fn emit_anonymous_struct_def(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     fields: Slice<semantic.Field>,
   ) {
     self.emit("struct ")
@@ -267,7 +267,7 @@ impl Emitter {
   }
 
   fn emit_anonymous_enum_def(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     variants: Slice<semantic.Variant>,
   ) {
     self.emit("union(enum) ")
@@ -280,7 +280,7 @@ impl Emitter {
     self.end_block()
   }
 
-  fn emit_generic_type_def(self: Ref<Emitter>, type_def: semantic.TypeDef) {
+  fn emit_generic_type_def(self: mut Ref<Emitter>, type_def: semantic.TypeDef) {
     // generic types are implemented as comptime functions in Zig
     // they are instantiated as needed
     self.emit("pub fn ")
@@ -299,13 +299,13 @@ impl Emitter {
     self.newline()
   }
 
-  fn emit_type_param(self: Ref<Emitter>, type_param: semantic.TypeParameter) {
+  fn emit_type_param(self: mut Ref<Emitter>, type_param: semantic.TypeParameter) {
     self.emit("comptime ")
     self.emit(type_param.name)
     self.emit(": type")
   }
 
-  fn emit_type(self: Ref<Emitter>, typ: semantic.Type) {
+  fn emit_type(self: mut Ref<Emitter>, typ: semantic.Type) {
     match typ {
       Any => self.emit("anytype"),
       Never => self.emit("noreturn"),
@@ -343,7 +343,7 @@ impl Emitter {
   }
 
   fn emit_list<A>(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     items: Slice<A>,
     start: string,
     end: string,
@@ -364,7 +364,7 @@ impl Emitter {
   }
 
   fn emit_list_paren<A>(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     items: Slice<A>,
     action: fn(A) -> (),
   ) {
@@ -383,7 +383,7 @@ impl Emitter {
   }
 
   pub fn emit_list_bracket<A>(
-    self: Ref<Emitter>,
+    self: mut Ref<Emitter>,
     items: Slice<A>,
     action: fn(A) -> (),
   ) {
@@ -401,7 +401,7 @@ impl Emitter {
     }
   }
 
-  fn emit_block(self: Ref<Emitter>, items: Slice<semantic.Expression>) {
+  fn emit_block(self: mut Ref<Emitter>, items: Slice<semantic.Expression>) {
     if items.is_empty() {
       self.emit("{}")
     } else {
@@ -419,7 +419,7 @@ impl Emitter {
     self.end_block()
   }
 
-  fn emit_param_type(self: Ref<Emitter>, m: md.Mode, typ: semantic.Type) {
+  fn emit_param_type(self: mut Ref<Emitter>, m: md.Mode, typ: semantic.Type) {
     match m {
       md.Mode.Let => self.emit("*const "),
       md.Mode.Mut | md.Mode.MutBang => self.emit("*"),
@@ -428,22 +428,22 @@ impl Emitter {
     self.emit_type(typ)
   }
 
-  fn ident(self: Ref<Emitter>, name: string) {
+  fn ident(self: mut Ref<Emitter>, name: string) {
     // check if valid Zig identifier here
     self.emit(name)
   }
 
-  fn type_name(self: Ref<Emitter>, name: string) {
+  fn type_name(self: mut Ref<Emitter>, name: string) {
     // check if valid Zig identifier here
     self.emit(name)
     self.emit("_t")
   }
 
-  fn emit(self: Ref<Emitter>, str: string) {
+  fn emit(self: mut Ref<Emitter>, str: string) {
     self.buffer = self.buffer.append(str)
   }
 
-  fn emit_if(self: Ref<Emitter>, node: ast.If) {
+  fn emit_if(self: mut Ref<Emitter>, node: ast.If) {
     for check in node.checks {
       match check {
         Test(expr, block) => self.emit_check_test(expr, block),
@@ -457,7 +457,7 @@ impl Emitter {
     }
   }
 
-  fn emit_check_test(self: Ref<Emitter>, expr: ast.Expression, block: ast.Block) {
+  fn emit_check_test(self: mut Ref<Emitter>, expr: ast.Expression, block: ast.Block) {
     self.emit("if ")
     self.emit_expr(expr.kind)
     self.emit(" ")
@@ -465,7 +465,7 @@ impl Emitter {
     self.emit(" else ")
   }
 
-  fn emit_switch(self: Ref<Emitter>, expr: ast.Expression, arms: Slice<ast.Arm>) {
+  fn emit_switch(self: mut Ref<Emitter>, expr: ast.Expression, arms: Slice<ast.Arm>) {
     self.emit("switch ")
     self.emit_expr(expr.kind)
     self.start_block()
@@ -475,7 +475,7 @@ impl Emitter {
     self.end_block()
   }
 
-  fn emit_arm(self: Ref<Emitter>, arm: ast.Arm) {
+  fn emit_arm(self: mut Ref<Emitter>, arm: ast.Arm) {
     match arm.pattern.kind {
       EnumConstructor(variant, sub_patterns) => {
         self.emit(".")

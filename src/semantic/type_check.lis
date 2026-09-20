@@ -5,10 +5,10 @@ import spn "span"
 import "ty"
 import "utils/slice"
 
-pub struct TypeCheck { function: Ref<ast.FunctionDef> }
+pub struct TypeCheck { function: mut Ref<ast.FunctionDef> }
 
 impl TypeCheck {
-  pub fn new(function: Ref<ast.FunctionDef>) -> TypeCheck {
+  pub fn new(function: mut Ref<ast.FunctionDef>) -> TypeCheck {
     TypeCheck { function }
   }
 
@@ -170,7 +170,7 @@ impl TypeCheck {
     Ok(ir.Expr.Block(blk))
   }
 
-  fn infer_block(self, block: ast.Block, lub: Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
+  fn infer_block(self, block: ast.Block, lub: mut Ref<LUB>) -> Result<ir.Block, dx.TypeError> {
     let statements = slice.map_result(block.statements, |node| self.infer(node))?
     lub.unify(statements[statements.length() - 1])?
     Ok(ir.Block.new(statements, lub.ty))
@@ -312,7 +312,7 @@ impl TypeCheck {
     // Ok(Expression.new(span, Expr.Closure(closure)))
   }
 
-  fn assign(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
+  fn assign(self, target: mut Ref<ty.Variable>, value: mut Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
     let value = self.check(
       value.*,
       target.typ,
@@ -321,7 +321,7 @@ impl TypeCheck {
     Ok(ir.Expr.Assign(target, &value))
   }
 
-  fn assign_cap(self, target: Ref<ty.Variable>, value: Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
+  fn assign_cap(self, target: mut Ref<ty.Variable>, value: mut Ref<ast.Expression>) -> Result<ir.Expr, dx.TypeError> {
     let value = self.check(
       value.*,
       target.typ,
@@ -394,7 +394,7 @@ impl TypeCheck {
     Ok(ir.Expr.If(cond, lub.ty))
   }
 
-  fn infer_if(self, cond: ast.If, lub: Ref<LUB>) -> Result<ir.If, dx.TypeError> {
+  fn infer_if(self, cond: ast.If, lub: mut Ref<LUB>) -> Result<ir.If, dx.TypeError> {
     let checks = slice.map_result(cond.checks, |chk| self.infer_check(chk, lub))?
     let default = if let Some(blk) = cond.default {
       let blk = self.infer_block(blk, lub)?
@@ -405,7 +405,7 @@ impl TypeCheck {
     Ok(ir.If.new(checks, default, lub.ty))
   }
 
-  fn infer_check(self, check: ast.Check, lub: Ref<LUB>) -> Result<ir.Check, dx.TypeError> {
+  fn infer_check(self, check: ast.Check, lub: mut Ref<LUB>) -> Result<ir.Check, dx.TypeError> {
     match check {
       Test(expr, blk) => {
         let test = self.infer(expr)?
@@ -426,7 +426,7 @@ impl TypeCheck {
     }
   }
 
-  fn infer_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, lub: Ref<LUB>) -> Result<ir.Arm, dx.TypeError> {
+  fn infer_arm(self, arm: ast.Arm, scrutinee_type: ty.Type, lub: mut Ref<LUB>) -> Result<ir.Arm, dx.TypeError> {
     // TODO: this should be upgraded to `self.pattern(arm.pattern, pattern_type)`
     let pattern = self.pattern(arm.pattern, scrutinee_type)?
     let then = match arm.then {
@@ -728,7 +728,7 @@ enum OverloadCandidate {
 }
 
 fn try_match_candidate(
-  fun: Ref<ast.FunctionDef>,
+  fun: mut Ref<ast.FunctionDef>,
   args: Slice<ir.Expression>,
   span: spn.Span,
 ) -> OverloadCandidate {
@@ -804,7 +804,7 @@ impl LUB {
     LUB { ty: ty.Type.Never, .. }
   }
 
-  fn unify(self: Ref<LUB>, expr: ir.Expression) -> Result<(), dx.TypeError> {
+  fn unify(self: mut Ref<LUB>, expr: ir.Expression) -> Result<(), dx.TypeError> {
     match (expr.typ(), self.ty) {
       (Never, _) => (),
       (typ, Never) => {

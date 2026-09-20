@@ -146,19 +146,19 @@ impl Declarations {
     Declarations { imports: [], types: [], functions: [], errors: [] }
   }
 
-  pub fn add_import(self: Ref<Declarations>, i: Import) {
+  pub fn add_import(self: mut Ref<Declarations>, i: Import) {
     self.imports = self.imports.append(i)
   }
 
-  pub fn add_type(self: Ref<Declarations>, t: TypeDecl) {
+  pub fn add_type(self: mut Ref<Declarations>, t: TypeDecl) {
     self.types = self.types.append(t)
   }
 
-  pub fn add_function(self: Ref<Declarations>, f: FunctionDecl) {
+  pub fn add_function(self: mut Ref<Declarations>, f: FunctionDecl) {
     self.functions = self.functions.append(f)
   }
 
-  pub fn add_error(self: Ref<Declarations>, s: dx.SyntaxError) {
+  pub fn add_error(self: mut Ref<Declarations>, s: dx.SyntaxError) {
     self.errors = self.errors.append(s)
   }
 }

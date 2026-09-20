@@ -5,19 +5,19 @@ import "ty"
 
 #[json]
 pub struct Registry {
-  pub imports: Map<string, Registry>,
-  pub type_defs: Map<string, Ref<ty.TypeDef>>,
-  pub function_defs: Slice<Ref<FunctionDef>>,
-  pub signatures: Map<string, Slice<Ref<FunctionDef>>>,
-  pub errors: Slice<dx.TypeError>,
+  pub imports: mut Map<string, Registry>,
+  pub type_defs: mut Map<string, mut Ref<ty.TypeDef>>,
+  pub function_defs: mut Slice<mut Ref<FunctionDef>>,
+  pub signatures: mut Map<string, Slice<Ref<FunctionDef>>>,
+  pub errors: mut Slice<dx.TypeError>,
 }
 
 impl Registry {
-  pub fn new() -> Registry {
+  pub fn new() -> mut Registry {
     Registry { .. }
   }
 
-  pub fn with_mock_prelude() -> Ref<Registry> {
+  pub fn with_mock_prelude() -> mut Ref<Registry> {
     let mut self = &Registry { .. }
     for fn_name in ["==", "+", "-", "*", "/", "print"] {
       self.add_function(&FunctionDef.mock(fn_name, [], [], ty.nil()))
@@ -36,7 +36,7 @@ impl Registry {
     self
   }
 
-  pub fn add_function(self: Ref<Registry>, func: Ref<FunctionDef>) {
+  pub fn add_function(self: mut Ref<Registry>, func: mut Ref<FunctionDef>) {
     let i = self.function_defs.length()
     self.function_defs = self.function_defs.append(func)
     let def = self.function_defs[i]
@@ -48,7 +48,7 @@ impl Registry {
     }
   }
 
-  pub fn error(self: Ref<Registry>, err: dx.TypeError) {
+  pub fn error(self: mut Ref<Registry>, err: dx.TypeError) {
     self.errors = self.errors.append(err)
   }
 

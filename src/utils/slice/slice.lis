@@ -2,7 +2,7 @@ pub fn compare<T>(s1: Slice<T>, s2: Slice<T>, pred: fn(T, T) -> bool) -> bool {
   s1.length() == s2.length() && zip(s1, s2).all(|(v1, v2)| pred(v1, v2))
 }
 
-pub fn zip<T, U>(s1: Slice<T>, s2: Slice<U>) -> Slice<(T, U)> {
+pub fn zip<T, U>(s1: Slice<T>, s2: Slice<U>) -> mut Slice<(T, U)> {
   if s1.length() <= s2.length() {
     s1
       .enumerate()
@@ -26,11 +26,11 @@ pub fn map_result<T, R, E>(s: Slice<T>, f: fn(T) -> Result<R, E>) -> Result<Slic
   Ok(result)
 }
 
-pub fn push<T>(s: Ref<Slice<T>>, item: T) {
+pub fn push<T>(s: mut Ref<Slice<T>>, item: T) {
   s.* = s.*.append(item)
 }
 
-pub fn pop_front<T>(s: Ref<Slice<T>>) -> Option<T> {
+pub fn pop_front<T>(s: mut Ref<Slice<T>>) -> Option<T> {
   match s.get(0) {
     Some(item) => {
       s.* = s.*[1..]

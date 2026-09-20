@@ -142,11 +142,11 @@ pub struct Closure {
 #[json]
 pub struct Capture {
   pub mode: md.Mode,
-  pub variable: Ref<ty.Variable>,
+  pub variable: mut Ref<ty.Variable>,
 }
 
 impl Capture {
-  pub fn new(varid: Ref<ty.Variable>) -> Capture {
+  pub fn new(varid: mut Ref<ty.Variable>) -> Capture {
     Capture { mode: md.Mode.Let, variable: varid }
   }
 }
@@ -251,8 +251,8 @@ impl Arm {
 #[json]
 #[equality]
 pub struct ForLoop {
-  pub binding: Ref<ty.Variable>,
-  pub iter: Ref<Expression>,
+  pub binding: mut Ref<ty.Variable>,
+  pub iter: mut Ref<Expression>,
   pub body: Block,
 }
 

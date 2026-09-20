@@ -30,25 +30,25 @@ pub fn tuple_expr(elems: Slice<Expression>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.TupleLiteral(elems) }
 }
 
-pub fn declare_expr(mode: md.Mode, name: string, init: Ref<Expression>) -> Expression {
+pub fn declare_expr(mode: md.Mode, name: string, init: mut Ref<Expression>) -> Expression {
   let varid = _var(mode, name)
   Expression { span: spn.new(0, 0), kind: Expr.Declare(mode, varid, init) }
 }
 
-pub fn ident_expr(var_: Ref<ty.Variable>) -> Expression {
+pub fn ident_expr(var_: mut Ref<ty.Variable>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.Identifier(var_) }
 }
 
-pub fn assign_expr(var_: Ref<ty.Variable>, expr: Ref<Expression>) -> Expression {
+pub fn assign_expr(var_: mut Ref<ty.Variable>, expr: mut Ref<Expression>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.Assign(var_, expr) }
 }
 
-pub fn binding_expr(mode: md.Mode, expr: Ref<Expression>) -> Expression {
+pub fn binding_expr(mode: md.Mode, expr: mut Ref<Expression>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.Binding(mode, expr) }
 }
 
 // fn call_expr(
-//   fun: Ref<FunctionDef>,
+//   fun: mut Ref<FunctionDef>,
 //   type_args: Slice<Type>,
 //   args: Slice<Expression>,
 // ) -> Expression {
@@ -66,14 +66,14 @@ pub fn binding_expr(mode: md.Mode, expr: Ref<Expression>) -> Expression {
 //   Expression { span: spn.new(0, 0), kind: Expr.SwitchIf(cases) }
 // }
 
-// fn match_expr(subject: Ref<Expression>, cases: Slice<MatchArm>) -> Expression {
+// fn match_expr(subject: mut Ref<Expression>, cases: Slice<MatchArm>) -> Expression {
 //   Expression {
 //     span: spn.new(0, 0),
 //     kind: Expr.Match(Match.new(subject, cases)),
 //   }
 // }
 
-// pub fn while_expr(cond: Ref<Expression>, body: Block) -> Expression {
+// pub fn while_expr(cond: mut Ref<Expression>, body: Block) -> Expression {
 //   Expression { span: spn.new(0, 0), kind: Expr.While(cond, body) }
 // }
 

@@ -16,7 +16,7 @@ pub fn test_specialization() {
   )
 }
 
-fn test_specializer_add_function(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_specializer_add_function(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.add_function"
   let mut env = semantic.TypeEnv.new()
   env.add_function(
@@ -42,7 +42,7 @@ fn test_specializer_add_function(t: Ref<testing.TestRunner>) -> Result<(), strin
   Ok(())
 }
 
-fn test_specializer_index_of(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_specializer_index_of(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.index_of"
   let mut env = semantic.TypeEnv.new()
   env.add_function(
@@ -75,7 +75,7 @@ fn test_specializer_index_of(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_specializer_substitute(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Specializer.substitute"
   let mut env = semantic.TypeEnv.new()
   env.add_function(
@@ -109,7 +109,7 @@ fn test_specializer_substitute(t: Ref<testing.TestRunner>) -> Result<(), string>
   Ok(())
 }
 
-fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_cache_get(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Cache.get"
   let mut env = semantic.TypeEnv.new()
   env.add_function(&semantic.FunctionDef.mock("f", [], [], ty.nil()))
@@ -133,7 +133,7 @@ fn test_cache_get(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_cache_insert(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_cache_insert(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Cache.insert"
   let mut env = semantic.TypeEnv.new()
   env.add_function(&semantic.FunctionDef.mock("f", [], [], ty.nil()))
@@ -157,7 +157,7 @@ fn test_cache_insert(t: Ref<testing.TestRunner>) -> Result<(), string> {
   Ok(())
 }
 
-fn test_specialize(t: Ref<testing.TestRunner>) -> Result<(), string> {
+fn test_specialize(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "specialize"
   let mut env = semantic.TypeEnv.new()
 

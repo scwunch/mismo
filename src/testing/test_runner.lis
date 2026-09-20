@@ -12,7 +12,7 @@ pub fn test(
 
 pub fn test_suite(
   suite_name: string,
-  tests: Slice<fn(Ref<TestRunner>) -> Result<(), string>>,
+  tests: Slice<fn(mut Ref<TestRunner>) -> Result<(), string>>,
 ) -> bool {
   fmt.Println(f"Test suite: {suite_name}")
   let num_tests = tests.length()
@@ -61,14 +61,14 @@ impl TestRunner {
     self.status
   }
 
-  pub fn fail(self: Ref<TestRunner>, msg: string) -> Result<(), string> {
+  pub fn fail(self: mut Ref<TestRunner>, msg: string) -> Result<(), string> {
     if self.panic_on_fail { panic(f"{self.test_name} failed: msg") }
     self.status = false
     Err(msg)
   }
 
   pub fn should_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
-    self: Ref<TestRunner>,
+    self: mut Ref<TestRunner>,
     val: A,
     expected: B,
   ) -> Result<(), string> {
@@ -79,7 +79,7 @@ impl TestRunner {
     }
   }
 
-  pub fn should_eq_repr<A, B>(self: Ref<TestRunner>, val: A, expected: B) -> Result<(), string> {
+  pub fn should_eq_repr<A, B>(self: mut Ref<TestRunner>, val: A, expected: B) -> Result<(), string> {
     if f"{val}" == f"{expected}" {
       Ok(())
     } else {
@@ -88,7 +88,7 @@ impl TestRunner {
   }
 
   pub fn should_contain<A: Equatable<A, B>, B>(
-    self: Ref<TestRunner>,
+    self: mut Ref<TestRunner>,
     collection: Slice<A>,
     expected: B,
   ) -> Result<(), string> {
@@ -99,7 +99,7 @@ impl TestRunner {
   }
 
   pub fn shouldnt_eq<A: Equatable<A, B>, B: Equatable<B, A>>(
-    self: Ref<TestRunner>,
+    self: mut Ref<TestRunner>,
     val: A,
     expected: B,
   ) -> Result<(), string> {
@@ -110,21 +110,21 @@ impl TestRunner {
     }
   }
 
-  pub fn should_be_true(self: Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
+  pub fn should_be_true(self: mut Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
     if cond { Ok(()) } else { self.fail(error_msg) }
   }
 
-  pub fn should_be_false(self: Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
+  pub fn should_be_false(self: mut Ref<TestRunner>, cond: bool, error_msg: string) -> Result<(), string> {
     if !cond { Ok(()) } else { self.fail(error_msg) }
   }
 }
 
-pub interface Equatable<Self: Equatable<Self, Other>, Other: Equatable<Other, Self>> {
+pub interface Equatable<T: Equatable<T, Other>, Other: Equatable<Other, T>> {
   fn equals(other: Other) -> bool
 }
 
-pub interface Testable<Self> {
-  fn should_eq(expected: Self, t: TestRunner) -> Result<(), string>
+pub interface Testable<T> {
+  fn should_eq(expected: T, t: TestRunner) -> Result<(), string>
 }
 
 pub interface Contains<T> {

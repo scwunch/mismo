@@ -8,7 +8,7 @@ pub fn test_compiler() {
   let _ = testing.test_suite("Compiler", [test_dummy])
 }
 
-pub fn test_dummy(t: Ref<testing.TestRunner>) -> Result<(), string> {
+pub fn test_dummy(t: mut Ref<testing.TestRunner>) -> Result<(), string> {
   t.test_name = "Dummy"
 
   t.should_eq(Source(" asdf\n  asdf"), Source("asdfasdf"))?

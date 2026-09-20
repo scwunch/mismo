@@ -22,7 +22,7 @@ impl Cache {
     }
   }
 
-  fn insert(self: Ref<Cache>, key: MonoMorphKey, value: int) {
+  fn insert(self: mut Ref<Cache>, key: MonoMorphKey, value: int) {
     let index = key.hash(self.hasher)
     match self.map.get(index) {
       Some(pairs) => {
@@ -37,7 +37,7 @@ impl Cache {
   }
 }
 
-struct Hasher { h: Ref<maphash.Hash> }
+struct Hasher { h: mut Ref<maphash.Hash> }
 
 impl Hasher {
   fn new() -> Hasher {

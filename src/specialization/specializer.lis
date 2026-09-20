@@ -21,7 +21,7 @@ pub fn specialize(reg: ir.Registry) -> Result<ConcreteRegistry, dx.Specializatio
 
 #[display]
 struct MonoMorphKey {
-  fun: Ref<ir.FunctionDef>,
+  fun: mut Ref<ir.FunctionDef>,
   type_args: Slice<ty.Type>,
 }
 
@@ -54,7 +54,7 @@ impl Specializer {
     }
   }
 
-  fn run(self: Ref<Specializer>) {
+  fn run(self: mut Ref<Specializer>) {
     while let Some(func) = self.queue.get(0) {
       // while self.queue.length() > 0 {
       // let func = self.queue[0]
@@ -63,18 +63,18 @@ impl Specializer {
     }
   }
 
-  fn specialize(self: Ref<Specializer>, item: FuncAndTypeArgs) {
+  fn specialize(self: mut Ref<Specializer>, item: FuncAndTypeArgs) {
     let mut func = self.functions[item.0]
     func.body = self.substitute(func.body, item.1)
     self.functions[item.0] = func
   }
 
-  fn index_of(self: Ref<Specializer>, call: ir.FnCall) -> int {
+  fn index_of(self: mut Ref<Specializer>, call: ir.FnCall) -> int {
     let call = MonoMorphKey.from_call(call)
     self.function_map.get(call).unwrap_or_else(|| self.add_function(call))
   }
 
-  fn add_function(self: Ref<Specializer>, call: MonoMorphKey) -> int {
+  fn add_function(self: mut Ref<Specializer>, call: MonoMorphKey) -> int {
     let i = self.functions.length()
     let parameters = call.fun.parameters.map(|p| p.substitute(call.type_args))
     let return_type = call.fun.return_type.substitute(call.type_args)
@@ -94,7 +94,7 @@ impl Specializer {
   }
 
   fn substitute(
-    self: Ref<Specializer>,
+    self: mut Ref<Specializer>,
     expr: Expression,
     type_args: Slice<Type>,
   ) -> Expression {
@@ -176,7 +176,7 @@ impl Specializer {
     Expression.new(expr.span, kind)
   }
 
-  fn error(self: Ref<Specializer>, e: error) {
+  fn error(self: mut Ref<Specializer>, e: error) {
     self.errors = self.errors.append(e)
   }
 }
