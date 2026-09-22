@@ -3,9 +3,9 @@ import "go:os"
 
 pub fn test(
   test_name: string,
-  test_fn: fn(Ref<TestRunner>) -> Result<(), string>,
+  test_fn: fn(mut Ref<TestRunner>) -> Result<(), string>,
 ) -> TestRunner {
-  let t = TestRunner.new(test_name)
+  let mut t = TestRunner.new(test_name)
   if let Err(e) = test_fn(&t) { fmt.Println(e) }
   t
 }

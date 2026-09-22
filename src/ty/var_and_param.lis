@@ -1,6 +1,10 @@
 import md "mode"
 import spn "span"
 
+#[json]
+#[equality]
+pub struct VarId { pub index: int }
+
 pub struct Variable {
   pub mode: md.Mode,
   pub name: string,

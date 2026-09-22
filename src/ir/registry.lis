@@ -4,17 +4,29 @@ import "ty"
 #[json]
 pub struct Registry {
   pub type_defs: Map<string, Ref<ty.TypeDef>>,
-  pub function_defs: Slice<Ref<FunctionDef>>,
+  pub function_defs: mut Slice<mut Ref<FunctionDef>>,
   pub main: Slice<Ref<FunctionDef>>,
+  pub variables: mut Slice<ty.Variable>,
   pub errors: Slice<dx.TypeError>,
 }
 
 impl Registry {
-  pub fn new() -> Registry {
+  pub fn new() -> mut Registry {
     Registry { .. }
   }
 
   pub fn error(self: mut Ref<Registry>, err: dx.TypeError) {
     self.errors = self.errors.append(err)
+  }
+
+  pub fn variable(self: mut Ref<mut Registry>, id: ty.VarId) -> mut Ref<ty.Variable> {
+    &self.variables[id.index]
+  }
+
+  pub fn function(self: mut Ref<mut Registry>, id: int) -> mut Ref<FunctionDef> {
+    match self.function_defs.find(|fun| fun.id == id) {
+      Some(fun) => fun,
+      None => panic(f"compiler bug: missing IR function definition {id}"),
+    }
   }
 }

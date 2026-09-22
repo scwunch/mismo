@@ -30,16 +30,21 @@ pub fn tuple_expr(elems: Slice<Expression>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.TupleLiteral(elems) }
 }
 
-pub fn declare_expr(mode: md.Mode, name: string, init: mut Ref<Expression>) -> Expression {
-  let varid = _var(mode, name)
+pub fn declare_expr(
+  registry: mut Ref<Registry>,
+  mode: md.Mode,
+  name: string,
+  init: mut Ref<Expression>,
+) -> Expression {
+  let varid = _var(registry, mode, name)
   Expression { span: spn.new(0, 0), kind: Expr.Declare(mode, varid, init) }
 }
 
-pub fn ident_expr(var_: mut Ref<ty.Variable>) -> Expression {
+pub fn ident_expr(var_: ty.VarId) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.Identifier(var_) }
 }
 
-pub fn assign_expr(var_: mut Ref<ty.Variable>, expr: mut Ref<Expression>) -> Expression {
+pub fn assign_expr(var_: ty.VarId, expr: mut Ref<Expression>) -> Expression {
   Expression { span: spn.new(0, 0), kind: Expr.Assign(var_, expr) }
 }
 
@@ -105,22 +110,22 @@ pub fn extern_expr() -> Expression {
 //   MatchArm.new(pattern, expr)
 // }
 
-pub fn _var(mode: md.Mode, name: string) -> Ref<ty.Variable> {
-  &ty.Variable.new(mode, name, 0)
+pub fn _var(registry: mut Ref<Registry>, mode: md.Mode, name: string) -> ty.VarId {
+  registry.add_variable(ty.Variable.new(mode, name, 0))
 }
 
-pub fn let_var(name: string) -> Ref<ty.Variable> {
-  &ty.Variable.new(md.Mode.Let, name, 0)
+pub fn let_var(registry: mut Ref<Registry>, name: string) -> ty.VarId {
+  _var(registry, md.Mode.Let, name)
 }
 
-pub fn mut_var(name: string) -> Ref<ty.Variable> {
-  &ty.Variable.new(md.Mode.Mut, name, 0)
+pub fn mut_var(registry: mut Ref<Registry>, name: string) -> ty.VarId {
+  _var(registry, md.Mode.Mut, name)
 }
 
-pub fn mut_bang_var(name: string) -> Ref<ty.Variable> {
-  &ty.Variable.new(md.Mode.MutBang, name, 0)
+pub fn mut_bang_var(registry: mut Ref<Registry>, name: string) -> ty.VarId {
+  _var(registry, md.Mode.MutBang, name)
 }
 
-pub fn var_var(name: string) -> Ref<ty.Variable> {
-  &ty.Variable.new(md.Mode.Var, name, 0)
+pub fn var_var(registry: mut Ref<Registry>, name: string) -> ty.VarId {
+  _var(registry, md.Mode.Var, name)
 }

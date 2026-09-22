@@ -8,7 +8,7 @@ import "ty"
 #[equality]
 pub struct Expression {
   pub span: spn.Span,
-  pub kind: Expr,
+  pub kind: mut Expr,
 }
 
 #[display]
@@ -24,11 +24,11 @@ pub enum Expr {
   TupleLiteral(Slice<Expression>),
   RecordLiteral(Slice<Field>),
   Closure(Closure),
-  Declare(md.Mode, Ref<ty.Variable>, Ref<Expression>),
-  Identifier(Ref<ty.Variable>),
-  CapturedIdent(Ref<ty.Variable>),
-  Assign(Ref<ty.Variable>, Ref<Expression>),
-  AssignCapture(Ref<ty.Variable>, Ref<Expression>),
+  Declare(md.Mode, ty.VarId, Ref<Expression>),
+  Identifier(ty.VarId),
+  CapturedIdent(ty.VarId),
+  Assign(ty.VarId, Ref<Expression>),
+  AssignCapture(ty.VarId, Ref<Expression>),
   Binding(md.Mode, Ref<Expression>),
   Call(Call),
   ConcreteCall(int, Slice<Expression>),
@@ -144,7 +144,7 @@ pub struct Case {
 
 #[equality]
 pub struct Place {
-  pub varid: mut Ref<ty.Variable>,
+  pub varid: ty.VarId,
   pub path: Slice<int>,
 }
 
@@ -186,7 +186,7 @@ pub struct Arm {
 #[equality]
 pub enum Pattern {
   Wildcard,
-  Binding(Ref<ty.Variable>),
+  Binding(ty.VarId),
   Tuple(Slice<Pattern>),
   Constructor(string, Ref<Pattern>),
 }
@@ -209,8 +209,9 @@ pub enum Then {
 }
 
 impl If {
-  pub fn new(checks: Slice<Check>, default: Option<Block>, typ: ty.Type) -> If {
-    If { checks, default, decision: &Decision.Fail, typ }
+  pub fn new(checks: Slice<Check>, default: Option<Block>, typ: ty.Type) -> mut If {
+    let mut fail = Decision.Fail
+    If { checks, default, decision: &fail, typ }
   }
 
   pub fn span(self) -> spn.Span {
@@ -300,8 +301,8 @@ impl Arm {
 //   Array(Slice<Pattern>),
 //   String(string),
 //   Struct(ty.TypeDef, Slice<Pattern>),
-//   Splat(Ref<ty.Variable>),
-//   Bind(Ref<ty.Variable>),
+//   Splat(mut Ref<ty.Variable>),
+//   Bind(mut Ref<ty.Variable>),
 //   Wildcard,
 // }
 
@@ -357,12 +358,12 @@ impl Expression {
     Expression.new(spn.new(0, 0), Expr.Nil)
   }
 
-  pub fn typ(self) -> ty.Type {
-    self.kind.typ()
+  pub fn typ(self, registry: mut Ref<mut Registry>) -> ty.Type {
+    self.kind.typ(registry)
   }
 
-  pub fn mode(self) -> md.Mode {
-    self.kind.mode()
+  pub fn mode(self, registry: mut Ref<mut Registry>) -> md.Mode {
+    self.kind.mode(registry)
   }
 }
 
@@ -373,7 +374,7 @@ impl Expr {
 }
 
 impl Expr {
-  pub fn typ(self) -> ty.Type {
+  pub fn typ(self, registry: mut Ref<mut Registry>) -> ty.Type {
     match self {
       Nil => ty.nil(),
       BoolLiteral(bool) => ty.Type.Bool,
@@ -381,18 +382,18 @@ impl Expr {
       FloatLiteral(float64) => ty.Type.Float,
       StringLiteral(string) => ty.Type.String,
       ArrayLiteral(_, typ) => typ,
-      TupleLiteral(exprs) => ty.Type.Tuple(exprs.map(|e| e.typ())),
+      TupleLiteral(exprs) => ty.Type.Tuple(exprs.map(|e| e.typ(registry))),
       RecordLiteral(exprs) => ty.Type.Record(exprs.map(|f|
-        ty.Field {name: f.name, typ: f.expr.typ()}
+        ty.Field {name: f.name, typ: f.expr.typ(registry)}
       )),
       Closure(closure) => closure.typ(),
-      Identifier(id) | CapturedIdent(id) | Assign(id, _) | AssignCapture(id, _) => id.typ,
+      Identifier(id) | CapturedIdent(id) | Assign(id, _) | AssignCapture(id, _) => registry.variable(id).typ,
       Declare(_, _, _) => ty.nil(),
-      Binding(_, expr) => expr.typ(),
+      Binding(_, expr) => expr.typ(registry),
       Call(call) => call.fun.return_type,
       If(_, t) => t,
       While(_, blk) | Block(blk) => blk.typ,
-      FieldAccess(obj, i) => obj.typ().field(i),
+      FieldAccess(obj, i) => obj.typ(registry).field(i),
       ConcreteCall(_, _) => panic(
         "compiler bug 75: concrete call should never have 'type' method called on it",
       ),
@@ -402,7 +403,7 @@ impl Expr {
     }
   }
 
-  pub fn mode(self) -> md.Mode {
+  pub fn mode(self, registry: mut Ref<mut Registry>) -> md.Mode {
     match self {
       Nil |
       BoolLiteral(_) |
@@ -417,10 +418,10 @@ impl Expr {
       } else {
         md.Mode.MutBang
       },
-      Identifier(varid) | CapturedIdent(varid) => varid.mode,
+      Identifier(varid) | CapturedIdent(varid) => registry.variable(varid).mode,
       Declare(_, _, _) | Assign(_, _) | AssignCapture(_, _) => md.Mode.Var,
       Binding(m, _) => m,
-      FieldAccess(obj, _) => obj.mode(),
+      FieldAccess(obj, _) => obj.mode(registry),
       If(cond, _) => md.Mode.Var,
       While(cond, _) => md.Mode.Var,
       Block(_) => md.Mode.Var,

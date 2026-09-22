@@ -7,7 +7,7 @@ import "ty"
 #[equality]
 pub struct Expression {
   pub span: spn.Span,
-  pub kind: Expr,
+  pub kind: mut Expr,
 }
 
 #[display]
@@ -23,11 +23,11 @@ pub enum Expr {
   TupleLiteral(Slice<Expression>),
   RecordLiteral(Slice<Field>),
   Closure(Closure),
-  Declare(md.Mode, Ref<ty.Variable>, Ref<Expression>),
-  Identifier(Ref<ty.Variable>),
-  CapturedIdent(Ref<ty.Variable>),
-  Assign(Ref<ty.Variable>, Ref<Expression>),
-  AssignCapture(Ref<ty.Variable>, Ref<Expression>),
+  Declare(md.Mode, ty.VarId, Ref<Expression>),
+  Identifier(ty.VarId),
+  CapturedIdent(ty.VarId),
+  Assign(ty.VarId, Ref<Expression>),
+  AssignCapture(ty.VarId, Ref<Expression>),
   Binding(md.Mode, Ref<Expression>),
   Call(Call),
   If(If),
@@ -100,7 +100,7 @@ impl Block {
 #[display]
 #[json]
 pub struct Call {
-  pub local_candidates: Slice<Ref<ty.Variable>>,
+  pub local_candidates: Slice<ty.VarId>,
   pub global_candidates: Slice<Ref<FunctionDef>>,
   pub type_args: Option<Slice<ty.Type>>,
   pub args: Slice<Expression>,
@@ -109,7 +109,7 @@ pub struct Call {
 
 impl Call {
   pub fn new(
-    local_candidates: Slice<Ref<ty.Variable>>,
+    local_candidates: Slice<ty.VarId>,
     global_candidates: Slice<Ref<FunctionDef>>,
     type_args: Option<Slice<ty.Type>>,
     args: Slice<Expression>,
@@ -142,11 +142,11 @@ pub struct Closure {
 #[json]
 pub struct Capture {
   pub mode: md.Mode,
-  pub variable: mut Ref<ty.Variable>,
+  pub variable: ty.VarId,
 }
 
 impl Capture {
-  pub fn new(varid: mut Ref<ty.Variable>) -> Capture {
+  pub fn new(varid: ty.VarId) -> Capture {
     Capture { mode: md.Mode.Let, variable: varid }
   }
 }
@@ -251,7 +251,7 @@ impl Arm {
 #[json]
 #[equality]
 pub struct ForLoop {
-  pub binding: mut Ref<ty.Variable>,
+  pub binding: ty.VarId,
   pub iter: mut Ref<Expression>,
   pub body: Block,
 }

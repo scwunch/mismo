@@ -9,6 +9,7 @@ pub struct Registry {
   pub type_defs: mut Map<string, mut Ref<ty.TypeDef>>,
   pub function_defs: mut Slice<mut Ref<FunctionDef>>,
   pub signatures: mut Map<string, Slice<Ref<FunctionDef>>>,
+  pub variables: mut Slice<ty.Variable>,
   pub errors: mut Slice<dx.TypeError>,
 }
 
@@ -50,6 +51,16 @@ impl Registry {
 
   pub fn error(self: mut Ref<Registry>, err: dx.TypeError) {
     self.errors = self.errors.append(err)
+  }
+
+  pub fn add_variable(self: mut Ref<mut Registry>, variable: ty.Variable) -> ty.VarId {
+    let index = self.variables.length()
+    self.variables = self.variables.append(variable)
+    ty.VarId { index }
+  }
+
+  pub fn variable(self: mut Ref<mut Registry>, id: ty.VarId) -> mut Ref<ty.Variable> {
+    &self.variables[id.index]
   }
 
   pub fn get_module(self, span: spn.Span, path: cst.Path) -> Result<Registry, dx.ResolveError> {
