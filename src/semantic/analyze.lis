@@ -3,33 +3,41 @@ import dx "diagnostics"
 import "ir"
 import "ty"
 
-pub fn analyze(env: mut Ref<ast.Registry>) -> ir.Registry {
+pub fn analyze(env: mut Ref<mut ast.Registry>) -> ir.Registry {
   let mut reg = ir.Registry.new()
   reg.type_defs = env.type_defs
-  reg.function_defs = env.function_defs.map(|fun| {
-    let (new_fun, err) = lower(fun)
+  reg.variables = env.variables
+  for fun in env.function_defs {
+    let mut header = &ir.FunctionDef.new(
+      fun.span,
+      fun.id,
+      fun.name,
+      fun.type_parameters,
+      fun.parameters,
+      fun.return_type,
+      ir.Block.new([], ty.Type.Never),
+    )
+    reg.function_defs = reg.function_defs.append(header)
+  }
+  for fun in env.function_defs {
+    let err = lower(&reg, fun)
     if let Some(e) = err { env.error(e) }
-    new_fun
-  })
+  }
   reg
 }
 
-fn lower(fun: mut Ref<ast.FunctionDef>) -> (Ref<ir.FunctionDef>, Option<dx.TypeError>) {
-  let new_fun = &ir.FunctionDef.new(
-    fun.span,
-    fun.id,
-    fun.name,
-    fun.type_parameters,
-    fun.parameters,
-    fun.return_type,
-    ir.Block.new([], ty.Type.Never),
-  )
-  match TypeCheck.new(fun).check_block(fun.body, fun.return_type, fun.span) {
+fn lower(
+  registry: mut Ref<mut ir.Registry>,
+  fun: Ref<ast.FunctionDef>,
+) -> Option<dx.TypeError> {
+  let mut new_fun = registry.function(fun.id)
+  let mut type_check = &TypeCheck.new(registry, fun)
+  match type_check.check_block(fun.body, fun.return_type, fun.span) {
     Ok(blk) => {
       new_fun.body = blk
-      (new_fun, None)
+      None
     },
-    Err(e) => (new_fun, Some(e)),
+    Err(e) => Some(e),
   }
 }
 
