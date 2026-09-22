@@ -18,14 +18,15 @@ fn test_scope(t) {
     "  bar",
     "  foo",
   ])
-  let assert Ok(block) = Resolver.new_blank().block(cst_node)
+  let mut res = Resolver.new_blank()
+  let assert Ok(block) = res.block(cst_node)
   let assert [stmt1, stmt2, stmt3] = block.statements
   let assert ast.Declare(md.Mode.Let, foo1, _) = stmt1.kind
   let assert ast.Declare(md.Mode.Let, bar1, _) = stmt2.kind
-  assert foo1.mode == md.Mode.Let
-  assert bar1.mode == md.Mode.Let
-  assert foo1.name == "foo"
-  assert bar1.name == "bar"
+  assert res.variable(foo1).mode == md.Mode.Let
+  assert res.variable(bar1).mode == md.Mode.Let
+  assert res.variable(foo1).name == "foo"
+  assert res.variable(bar1).name == "bar"
   let assert ast.Expr.While(cond) = stmt3.kind
   let assert [ast.Check.Test(_, body)] = cond.checks
   let assert [_, ident_bar, ident_foo] = body.statements
@@ -37,7 +38,7 @@ fn test_scope(t) {
 
 #[test("resolver: Closure captures")]
 fn test_closure(t) -> Result<(), error> {
-  let res = Resolver.new_blank()
+  let mut res = Resolver.new_blank()
   let cst_node = parse([
     "let foo = 0",
     "let bar = 0",
@@ -50,8 +51,8 @@ fn test_closure(t) -> Result<(), error> {
   let assert [stmt1, stmt2, stmt3] = block.statements
   let assert ast.Expr.Declare(_, foo1, _) = stmt1.kind
   let assert ast.Expr.Declare(_, bar1, _) = stmt2.kind
-  assert foo1.name == "foo"
-  assert bar1.name == "bar"
+  assert res.variable(foo1).name == "foo"
+  assert res.variable(bar1).name == "bar"
   let assert ast.Expr.Closure(closure) = stmt3.kind
   let assert [cap] = closure.env
   assert cap == ast.Capture.new(bar1)
@@ -71,9 +72,34 @@ fn test_closure(t) -> Result<(), error> {
   Ok(())
 }
 
+#[test("resolver: Failed closure resolution unwinds captures")]
+fn test_failed_closure_resolution(t) -> Result<(), error> {
+  let mut env = &ast.Registry.new()
+  let function = &ast.FunctionDef.mock(
+    "test",
+    [],
+    [ty.Parameter.new(spn.new(0, 0), md.Mode.Let, "arg", Type.Int)],
+    ty.nil(),
+  )
+  let mut res = Resolver.new(env, function)
+
+  let invalid = parse([
+    "||:",
+    "  missing",
+  ])?
+  let assert Err(_) = res.block(invalid)
+
+  let assignment = parse(["arg = 1"])?
+  let block = res.block(assignment).map_err(dx2err)?
+  let assert [stmt] = block.statements
+  let assert ast.Expr.Assign(variable, _) = stmt.kind
+  assert res.variable(variable).name == "arg"
+  Ok(())
+}
+
 #[test("resolver: Nested Closure Scope Capturing")]
 fn test_nested_closure(t) -> Result<(), error> {
-  let res = Resolver.new_blank()
+  let mut res = Resolver.new_blank()
   let cst_node = parse([
     "let foo = 0",
     "let bar = 1",
@@ -98,16 +124,16 @@ fn test_nested_closure(t) -> Result<(), error> {
     ast.Expr.Declare(_, glob1, _),
     ast.Expr.Closure(closure1),
   ] = block.statements.map(|s| s.kind)
-  assert foo1.name == "foo"
-  assert bar1.name == "bar"
-  assert baz1.name == "baz"
-  assert glob1.name == "glob"
+  assert res.variable(foo1).name == "foo"
+  assert res.variable(bar1).name == "bar"
+  assert res.variable(baz1).name == "baz"
+  assert res.variable(glob1).name == "glob"
   let assert [cap_bar, cap_glob] = closure1.env
   assert cap_bar.variable == bar1
   assert cap_glob.variable == glob1
 
   // nested closures one after the other
-  let res = Resolver.new_blank()
+  let mut res = Resolver.new_blank()
   let cst_node = parse([
     "let foo = 0",
     "let bar = 1",
@@ -135,10 +161,10 @@ fn test_nested_closure(t) -> Result<(), error> {
     ast.Expr.Closure(closure1),
     ast.Expr.Closure(closure2),
   ] = block.statements.map(|s| s.kind)
-  assert foo1.name == "foo"
-  assert bar1.name == "bar"
-  assert baz1.name == "baz"
-  assert glob1.name == "glob"
+  assert res.variable(foo1).name == "foo"
+  assert res.variable(bar1).name == "bar"
+  assert res.variable(baz1).name == "baz"
+  assert res.variable(glob1).name == "glob"
 
   let assert [cap_bar] = closure1.env
   assert cap_bar.variable == bar1
@@ -156,12 +182,12 @@ fn test_nested_closure(t) -> Result<(), error> {
 #[test("resolver/call: classic syntax (`foo(args)`)")]
 fn test_classic_call(t) -> Result<(), error> {
   let cst_node = parse(["foo(1, 2, 3)"])?
-  let res = Resolver.new_blank()
+  let mut res = Resolver.new_blank()
   let assert Err(e) = res.block(cst_node)
   // MissingNameError
   assert e.code() == 2002
 
-  let foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let mut foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   res.ctx.env.add_function(foo)
   let block = res.block(cst_node).map_err(dx2err)?
   let assert [ast.Expr.Call(call)] = block.statements.map(|s| s.kind)
@@ -176,8 +202,8 @@ fn test_classic_call(t) -> Result<(), error> {
   ] = call.args.map(|a| a.kind)
 
   // add more overloads and resolve again
-  let foo2 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
-  let foo3 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let mut foo2 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let mut foo3 = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   res.ctx.env.add_function(foo2)
   res.ctx.env.add_function(foo3)
   let block = res.block(cst_node).map_err(dx2err)?
@@ -215,8 +241,8 @@ fn test_namespaced_call(t) -> Result<(), error> {
   // MissingNameError
   assert e.code() == 2002
 
-  let mod_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
-  let this_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let mut mod_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
+  let mut this_foo = &ast.FunctionDef.mock("foo", [], [], ty.nil())
   let mut mod = ast.Registry.new()
   mod.add_function(mod_foo)
   res.ctx.env.add_function(this_foo)
@@ -257,12 +283,12 @@ fn test_dotname_call(t) -> Result<(), error> {
     "foo.bar          ",
     "bar(foo)         ",
   ])?
-  let res = Resolver.new_blank()
+  let mut res = Resolver.new_blank()
   let assert Err(e) = res.block(cst_node)
   // MissingNameError
   assert e.code() == 2002
 
-  let global_bar = &ast.FunctionDef.mock("bar", [], [], ty.nil())
+  let mut global_bar = &ast.FunctionDef.mock("bar", [], [], ty.nil())
   res.ctx.env.add_function(global_bar)
   let block = res.block(cst_node).map_err(dx2err)?
   let assert [
@@ -306,7 +332,8 @@ fn test_conditional_branching(t) {
     "   mut y = 'oh'      ",
     "y                    ",
   ])
-  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  let mut res = Resolver.with_mock_prelude()
+  let assert Err(e) = res.block(cst_block)
   assert e.code() == 2002
 
   let assert Ok(cst_block) = parse([
@@ -316,7 +343,8 @@ fn test_conditional_branching(t) {
     "else:                ",
     "   y      ",
   ])
-  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  let mut res = Resolver.with_mock_prelude()
+  let assert Err(e) = res.block(cst_block)
   assert e.code() == 2002
 
   // shadowing
@@ -325,7 +353,8 @@ fn test_conditional_branching(t) {
     "if x is .Some x:     ",
     "   x                 ",
   ])
-  let assert Ok(block) = Resolver.with_mock_prelude().block(cst_block)
+  let mut res = Resolver.with_mock_prelude()
+  let assert Ok(block) = res.block(cst_block)
   let assert [decl, ast.Expr.If(cond)] = block.kinds()
   let assert ast.Expr.Declare(_, x0, _) = decl
   let assert [ast.Check.Match(_subj, [arm])] = cond.checks
@@ -342,14 +371,16 @@ fn test_conditional_branching(t) {
     "if a is .Some b if b is .Some c if c is .Some d:     ",
     "   d                 ",
   ])
-  let assert Ok(_block) = Resolver.with_mock_prelude().block(cst_block)
+  let mut res = Resolver.with_mock_prelude()
+  let assert Ok(_block) = res.block(cst_block)
   let assert Ok(cst_block) = parse([
     "let a = 1            ",
     "if a is              ",
     "   .Some b: b        ",
     "   .None: b           ",
   ])
-  let assert Err(e) = Resolver.with_mock_prelude().block(cst_block)
+  let mut res = Resolver.with_mock_prelude()
+  let assert Err(e) = res.block(cst_block)
   assert e.code() == 2002
 }
 

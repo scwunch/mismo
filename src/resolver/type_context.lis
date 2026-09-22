@@ -11,12 +11,12 @@ type Type = ty.Type
 /// Generic context that bundles a Registry with type parameters
 /// for evaluating types
 pub struct TypeContext {
-  env: mut Ref<ast.Registry>,
+  env: mut Ref<mut ast.Registry>,
   type_params: Slice<ty.TypeParameter>,
 }
 
 impl TypeContext {
-  fn new(env: mut Ref<ast.Registry>, type_params: Slice<ty.TypeParameter>) -> mut TypeContext {
+  fn new(env: mut Ref<mut ast.Registry>, type_params: Slice<ty.TypeParameter>) -> mut TypeContext {
     TypeContext { env, type_params }
   }
 

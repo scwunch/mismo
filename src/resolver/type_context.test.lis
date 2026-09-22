@@ -73,7 +73,7 @@ fn test_eval_type_compound(t) -> Result<(), error> {
 
 #[test("resolver/type_context: eval type nominal types")]
 fn test_eval_type_nominal(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx = TypeContext.new_blank()
   register_types(
     ctx.env,
     [
@@ -113,7 +113,7 @@ fn test_eval_type_nominal(t) -> Result<(), error> {
 
 #[test("resolver/type_context: eval type errors")]
 fn test_eval_type_errors(t) -> Result<(), error> {
-  let ctx = TypeContext.new_blank()
+  let mut ctx = TypeContext.new_blank()
 
   // Missing name
   let assert Err(e) = ctx.eval_type(cst.typ(0, 6, "Wobble", []))

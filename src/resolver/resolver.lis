@@ -10,32 +10,44 @@ type Expr = ast.Expr
 
 #[display]
 pub struct Resolver {
-  pub ctx: TypeContext,
+  pub ctx: mut TypeContext,
   pub scope: Scope,
-  pub capture_set_stack: mut Ref<mut Slice<CaptureSet>>,
 }
 
 impl Resolver {
-  pub fn new(env: mut Ref<ast.Registry>, func: Ref<ast.FunctionDef>) -> Resolver {
-    let scope = Scope.from_params(func.parameters)
-    let ctx = TypeContext.new(env, func.type_parameters)
-    let mut css = []
-    Resolver { ctx, scope, capture_set_stack: &css }
+  pub fn variable(self: mut Resolver, id: ty.VarId) -> mut Ref<ty.Variable> {
+    self.ctx.env.variable(id)
   }
 
-  pub fn new_blank() -> Resolver {
+  pub fn new(env: mut Ref<mut ast.Registry>, func: Ref<ast.FunctionDef>) -> mut Resolver {
+    let scope = Scope.from_params(env, func.parameters)
+    let mut ctx = TypeContext.new(env, func.type_parameters)
+    Resolver { ctx, scope }
+  }
+
+  pub fn new_blank() -> mut Resolver {
     let mut reg = ast.Registry.new()
     let mut fun = ast.FunctionDef.mock("dummy", [], [], ty.nil())
     Resolver.new(&reg, &fun)
   }
 
-  pub fn with_mock_prelude() -> Resolver {
+  pub fn with_mock_prelude() -> mut Resolver {
     let mut reg = ast.Registry.with_mock_prelude()
     let mut fun = ast.FunctionDef.mock("dummy", [], [], ty.nil())
     Resolver.new(reg, &fun)
   }
 
-  pub fn resolve(self, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+  pub fn resolve(self: mut Resolver, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+    let mut captures = CaptureStack.new()
+    self.resolve_with(&captures, node)
+  }
+
+  fn resolve_with(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    node: cst.Expression,
+  ) -> Result<ast.Expression, dx.ResolveError> {
+    let mut captures = captures
     let expr: Expr = match node.kind {
       Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
@@ -43,53 +55,54 @@ impl Resolver {
       FloatLiteral(f) => Expr.FloatLiteral(f),
       StringLiteral(s) => Expr.StringLiteral(s),
       ArrayLiteral(elems) => Expr.ArrayLiteral(
-        slice.map_result(elems, self.resolve)?,
+        self.resolve_expressions(captures, elems)?,
       ),
       TupleLiteral(elems) => Expr.TupleLiteral(
-        slice.map_result(elems, self.resolve)?,
+        self.resolve_expressions(captures, elems)?,
       ),
       RecordLiteral(fields) => Expr.RecordLiteral(
-        slice.map_result(fields, self.resolve_field)?
+        self.resolve_fields(captures, fields)?
       ),
-      Closure(params, body) => self.closure(
+      Closure(params, body) => self.closure_with(
+        captures,
         slice.map_result(params, self.ctx.eval_param)?,
         body,
       )?,
-      Identifier(path) => self.resolve_path(path, node.span)?,
+      Identifier(path) => self.resolve_path(captures, path, node.span)?,
       Binding(m, expr) => {
-        let e = self.resolve(expr.*)?
+        let e = self.resolve_with(captures, expr.*)?
         Expr.Binding(m, &e)
       },
-      Binop(binop) => self.binop(binop.*, node.span)?,
+      Binop(binop) => self.binop(captures, binop.*, node.span)?,
       Call(call) => {
-        let args = slice.map_result(call.args, self.resolve)?
-        self.call(call.fn_name, call.type_args, args, node.span)?
+        let args = self.resolve_expressions(captures, call.args)?
+        self.call(captures, call.fn_name, call.type_args, args, node.span)?
       },
-      If(cond) => self.if_expr(cond)?,
-      While(cond) => self.while_expr(cond)?,
-      For(for_loop) => self.for_expr(for_loop.*, node.span)?,
-      Block(exprs) => Expr.Block(self.block(exprs)?),
+      If(cond) => self.if_expr(captures, cond)?,
+      While(cond) => self.while_expr(captures, cond)?,
+      For(for_loop) => self.for_expr(captures, for_loop.*, node.span)?,
+      Block(exprs) => Expr.Block(self.block_with(captures, exprs)?),
       Neg(expr) => {
-        let arg = [self.resolve(expr.*)?]
-        self.bare_call("-", arg, false, node.span)?
+        let arg = [self.resolve_with(captures, expr.*)?]
+        self.bare_call(captures, "-", arg, false, node.span)?
       },
       Not(expr) => {
-        let arg = [self.resolve(expr.*)?]
-        self.bare_call("not", arg, false, node.span)?
+        let arg = [self.resolve_with(captures, expr.*)?]
+        self.bare_call(captures, "not", arg, false, node.span)?
       },
       Return(None) => Expr.Return(None),
       Return(Some(expr)) => {
-        let e = self.resolve(expr.*)?
+        let e = self.resolve_with(captures, expr.*)?
         Expr.Return(Some(&e))
       },
       Break(None) => Expr.Break(None),
       Break(Some(expr)) => {
-        let e = self.resolve(expr.*)?
+        let e = self.resolve_with(captures, expr.*)?
         Expr.Break(Some(&e))
       },
       Continue => Expr.Continue,
-      DotName(expr, name) => self.dot_name(node.span, expr.*, name)?,
-      DotCall(expr, call) => self.dot_call(expr, call, node.span)?,
+      DotName(expr, name) => self.dot_name(captures, node.span, expr.*, name)?,
+      DotCall(expr, call) => self.dot_call(captures, expr, call, node.span)?,
       Type(path, type_args) => self.resolve_constructor(node.span, path, type_args, &ast.nil_expr())?,
       EnumConstructor(typ, variant) => self.resolve_enum_constructor(node.span, typ, variant, &ast.nil_expr())?,
       Extern => Expr.Extern,
@@ -97,11 +110,16 @@ impl Resolver {
     Ok(ast.Expression { span: node.span, kind: expr })
   }
 
-  fn resolve_path(self, path: cst.Path, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn resolve_path(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    path: cst.Path,
+    span: spn.Span,
+  ) -> Result<Expr, dx.ResolveError> {
     if path.namespace.is_empty() {
-      match self.scope.get(path.name) {
+      match self.scope.get(self.ctx.env, path.name) {
         Some((idx, varid)) => {
-          if self.capture(varid, idx) {
+          if self.capture(captures, varid, idx) {
             Ok(Expr.CapturedIdent(varid))
           } else {
             Ok(Expr.Identifier(varid))
@@ -117,71 +135,131 @@ impl Resolver {
     }
   }
 
-  fn resolve_field(self, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
+  fn resolve_field(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    field: cst.RecordField,
+  ) -> Result<ast.Field, dx.ResolveError> {
     Ok(ast.Field {
       span: field.span,
       name: field.name,
-      expr: self.resolve(field.expr)?,
+      expr: self.resolve_with(captures, field.expr)?,
     })
+  }
+
+  fn resolve_expressions(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    nodes: Slice<cst.Expression>,
+  ) -> Result<Slice<ast.Expression>, dx.ResolveError> {
+    let mut expressions = [].reserve(nodes.length())
+    for node in nodes {
+      expressions = expressions.append(self.resolve_with(captures, node)?)
+    }
+    Ok(expressions)
+  }
+
+  fn resolve_fields(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    fields: Slice<cst.RecordField>,
+  ) -> Result<Slice<ast.Field>, dx.ResolveError> {
+    let mut resolved_fields = [].reserve(fields.length())
+    for field in fields {
+      resolved_fields = resolved_fields.append(self.resolve_field(captures, field)?)
+    }
+    Ok(resolved_fields)
   }
   /// add variable to capture set of all closures outside current scope
   /// return `true` if captured, false, otherwise
-  fn capture(self, varid: mut Ref<ty.Variable>, index: int) -> bool {
-    // let mut self = &self
+  fn capture(
+    self,
+    captures: mut Ref<CaptureStack>,
+    varid: ty.VarId,
+    index: int,
+  ) -> bool {
     let mut is_capture = false
-    for i in 0..self.capture_set_stack.length() {
-      let mut capset = &self.capture_set_stack.*[i]
+    let mut sets = [].reserve(captures.sets.length())
+    for i in 0..captures.sets.length() {
+      let mut capset = captures.sets[i]
       if index < capset.index {
         is_capture = true
         capset.captures = capset.captures.append(varid)
       }
+      sets = sets.append(capset)
     }
+    captures.sets = sets
     is_capture
   }
 
-  pub fn block(self, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
-    let mut self = &self
-    let expressions = slice.map_result(
-      block.statements,
-      |stmt| {
-        let expr = self.resolve(stmt)?
-        if let Expr.Declare(_, varid, _) = expr.kind {
-          self.scope.bindings = self.scope.bindings.append(varid)
-        }
-        Ok(expr)
-      },
-    )?
+  pub fn block(self: mut Resolver, block: cst.Block) -> Result<ast.Block, dx.ResolveError> {
+    let mut captures = CaptureStack.new()
+    self.block_with(&captures, block)
+  }
+
+  fn block_with(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    block: cst.Block,
+  ) -> Result<ast.Block, dx.ResolveError> {
+    let mut current = self
+    let mut expressions = [].reserve(block.statements.length())
+    for stmt in block.statements {
+      let mut expr = current.resolve_with(captures, stmt)?
+      if let Expr.Declare(_, varid, _) = expr.kind {
+        current.scope = current.scope.bind(varid)
+      }
+      expressions = expressions.append(expr)
+    }
     Ok(ast.Block.new(expressions))
   }
 
-  fn append_params(self, params: Slice<ty.Parameter>) -> Slice<Ref<ty.Variable>> {
-    params.fold(
-      self.scope.bindings,
-      |vars, param| vars.append(&ty.Variable.from_param(param)),
-    )
+  fn append_params(self: mut Resolver, params: Slice<ty.Parameter>) -> Scope {
+    Scope {
+      bindings: params.fold(
+        self.scope.bindings,
+        |vars, param| vars.append(self.ctx.env.add_variable(ty.Variable.from_param(param))),
+      ),
+    }
   }
 
-  fn push_closure_env(self) {
-    self.capture_set_stack.* = self.capture_set_stack.*.append(
+  fn push_closure_env(self, captures: mut Ref<CaptureStack>) {
+    captures.sets = captures.sets.append(
       CaptureSet { index: self.scope.bindings.length(), .. },
     )
   }
 
-  fn pop_closure_env(self) -> Slice<ast.Capture> {
-    let last = self.capture_set_stack.length() - 1
-    let env = self.capture_set_stack.*[last].captures.map(ast.Capture.new)
-    self.capture_set_stack.* = self.capture_set_stack.*[..last]
+  fn pop_closure_env(self, captures: mut Ref<CaptureStack>) -> Slice<ast.Capture> {
+    let mut captures = captures
+    let last = captures.sets.length() - 1
+    let mut env = []
+    for variable in captures.sets[last].captures {
+      env = env.append(ast.Capture.new(variable))
+    }
+    captures.sets = captures.sets[..last]
     env
   }
 
-  fn closure(self, params: Slice<ty.Parameter>, body: cst.Block) -> Result<Expr, dx.ResolveError> {
-    let mut self = &self
+  fn closure_with(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    params: Slice<ty.Parameter>,
+    body: cst.Block,
+  ) -> Result<Expr, dx.ResolveError> {
     let ret_type = Type.Never
-    self.push_closure_env()
-    self.scope.bindings = self.append_params(params)
-    let body = self.block(body)?
-    let env = self.pop_closure_env()
-    Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
+    self.push_closure_env(captures)
+    let mut child = self
+    child.scope = child.append_params(params)
+    match child.block_with(captures, body) {
+      Ok(body) => {
+        let env = self.pop_closure_env(captures)
+        Ok(Expr.Closure(ast.Closure { env, params, ret_type, body }))
+      },
+      Err(e) => {
+        let _ = self.pop_closure_env(captures)
+        Err(e)
+      },
+    }
   }
 
   #[allow(verbose_failure_propagation)]
@@ -248,43 +326,60 @@ impl Resolver {
     }
   }
 
-  fn binop(self, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn binop(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    binop: cst.Binop,
+    span: spn.Span,
+  ) -> Result<Expr, dx.ResolveError> {
     match binop.op {
       Assign => {
-        let value = self.resolve(binop.right)?
-        self.assign(binop.left, &value)
+        let value = self.resolve_with(captures, binop.right)?
+        self.assign(captures, binop.left, &value)
       },
       Juxtaposition => {
-        let payload = self.resolve(binop.right)?
+        let payload = self.resolve_with(captures, binop.right)?
         match binop.left.kind {
           Type(path, type_args) => self.resolve_constructor(binop.left.span, path, type_args, &payload),
           EnumConstructor(typ, variant) => self.resolve_enum_constructor(binop.left.span, typ, variant, &payload),
           _ => panic("compiler bug: parser should only allow `Type` and `EnumConstructor` here."),
       }},
       _ => self.call(
+        captures,
         cst.Path.name_(binop.op.sigil()),
         None,
-        [self.resolve(binop.left)?, self.resolve(binop.right)?],
+        [
+          self.resolve_with(captures, binop.left)?,
+          self.resolve_with(captures, binop.right)?,
+        ],
         span,
       )
     }
   }
 
-  fn assign(self, lhs: cst.Expression, value: Ref<ast.Expression>) -> Result<Expr, dx.ResolveError> {
+  fn assign(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    lhs: cst.Expression,
+    value: Ref<ast.Expression>,
+  ) -> Result<Expr, dx.ResolveError> {
     match lhs.kind {
       Binding(mode, expr) => match expr.kind {
         Identifier(path) if path.namespace.is_empty() => {
+          let mut ctx = self.ctx
+          let varid = ctx.env.add_variable(ty.Variable.new(mode, path.name, lhs.span.start))
           return Ok(Expr.Declare(
             mode,
-            &ty.Variable.new(mode, path.name, lhs.span.start),
+            varid,
             value,
           ))
         },
         _ => (),
       },
       Identifier(path) if path.namespace.is_empty() => {
-        return match self.scope.get(path.name) {
-          Some((i, varid)) => if i < self.last_capset().index {
+        let mut ctx = self.ctx
+        return match self.scope.get(ctx.env, path.name) {
+          Some((i, varid)) => if i < self.last_capset(captures).index {
             Ok(Expr.AssignCapture(varid, value))
           } else {
             Ok(Expr.Assign(varid, value))
@@ -300,49 +395,79 @@ impl Resolver {
     Err(dx.InvalidAssignmentTargetError.new(lhs.span, lhs))
   }
 
-  fn if_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {
-    Ok(ast.Expr.If(self.resolve_conditional(cond)?))
+  fn if_expr(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    cond: cst.If,
+  ) -> Result<Expr, dx.ResolveError> {
+    Ok(ast.Expr.If(self.resolve_conditional(captures, cond)?))
   }
 
-  fn resolve_conditional(self, cond: cst.If) -> Result<ast.If, dx.ResolveError> {
-    let checks = slice.map_result(cond.checks, self.resolve_check)?
+  fn resolve_conditional(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    cond: cst.If,
+  ) -> Result<ast.If, dx.ResolveError> {
+    let mut checks = [].reserve(cond.checks.length())
+    for check in cond.checks {
+      checks = checks.append(self.resolve_check(captures, check)?)
+    }
     let default = match cond.default {
-      Some(default) => Some(self.block(default)?),
+      Some(default) => Some(self.block_with(captures, default)?),
       None => None,
     }
     Ok(ast.If { checks, default })
   }
 
-  fn resolve_check(self, check: cst.Check) -> Result<ast.Check, dx.ResolveError> {
+  fn resolve_check(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    check: cst.Check,
+  ) -> Result<ast.Check, dx.ResolveError> {
     match check {
       Test(expr, block) => Ok(ast.Check.Test(
-        self.resolve(expr)?,
-        self.block(block)?,
+        self.resolve_with(captures, expr)?,
+        self.block_with(captures, block)?,
       )),
       Match(subject, arms) => {
-        let subject = self.resolve(subject)?
-        let arms = slice.map_result(arms, self.resolve_arm)?
-        Ok(ast.Check.Match(subject, arms))
+        let subject = self.resolve_with(captures, subject)?
+        let mut resolved_arms = [].reserve(arms.length())
+        for arm in arms {
+          resolved_arms = resolved_arms.append(self.resolve_arm(captures, arm)?)
+        }
+        Ok(ast.Check.Match(subject, resolved_arms))
       },
     }
   }
 
-  fn resolve_arm(self, arm: cst.Arm) -> Result<ast.Arm, dx.ResolveError> {
-    let self = &self
-    let pattern = self.resolve_pattern(arm.pattern)?
+  fn resolve_arm(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    arm: cst.Arm,
+  ) -> Result<ast.Arm, dx.ResolveError> {
+    let pattern = self.resolve_pattern(captures, arm.pattern)?
+    let mut child = self
+    child.scope = pattern.scope
     let then = match arm.then {
-      Block(block) => ast.Then.Block(self.block(block)?),
-      If(cond) => ast.Then.If(self.resolve_conditional(cond)?),
+      Block(block) => ast.Then.Block(child.block_with(captures, block)?),
+      If(cond) => ast.Then.If(child.resolve_conditional(captures, cond)?),
     }
-    Ok(ast.Arm { pattern, then })
+    Ok(ast.Arm { pattern: pattern.expr, then })
   }
 
-  fn resolve_pattern(self: mut Ref<Resolver>, node: cst.Expression) -> Result<ast.Expression, dx.ResolveError> {
+  fn resolve_pattern(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    node: cst.Expression,
+  ) -> Result<ResolvedPattern, dx.ResolveError> {
     let expr: Expr = match node.kind {
       Identifier(cst.Path { namespace: [], name }) => {
-        let varid = &ty.Variable.new(md.Mode.MutBang, name, node.span.start)
-        self.scope.bindings = self.scope.bindings.append(varid)
-        ast.Expr.Identifier(varid)
+        let mut ctx = self.ctx
+        let varid = ctx.env.add_variable(ty.Variable.new(md.Mode.MutBang, name, node.span.start))
+        return Ok(ResolvedPattern {
+          expr: ast.Expression { span: node.span, kind: ast.Expr.Identifier(varid) },
+          scope: self.scope.bind(varid),
+        })
       },
       Nil => Expr.Nil,
       BoolLiteral(b) => Expr.BoolLiteral(b),
@@ -354,18 +479,42 @@ impl Resolver {
         _ => return Err(dx.InvalidPatternError.new(node.span, node.kind)),
       },
       StringLiteral(s) => Expr.StringLiteral(s),
-      TupleLiteral(elems) => ast.Expr.TupleLiteral(
-        slice.map_result(elems, self.resolve_pattern)?,
-      ),
-      RecordLiteral(fields) => ast.Expr.RecordLiteral(
-        slice.map_result(fields, self.field_pattern)?
-      ),
-      ArrayLiteral(elems) => ast.Expr.ArrayLiteral(
-        slice.map_result(elems, self.resolve_pattern)?,
-      ),
+      TupleLiteral(elems) => {
+        let patterns = self.resolve_patterns(captures, elems)?
+        return Ok(ResolvedPattern {
+          expr: ast.Expression {
+            span: node.span,
+            kind: ast.Expr.TupleLiteral(patterns.exprs),
+          },
+          scope: patterns.scope,
+        })
+      },
+      RecordLiteral(fields) => {
+        let patterns = self.resolve_field_patterns(captures, fields)?
+        return Ok(ResolvedPattern {
+          expr: ast.Expression {
+            span: node.span,
+            kind: ast.Expr.RecordLiteral(patterns.fields),
+          },
+          scope: patterns.scope,
+        })
+      },
+      ArrayLiteral(elems) => {
+        let patterns = self.resolve_patterns(captures, elems)?
+        return Ok(ResolvedPattern {
+          expr: ast.Expression {
+            span: node.span,
+            kind: ast.Expr.ArrayLiteral(patterns.exprs),
+          },
+          scope: patterns.scope,
+        })
+      },
       Type(_, _) |
-      EnumConstructor(_, _) => return self.resolve(node),
-      Binop(binop) => self.binop_pattern(binop.*, node.span)?,
+      EnumConstructor(_, _) => return Ok(ResolvedPattern {
+        expr: self.resolve_with(captures, node)?,
+        scope: self.scope,
+      }),
+      Binop(binop) => return self.binop_pattern(captures, binop.*, node.span),
       // Not(expr) => Expr.Not(self.resolve_pattern(expr)?),
       Call(_) |
       DotCall(_, _) |
@@ -383,32 +532,72 @@ impl Resolver {
       Break(_) |
       Extern => return Err(dx.InvalidPatternError.new(node.span, node.kind)),
     }
-    Ok(ast.Expression { span: node.span, kind: expr })
-  }
-
-  fn field_pattern(self: mut Ref<Resolver>, field: cst.RecordField) -> Result<ast.Field, dx.ResolveError> {
-    Ok(ast.Field {
-      span: field.span,
-      name: field.name,
-      expr: self.resolve_pattern(field.expr)?
+    Ok(ResolvedPattern {
+      expr: ast.Expression { span: node.span, kind: expr },
+      scope: self.scope,
     })
   }
 
-  fn binop_pattern(self: mut Ref<Resolver>, binop: cst.Binop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn resolve_patterns(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    nodes: Slice<cst.Expression>,
+  ) -> Result<ResolvedPatterns, dx.ResolveError> {
+    let mut current = self
+    let mut exprs = [].reserve(nodes.length())
+    for node in nodes {
+      let pattern = current.resolve_pattern(captures, node)?
+      current.scope = pattern.scope
+      exprs = exprs.append(pattern.expr)
+    }
+    Ok(ResolvedPatterns { exprs, scope: current.scope })
+  }
+
+  fn resolve_field_patterns(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    fields: Slice<cst.RecordField>,
+  ) -> Result<ResolvedFieldPatterns, dx.ResolveError> {
+    let mut current = self
+    let mut resolved_fields = [].reserve(fields.length())
+    for field in fields {
+      let pattern = current.resolve_pattern(captures, field.expr)?
+      current.scope = pattern.scope
+      resolved_fields = resolved_fields.append(ast.Field {
+        span: field.span,
+        name: field.name,
+        expr: pattern.expr,
+      })
+    }
+    Ok(ResolvedFieldPatterns { fields: resolved_fields, scope: current.scope })
+  }
+
+  fn binop_pattern(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    binop: cst.Binop,
+    span: spn.Span,
+  ) -> Result<ResolvedPattern, dx.ResolveError> {
     match binop.op {
       Juxtaposition => {
-        let payload = self.resolve_pattern(binop.right)?
-        match binop.left.kind {
-          Type(path, type_args) => self.resolve_constructor(binop.left.span, path, type_args, &payload),
-          EnumConstructor(typ, variant) => self.resolve_enum_constructor(binop.left.span, typ, variant, &payload),
+        let payload = self.resolve_pattern(captures, binop.right)?
+        let expr = match binop.left.kind {
+          Type(path, type_args) => self.resolve_constructor(binop.left.span, path, type_args, &payload.expr),
+          EnumConstructor(typ, variant) => self.resolve_enum_constructor(binop.left.span, typ, variant, &payload.expr),
           _ => panic("compiler bug: parser should only allow `Type` and `EnumConstructor` here."),
-      }},
+        }?
+        Ok(ResolvedPattern { expr: ast.Expression { span, kind: expr }, scope: payload.scope })
+      },
       _ => Err(dx.InvalidPatternError.new(span, binop)),
     }
   }
 
-  fn while_expr(self, cond: cst.If) -> Result<Expr, dx.ResolveError> {
-    let cond = self.resolve_conditional(cond)?
+  fn while_expr(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    cond: cst.If,
+  ) -> Result<Expr, dx.ResolveError> {
+    let cond = self.resolve_conditional(captures, cond)?
     Ok(ast.Expr.While(cond))
     // let _ = span
     // match cond.checks {
@@ -451,16 +640,28 @@ impl Resolver {
     // }
   }
 
-  fn for_expr(self, for_loop: cst.ForLoop, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn for_expr(
+    self: mut Resolver,
+    _captures: mut Ref<CaptureStack>,
+    for_loop: cst.ForLoop,
+    span: spn.Span,
+  ) -> Result<Expr, dx.ResolveError> {
     let _ = for_loop
     let _ = span
     panic("not implemented yet")
   }
 
-  fn dot_name(self, span: spn.Span, expr: cst.Expression, name: string) -> Result<Expr, dx.ResolveError> {
+  fn dot_name(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    span: spn.Span,
+    expr: cst.Expression,
+    name: string,
+  ) -> Result<Expr, dx.ResolveError> {
     match expr.kind {
       Type(path, type_args) => {
         self.type_dot_call(
+          captures,
           path,
           type_args,
           cst.Call{fn_name: cst.Path.name_(name), ..},
@@ -468,23 +669,30 @@ impl Resolver {
         )
       },
       _ => {
-        let arg = [self.resolve(expr)?]
-        self.bare_call(name, arg, true, span)
+        let arg = [self.resolve_with(captures, expr)?]
+        self.bare_call(captures, name, arg, true, span)
       }
     }
   }
 
-  fn dot_call(self, expr: Ref<cst.Expression>, call: cst.Call, span: spn.Span) -> Result<Expr, dx.ResolveError> {
+  fn dot_call(
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
+    expr: Ref<cst.Expression>,
+    call: cst.Call,
+    span: spn.Span,
+  ) -> Result<Expr, dx.ResolveError> {
     let receiver = match expr.kind {
-      Type(path, type_args) => return self.type_dot_call(path, type_args, call, span),
-      _ => self.resolve(expr.*)?,
+      Type(path, type_args) => return self.type_dot_call(captures, path, type_args, call, span),
+      _ => self.resolve_with(captures, expr.*)?,
     }
     let mut args = [].reserve(call.args.length())
     args = args.append(receiver)
     for arg in call.args {
-      args = args.append(self.resolve(arg)?)
+      args = args.append(self.resolve_with(captures, arg)?)
     }
     self.call(
+      captures,
       call.fn_name,
       call.type_args,
       args,
@@ -494,7 +702,8 @@ impl Resolver {
   }
 
   fn type_dot_call(
-    self,
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
     type_path: cst.Path,
     type_args: Option<Slice<cst.Type>>,
     call: cst.Call,
@@ -520,14 +729,17 @@ impl Resolver {
     // combine the type args from the type with the type args with the type args from the call
     let type_args = match (type_args, call.type_args) {
       (None, None) => None,
-      (Some(ta), None) | (None, Some(ta)) => {
+      (Some(ta), None) => {
+        Some(slice.map_result(ta, self.ctx.eval_type)?)
+      },
+      (None, Some(ta)) => {
         Some(slice.map_result(ta, self.ctx.eval_type)?)
       },
       (Some(ta1), Some(ta2)) => {
         Some(slice.map_result(ta1.append(ta2...), self.ctx.eval_type)?)
       },
     }
-    let args = slice.map_result(call.args, self.resolve)?
+    let args = self.resolve_expressions(captures, call.args)?
     Ok(ast.Expr.Call(
       ast.Call {
         local_candidates: [],
@@ -540,14 +752,15 @@ impl Resolver {
   }
 
   fn call(
-    self,
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
     fname: cst.Path,
     type_args: Option<Slice<cst.Type>>,
     args: Slice<ast.Expression>,
     span: spn.Span,
   ) -> Result<Expr, dx.ResolveError> {
     if let ([], None) = (fname.namespace, type_args) {
-      return self.bare_call(fname.name, args, false, span)
+      return self.bare_call(captures, fname.name, args, false, span)
     }
     let type_args = match type_args {
       None => None,
@@ -577,18 +790,20 @@ impl Resolver {
 
   /// handle the syntax `foo(args)`, `foo.bar(args)` and `foo.bar`
   fn bare_call(
-    self,
+    self: mut Resolver,
+    captures: mut Ref<CaptureStack>,
     fname: string,
     args: Slice<ast.Expression>,
     is_dotname: bool,
     span: spn.Span,
   ) -> Result<ast.Expr, dx.ResolveError> {
-    let mut local_candidates = self.scope.bindings.filter(|v| v.name == fname)
-    for mut v in local_candidates {
+    let mut ctx = self.ctx
+    let local_candidates = self.scope.bindings.filter(|id| ctx.env.variable(id).name == fname)
+    for v in local_candidates {
       // capture ALL local names that match, just in case they might be used
       // TODO: during typechecking, just add the resolved local closure variable to all the containing closure capture sets
       //       I guess that means we have to track the stack of closure capture sets during typechecking too
-      let _ = self.capture(v, -1)
+      let _ = self.capture(captures, v, -1)
     }
     let global_candidates = self.ctx.env.signatures
       .get(fname)
@@ -608,40 +823,67 @@ impl Resolver {
     ))
   }
 
-  fn last_capset(self) -> CaptureSet {
-    let size = self.capture_set_stack.length()
-    self.capture_set_stack.get(size - 1).unwrap_or(CaptureSet { index: -1, .. })
+  fn last_capset(self, captures: mut Ref<CaptureStack>) -> CaptureSet {
+    let size = captures.sets.length()
+    captures.sets.get(size - 1).unwrap_or(CaptureSet { index: -1, .. })
   }
 }
 
 /// index: the boundary in the stack of variables at which the closure scope opens
 /// captures: the set of variables outside the scope of the closure
-struct CaptureSet { index: int, captures: mut Slice<Ref<ty.Variable>> }
+struct CaptureSet { index: int, captures: Slice<ty.VarId> }
+
+struct CaptureStack { sets: mut Slice<CaptureSet> }
+
+impl CaptureStack {
+  fn new() -> mut CaptureStack {
+    CaptureStack { sets: [] }
+  }
+}
+
+struct ResolvedPattern {
+  expr: ast.Expression,
+  scope: Scope,
+}
+
+struct ResolvedPatterns {
+  exprs: Slice<ast.Expression>,
+  scope: Scope,
+}
+
+struct ResolvedFieldPatterns {
+  fields: Slice<ast.Field>,
+  scope: Scope,
+}
 
 impl CaptureSet {
   fn string(self) -> string {
-    f"CaptureSet(index={self.index}, captures={self.captures.map(|v| v.name)})"
+    f"CaptureSet(index={self.index}, captures={self.captures})"
   }
 }
 
 /// an immutable stack of bindings
 /// scope is *shallow-copied* on every function call, so the length only ever increases with Go's call stack depth
 /// this naturally mirrors the scoping rules of Mismo's tree-shaped CST.
-pub struct Scope { bindings: mut Slice<mut Ref<ty.Variable>> }
+pub struct Scope { bindings: Slice<ty.VarId> }
 
 impl Scope {
-  fn from_params(params: Slice<ty.Parameter>) -> Scope {
-    Scope { bindings: params.map(|p| &ty.Variable.from_param(p)) }
+  fn from_params(env: mut Ref<mut ast.Registry>, params: Slice<ty.Parameter>) -> Scope {
+    Scope { bindings: params.map(|p| env.add_variable(ty.Variable.from_param(p))) }
+  }
+
+  fn bind(self, variable: ty.VarId) -> Scope {
+    Scope { bindings: self.bindings.append(variable) }
   }
 
   // if name in scope, return variable and whether it is captured or not
   // search start from top (most recent) of stack
-  fn get(self, name: string) -> Option<(int, Ref<ty.Variable>)> {
+  fn get(self, env: mut Ref<mut ast.Registry>, name: string) -> Option<(int, ty.VarId)> {
     let mut i = self.bindings.length()
     while i > 0 {
       i -= 1
-      let v = self.bindings[i]
-      if v.name == name { return Some((i, v)) }
+      let id = self.bindings[i]
+      if env.variable(id).name == name { return Some((i, id)) }
     }
     None
   }
